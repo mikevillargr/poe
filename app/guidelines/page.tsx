@@ -54,6 +54,22 @@ export default function GuidelinesPage() {
     }
   }
   
+  // Load saved heuristics on mount
+  useEffect(() => {
+    const loadHeuristics = async () => {
+      try {
+        const response = await fetch('/api/guidelines/list')
+        if (response.ok) {
+          const { heuristics } = await response.json()
+          setSavedHeuristics(heuristics || [])
+        }
+      } catch (error) {
+        console.error('Failed to load heuristics:', error)
+      }
+    }
+    loadHeuristics()
+  }, [])
+
   // Auto-trigger extraction when file is set
   useEffect(() => {
     if (file && inputMethod === 'upload' && step === 'input') {
@@ -183,7 +199,13 @@ export default function GuidelinesPage() {
         throw new Error('Failed to save heuristics')
       }
 
-      setSavedHeuristics([...savedHeuristics, ...extractedHeuristics])
+      // Reload heuristics from database to get the saved ones with IDs
+      const listResponse = await fetch('/api/guidelines/list')
+      if (listResponse.ok) {
+        const { heuristics } = await listResponse.json()
+        setSavedHeuristics(heuristics || [])
+      }
+
       setExtractedHeuristics([])
       setStep('complete')
       
