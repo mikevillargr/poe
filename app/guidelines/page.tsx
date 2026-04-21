@@ -42,7 +42,6 @@ export default function GuidelinesPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [activeFilter, setActiveFilter] = useState<string>('All')
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
   const { settings } = useSettings()
 
   // Handle file upload
@@ -71,84 +70,8 @@ export default function GuidelinesPage() {
     loadHeuristics()
   }, [])
 
-  // Check for active ingest job on mount and poll for completion
-  useEffect(() => {
-    const checkActiveJob = async () => {
-      try {
-        const response = await fetch('/api/guidelines/ingest-job')
-        if (response.ok) {
-          const { job } = await response.json()
-          if (job && job.status === 'processing') {
-            // Resume the job
-            setCurrentJobId(job.id)
-            setStep('processing')
-            setIsProcessing(true)
-            setInputMethod(job.inputMethod)
-            if (job.fileName) setFile({ name: job.fileName } as File)
-            if (job.url) setInputValue(job.url)
-          } else if (job && job.status === 'complete') {
-            // Show results
-            setCurrentJobId(job.id)
-            setExtractedHeuristics(job.extractedHeuristics || [])
-            setDiscoveredDimensions(job.discoveredDimensions || [])
-            setStep('review')
-            setIsProcessing(false)
-          } else if (job && job.status === 'error') {
-            // Show error
-            setError(job.error || 'Processing failed')
-            setStep('input')
-            setIsProcessing(false)
-          }
-        }
-      } catch (error) {
-        console.error('Failed to check active job:', error)
-      }
-    }
-
-    checkActiveJob()
-  }, [])
-
-  // Poll for job completion when processing
-  useEffect(() => {
-    if (!currentJobId || !isProcessing) {
-      console.log('Polling skipped - jobId:', currentJobId, 'isProcessing:', isProcessing)
-      return
-    }
-
-    console.log('Starting polling for job:', currentJobId)
-    const pollInterval = setInterval(async () => {
-      try {
-        console.log('Polling job status:', currentJobId)
-        const response = await fetch(`/api/guidelines/ingest-job?id=${currentJobId}`)
-        if (response.ok) {
-          const { job } = await response.json()
-          console.log('Job status:', job.status, 'step:', job.step)
-          
-          if (job.status === 'complete') {
-            console.log('Job complete! Heuristics:', job.extractedHeuristics?.length)
-            setExtractedHeuristics(job.extractedHeuristics || [])
-            setDiscoveredDimensions(job.discoveredDimensions || [])
-            setStep('review')
-            setIsProcessing(false)
-            setCurrentJobId(null)
-          } else if (job.status === 'error') {
-            console.error('Job failed:', job.error)
-            setError(job.error || 'Processing failed')
-            setStep('input')
-            setIsProcessing(false)
-            setCurrentJobId(null)
-          }
-        }
-      } catch (error) {
-        console.error('Job polling error:', error)
-      }
-    }, 2000) // Poll every 2 seconds
-
-    return () => {
-      console.log('Stopping polling for job:', currentJobId)
-      clearInterval(pollInterval)
-    }
-  }, [currentJobId, isProcessing])
+  // Note: Persistent job system removed for simplicity
+  // Direct extraction is faster and simpler for most use cases
 
   // Auto-trigger extraction when file is set
   useEffect(() => {
@@ -231,37 +154,35 @@ export default function GuidelinesPage() {
         content = data.content
       }
 
-      // Create persistent ingest job
-      console.log('Creating ingest job with content length:', content.length)
-      const jobResponse = await fetch('/api/guidelines/ingest-job', {
+      // Extract heuristics directly - simple and synchronous
+      console.log('Extracting heuristics from content length:', content.length)
+      const extractResponse = await fetch('/api/guidelines/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          inputMethod,
-          fileName: file?.name,
-          url: inputValue,
           content,
+          source: inputMethod,
           apiKey: settings.apiKey,
         }),
       })
 
-      console.log('Job response status:', jobResponse.status)
-      
-      if (!jobResponse.ok) {
-        const errorData = await jobResponse.json().catch(() => ({}))
-        console.error('Job creation failed:', errorData)
-        throw new Error(errorData.error || 'Failed to start ingest job')
+      if (!extractResponse.ok) {
+        const errorData = await extractResponse.json()
+        throw new Error(errorData.error || 'Failed to extract heuristics')
       }
 
-      const { job } = await jobResponse.json()
-      console.log('Job created:', job.id)
-      setCurrentJobId(job.id)
+      const { heuristics, dimensions } = await extractResponse.json()
+      console.log('Extracted heuristics:', heuristics.length)
       
-      // Keep isProcessing true - polling will set to false when job completes
+      setExtractedHeuristics(heuristics)
+      setDiscoveredDimensions(dimensions || [])
+      setStep('review')
+      
     } catch (err: any) {
       console.error('Ingest error:', err)
       setError(err.message || 'Failed to process guidelines')
       setStep('input')
+    } finally {
       setIsProcessing(false)
     }
   }
