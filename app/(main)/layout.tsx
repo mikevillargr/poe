@@ -15,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>
+      <body suppressHydrationWarning>
         <AppProviders>
           <div className="flex h-screen bg-background text-body font-sans overflow-hidden">
             <Sidebar />
