@@ -584,22 +584,21 @@ export function EditorView({
 
           {/* Export Section - Compact */}
           <div className="mt-6 pt-4 border-t border-border">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-medium text-muted uppercase tracking-wider">
-                Export
-              </h3>
-              <label className="flex items-center gap-1.5 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={includeScoreData}
-                  onChange={(e) => setIncludeScoreData(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-border bg-surface text-accent focus:ring-accent focus:ring-offset-0"
-                />
-                <span className="text-xs text-muted group-hover:text-body transition-colors">
-                  + Report
-                </span>
-              </label>
-            </div>
+            <h3 className="text-xs font-medium text-muted uppercase tracking-wider mb-3">
+              Export
+            </h3>
+            
+            <label className="flex items-center gap-2 mb-3 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={includeScoreData}
+                onChange={(e) => setIncludeScoreData(e.target.checked)}
+                className="w-4 h-4 rounded border-border bg-surface text-accent focus:ring-accent focus:ring-offset-0"
+              />
+              <span className="text-xs text-body group-hover:text-heading transition-colors">
+                Include analysis report
+              </span>
+            </label>
 
             <div className="flex gap-2">
               {/* Download DOCX */}
