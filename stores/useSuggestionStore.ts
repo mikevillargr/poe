@@ -3,7 +3,7 @@ import { create } from 'zustand'
 export interface SuggestionState {
   id: string
   status: 'pending' | 'accepted' | 'dismissed'
-  category: 'Brand' | 'SEO' | 'Blacklist' | 'Agency' | 'Client'
+  category: string
   severity: 'high' | 'medium' | 'low'
   title: string
   original: string

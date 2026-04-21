@@ -49,7 +49,7 @@ interface DocumentTab {
 
 interface Suggestion {
   id: string
-  category: 'Brand' | 'SEO' | 'Blacklist' | 'Agency' | 'Client'
+  category: string
   severity: 'high' | 'medium' | 'low'
   title: string
   original: string
@@ -73,11 +73,12 @@ interface BatchItem {
 const SUGGESTIONS: Suggestion[] = []
 
 const DIMENSIONS = [
-  { category: 'Brand', score: 72, status: 'fail' },
-  { category: 'SEO', score: 58, status: 'fail' },
-  { category: 'Blacklist', score: 85, status: 'pass' },
-  { category: 'Agency', score: 88, status: 'pass' },
-  { category: 'Client', score: 64, status: 'fail' },
+  { category: 'Brand Voice & Messaging', score: 0, status: 'pending' },
+  { category: 'Call-to-Action', score: 0, status: 'pending' },
+  { category: 'Compliance & Accuracy', score: 0, status: 'pending' },
+  { category: 'Entity Formation Standards', score: 0, status: 'pending' },
+  { category: 'SEO & Readability', score: 0, status: 'pending' },
+  { category: 'Target Audience Alignment', score: 0, status: 'pending' },
 ]
 
 const BATCH_ITEMS: BatchItem[] = [
@@ -344,6 +345,11 @@ export default function AnalyzePage() {
   // Convert plain text with newlines to HTML paragraphs for TipTap
   const convertTextToHTML = (text: string): string => {
     if (!text) return ''
+    
+    // If content already has HTML tags, return as-is
+    if (text.includes('<p>') || text.includes('<h1') || text.includes('<h2') || text.includes('<div')) {
+      return text
+    }
     
     // Split by double newlines (paragraph breaks)
     const paragraphs = text.split(/\n\n+/)
