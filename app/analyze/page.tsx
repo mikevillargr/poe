@@ -340,6 +340,28 @@ export default function AnalyzePage() {
     }
   }
 
+  // Convert plain text with newlines to HTML paragraphs for TipTap
+  const convertTextToHTML = (text: string): string => {
+    if (!text) return ''
+    
+    // Split by double newlines (paragraph breaks)
+    const paragraphs = text.split(/\n\n+/)
+    
+    // Wrap each paragraph in <p> tags, convert single newlines to <br>
+    const html = paragraphs
+      .map(para => {
+        const trimmed = para.trim()
+        if (!trimmed) return ''
+        // Replace single newlines with <br>
+        const withBreaks = trimmed.replace(/\n/g, '<br>')
+        return `<p>${withBreaks}</p>`
+      })
+      .filter(p => p)
+      .join('')
+    
+    return html || `<p>${text}</p>`
+  }
+
   const handleOpenBatchItem = async (documentId: string) => {
     const item = batchItems.find((b) => b.id === documentId)
     if (!item) return
@@ -357,12 +379,13 @@ export default function AnalyzePage() {
       if (response.ok) {
         const { document, latestScore } = await response.json()
         const newId = generateTabId('doc')
+        const rawContent = document.editedText || document.originalText
         const newTab: DocumentTab = {
           id: newId,
           title: document.title,
           type: document.source === 'url' ? 'url' : 'docx',
           score: document.overallScore,
-          content: document.editedText || document.originalText,
+          content: convertTextToHTML(rawContent), // Convert to HTML
           source: document.source,
           sourceRef: document.sourceRef,
           documentId: document.id,
