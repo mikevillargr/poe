@@ -1,7 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server'
 import mammoth from 'mammoth'
-import { Readability } from '@mozilla/readability'
-import { JSDOM } from 'jsdom'
+import * as cheerio from 'cheerio'
+
+// Extract clean content from HTML
+function extractMainContent(html: string, url: string): { content: string; title: string } {
+  const $ = cheerio.load(html)
+  
+  // Extract title
+  const title = $('title').text().trim() || 
+                $('h1').first().text().trim() || 
+                url.split('/').pop() || 
+                'Untitled'
+  
+  // Remove unwanted elements
+  $('script, style, nav, header, footer, aside, iframe, noscript').remove()
+  $('.nav, .navigation, .menu, .sidebar, .footer, .header, .advertisement, .ad').remove()
+  
+  // Try to find main content area
+  let mainContent = $('main').html() || 
+                    $('article').html() || 
+                    $('.content').html() ||
+                    $('.post-content').html() ||
+                    $('.entry-content').html() ||
+                    $('body').html() || 
+                    ''
+  
+  // Load the main content into cheerio for further processing
+  const $main = cheerio.load(mainContent)
+  
+  // Convert to clean HTML with proper paragraph structure
+  const paragraphs: string[] = []
+  
+  // Extract headings and paragraphs
+  $main('h1, h2, h3, h4, h5, h6, p, li').each((_, elem) => {
+    const text = $main(elem).text().trim()
+    if (text && text.length > 0) {
+      const tagName = elem.tagName.toLowerCase()
+      if (tagName.startsWith('h')) {
+        paragraphs.push(`<${tagName}>${text}</${tagName}>`)
+      } else {
+        paragraphs.push(`<p>${text}</p>`)
+      }
+    }
+  })
+  
+  const content = paragraphs.join('\n')
+  
+  return { content, title }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,21 +114,16 @@ export async function POST(request: NextRequest) {
 
       const html = await response.text()
       
-      // Use Readability to extract main content
-      const dom = new JSDOM(html, { url })
-      const reader = new Readability(dom.window.document)
-      const article = reader.parse()
+      // Extract main content using cheerio
+      const { content, title } = extractMainContent(html, url)
 
-      if (!article || !article.textContent) {
+      if (!content || content.trim().length === 0) {
         throw new Error('Could not extract readable content from URL')
       }
 
-      // Convert to HTML for editor
-      const content = article.content || article.textContent
-
       return NextResponse.json({
         content,
-        title: article.title || url.split('/').pop() || 'Untitled',
+        title,
         source: 'url',
         sourceRef: url,
       })
