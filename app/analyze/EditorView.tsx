@@ -13,6 +13,7 @@ import { useSettings } from '@/hooks/useSettings'
 import { saveAs } from 'file-saver'
 // @ts-ignore - no types available
 import htmlDocx from 'html-docx-js/dist/html-docx'
+import { initGoogleDrive, uploadToGoogleDrive } from '@/lib/googleDrive'
 
 interface DocumentTab {
   id: string
@@ -59,6 +60,15 @@ export function EditorView({
   const [heuristicsCount, setHeuristicsCount] = useState<number>(0)
   const [includeScoreData, setIncludeScoreData] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false)
+  const [driveInitialized, setDriveInitialized] = useState(false)
+
+  // Initialize Google Drive on mount
+  useEffect(() => {
+    initGoogleDrive()
+      .then(() => setDriveInitialized(true))
+      .catch((err) => console.warn('Google Drive init failed:', err))
+  }, [])
   
   // Zustand stores
   const {
@@ -629,15 +639,89 @@ export function EditorView({
 
             {/* Google Drive */}
             <button
-              onClick={() => {
-                alert('Google Drive integration coming soon. For now, download DOCX and upload to Drive manually.')
+              onClick={async () => {
+                if (!editorRef.current) return
+                
+                setIsUploadingToDrive(true)
+                try {
+                  const content = editorRef.current.getHTML()
+                  let exportContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <title>${tab?.title || 'Document'}</title>
+                    </head>
+                    <body>
+                      ${content}
+                  `
+
+                  // Append score data if checkbox is checked
+                  if (includeScoreData && currentScore !== null) {
+                    exportContent += `
+                      <hr style="margin: 40px 0 20px 0; border: 2px solid #e5e7eb;">
+                      <h2>Content Analysis Report</h2>
+                      <p><strong>Overall Score:</strong> ${currentScore}/100</p>
+                      ${currentDimensions.length > 0 ? `
+                        <h3>Dimension Breakdown</h3>
+                        <ul>
+                          ${currentDimensions.map(d => `<li><strong>${d.category}:</strong> ${d.score}/100</li>`).join('')}
+                        </ul>
+                      ` : ''}
+                      ${suggestions.size > 0 ? `
+                        <h3>Suggestions Applied</h3>
+                        <ul>
+                          ${Array.from(suggestions.values()).filter(s => s.status === 'accepted').map(s => 
+                            `<li>[${s.category}] ${s.title || 'Suggestion'}</li>`
+                          ).join('')}
+                        </ul>
+                      ` : ''}
+                    `
+                  }
+
+                  exportContent += `
+                    </body>
+                    </html>
+                  `
+
+                  // Upload to Google Drive
+                  const docUrl = await uploadToGoogleDrive(
+                    tab?.title || 'Document',
+                    exportContent,
+                    'text/html'
+                  )
+
+                  // Open the Google Doc in a new tab
+                  window.open(docUrl, '_blank')
+                  
+                  alert('Document created in Google Drive!')
+                } catch (error: any) {
+                  console.error('Google Drive error:', error)
+                  if (error.message?.includes('not initialized')) {
+                    alert('Please set up Google Drive credentials. Check console for details.')
+                  } else {
+                    alert('Failed to upload to Google Drive. Please try again.')
+                  }
+                } finally {
+                  setIsUploadingToDrive(false)
+                }
               }}
-              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all flex items-center justify-center gap-2"
+              disabled={isUploadingToDrive}
+              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12.01 1.485c-.276 0-.546.076-.785.22L2.36 7.103a1.57 1.57 0 0 0-.785 1.36v11.073c0 .56.299 1.077.785 1.36l8.865 5.398c.24.144.51.22.785.22.276 0 .546-.076.785-.22l8.865-5.398c.486-.283.785-.8.785-1.36V8.463c0-.56-.299-1.077-.785-1.36L12.795 1.705a1.57 1.57 0 0 0-.785-.22z"/>
-              </svg>
-              Save to Google Drive
+              {isUploadingToDrive ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12.01 1.485c-.276 0-.546.076-.785.22L2.36 7.103a1.57 1.57 0 0 0-.785 1.36v11.073c0 .56.299 1.077.785 1.36l8.865 5.398c.24.144.51.22.785.22.276 0 .546-.076.785-.22l8.865-5.398c.486-.283.785-.8.785-1.36V8.463c0-.56-.299-1.077-.785-1.36L12.795 1.705a1.57 1.57 0 0 0-.785-.22z"/>
+                  </svg>
+                  Save to Google Drive
+                </>
+              )}
             </button>
 
             <p className="text-xs text-muted mt-3 text-center">

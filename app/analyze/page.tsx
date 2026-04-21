@@ -155,7 +155,13 @@ const itemVariants = {
 export default function AnalyzePage() {
   const searchParams = useSearchParams()
   const [tabs, setTabs] = useState<DocumentTab[]>([])
-  const [activeTabId, setActiveTabId] = useState<string>('new')
+  const [activeTabId, setActiveTabId] = useState<string>(() => {
+    // Restore last active tab from localStorage
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('analyze-active-tab') || 'new'
+    }
+    return 'new'
+  })
   const [activeFilter, setActiveFilter] = useState<string>('All')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
   const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null)
@@ -163,6 +169,13 @@ export default function AnalyzePage() {
   const [batchItems, setBatchItems] = useState<any[]>([])
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const editorRef = useRef<any>(null)
+
+  // Persist active tab to localStorage
+  useEffect(() => {
+    if (activeTabId) {
+      localStorage.setItem('analyze-active-tab', activeTabId)
+    }
+  }, [activeTabId])
   
   // Zustand stores
   const { suggestions, setSuggestions, acceptSuggestion, dismissSuggestion, updateSuggestion, startRecomposition, finishRecomposition } = useSuggestionStore()
