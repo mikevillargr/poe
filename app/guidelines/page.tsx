@@ -42,6 +42,8 @@ export default function GuidelinesPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [activeFilter, setActiveFilter] = useState<string>('All')
+  const [editingHeuristic, setEditingHeuristic] = useState<Heuristic | null>(null)
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const { settings } = useSettings()
 
   // Handle file upload
@@ -271,6 +273,51 @@ export default function GuidelinesPage() {
   // Delete heuristic
   const deleteHeuristic = (id: string) => {
     setExtractedHeuristics(prev => prev.filter(h => h.id !== id))
+  }
+
+  // Handle edit saved heuristic
+  const handleEditHeuristic = async (updates: { text: string; weight: number }) => {
+    if (!editingHeuristic) return
+
+    try {
+      const response = await fetch(`/api/guidelines/${editingHeuristic.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+
+      if (response.ok) {
+        // Update local state
+        setSavedHeuristics(prev =>
+          prev.map(h => h.id === editingHeuristic.id ? { ...h, ...updates } : h)
+        )
+        setEditingHeuristic(null)
+      } else {
+        alert('Failed to update heuristic')
+      }
+    } catch (error) {
+      console.error('Update error:', error)
+      alert('Failed to update heuristic')
+    }
+  }
+
+  // Handle delete saved heuristic
+  const handleDeleteHeuristic = async (id: string) => {
+    try {
+      const response = await fetch(`/api/guidelines/${id}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setSavedHeuristics(prev => prev.filter(h => h.id !== id))
+        setDeleteConfirmId(null)
+      } else {
+        alert('Failed to delete heuristic')
+      }
+    } catch (error) {
+      console.error('Delete error:', error)
+      alert('Failed to delete heuristic')
+    }
   }
 
   // Get unique categories from saved heuristics for dynamic filter tabs
@@ -615,10 +662,18 @@ export default function GuidelinesPage() {
                   <span className="text-xs text-muted font-mono">
                     {heuristic.weight}/10
                   </span>
-                  <button className="p-2 text-muted hover:text-accent transition-colors">
+                  <button 
+                    onClick={() => setEditingHeuristic(heuristic)}
+                    className="p-2 text-muted hover:text-accent transition-colors"
+                    title="Edit heuristic"
+                  >
                     <Edit2 className="w-4 h-4" />
                   </button>
-                  <button className="p-2 text-muted hover:text-red-400 transition-colors">
+                  <button 
+                    onClick={() => setDeleteConfirmId(heuristic.id)}
+                    className="p-2 text-muted hover:text-red-400 transition-colors"
+                    title="Delete heuristic"
+                  >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -645,6 +700,148 @@ export default function GuidelinesPage() {
             </p>
           </motion.div>
         )}
+
+        {/* Edit Modal */}
+        <AnimatePresence>
+          {editingHeuristic && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setEditingHeuristic(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="glass-card p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              >
+                <h3 className="text-xl font-display text-heading mb-6">Edit Heuristic</h3>
+                
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const formData = new FormData(e.currentTarget)
+                    handleEditHeuristic({
+                      text: formData.get('text') as string,
+                      weight: parseInt(formData.get('weight') as string),
+                    })
+                  }}
+                  className="space-y-6"
+                >
+                  {/* Category (read-only) */}
+                  <div>
+                    <label className="block text-sm font-medium text-heading mb-2">
+                      Category
+                    </label>
+                    <CategoryBadge category={editingHeuristic.category} variant="solid" />
+                    <p className="text-xs text-muted mt-1">
+                      Category cannot be changed after creation
+                    </p>
+                  </div>
+
+                  {/* Heuristic Text */}
+                  <div>
+                    <label className="block text-sm font-medium text-heading mb-2">
+                      Heuristic Rule
+                    </label>
+                    <textarea
+                      name="text"
+                      defaultValue={editingHeuristic.text}
+                      rows={4}
+                      className="w-full bg-surface border border-border rounded-input px-4 py-3 text-sm text-heading placeholder-muted focus:outline-none focus:ring-2 focus:ring-accent resize-none"
+                      placeholder="Enter the heuristic rule..."
+                      required
+                    />
+                    <p className="text-xs text-muted mt-1">
+                      This is the instruction that will be used to evaluate content
+                    </p>
+                  </div>
+
+                  {/* Weight */}
+                  <div>
+                    <label className="block text-sm font-medium text-heading mb-2">
+                      Scoring Weight
+                    </label>
+                    <input
+                      type="number"
+                      name="weight"
+                      defaultValue={editingHeuristic.weight}
+                      min="1"
+                      max="10"
+                      className="w-full bg-surface border border-border rounded-input px-4 py-3 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-accent"
+                      required
+                    />
+                    <p className="text-xs text-muted mt-1">
+                      Weight from 1-10. Higher weights have more impact on the overall score. 
+                      Use 10 for critical rules, 5 for moderate importance, 1 for minor guidelines.
+                    </p>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-3 justify-end pt-4 border-t border-border">
+                    <button
+                      type="button"
+                      onClick={() => setEditingHeuristic(null)}
+                      className="px-4 py-2 rounded-input text-sm font-medium text-body hover:bg-surface transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-input text-sm font-medium bg-accent hover:bg-accent/90 text-white transition-colors"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Delete Confirmation */}
+        <AnimatePresence>
+          {deleteConfirmId && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+              onClick={() => setDeleteConfirmId(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="glass-card p-6 max-w-md w-full"
+              >
+                <h3 className="text-lg font-display text-heading mb-2">Delete Heuristic?</h3>
+                <p className="text-sm text-muted mb-6">
+                  This will permanently remove this heuristic from your scoring equation. 
+                  Content will no longer be evaluated against this rule. This action cannot be undone.
+                </p>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => setDeleteConfirmId(null)}
+                    className="px-4 py-2 rounded-input text-sm font-medium text-body hover:bg-surface transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDeleteHeuristic(deleteConfirmId)}
+                    className="px-4 py-2 rounded-input text-sm font-medium bg-danger hover:bg-danger/90 text-white transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </PageErrorBoundary>
   )
