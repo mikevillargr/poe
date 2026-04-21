@@ -170,7 +170,7 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
         content = item.ref
       }
 
-      // Create document first
+      // Create document first with 'scoring' status
       let documentId: string | undefined
       try {
         const docResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/documents`, {
@@ -181,13 +181,14 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
             content,
             source: item.type,
             sourceRef: item.ref,
+            status: 'scoring',
           }),
         })
         
         if (docResponse.ok) {
           const { document } = await docResponse.json()
           documentId = document.id
-          console.log(`Created document ${documentId} for ${item.ref}`)
+          console.log(`Created document ${documentId} for ${item.ref}, status: scoring`)
         }
       } catch (docError) {
         console.error('Failed to create document:', docError)

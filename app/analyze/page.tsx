@@ -795,6 +795,19 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
   const { settings } = useSettings()
 
+  // Poll for updates when there are documents in scoring status
+  useEffect(() => {
+    const hasScoring = items.some(item => item.status === 'scoring')
+    if (!hasScoring) return
+
+    const interval = setInterval(() => {
+      console.log('[Batch Queue] Polling for scoring updates...')
+      onRefresh()
+    }, 3000) // Poll every 3 seconds
+
+    return () => clearInterval(interval)
+  }, [items, onRefresh])
+
   const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -982,17 +995,29 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
   }
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    // Map database status to display status
+    const displayStatus = status === 'scored' ? 'Complete' : 
+                         status === 'scoring' ? 'Scoring' :
+                         status === 'draft' ? 'Draft' :
+                         status || 'Queued'
+    
+    switch (displayStatus) {
       case 'Complete':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-success/10 text-green-400 border border-success/20 backdrop-blur-sm">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Complete
+            <CheckCircle2 className="w-3.5 h-3.5" /> Scored
           </span>
         )
       case 'Scoring':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent border border-accent/20 backdrop-blur-sm shadow-glow-accent">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Scoring
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Scoring...
+          </span>
+        )
+      case 'Draft':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface text-muted border border-border backdrop-blur-sm">
+            Draft
           </span>
         )
       case 'Queued':
@@ -1005,6 +1030,12 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-danger/10 text-red-400 border border-danger/20 backdrop-blur-sm">
             <AlertCircle className="w-3.5 h-3.5" /> Error
+          </span>
+        )
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-surface text-muted border border-border backdrop-blur-sm">
+            {displayStatus}
           </span>
         )
     }
