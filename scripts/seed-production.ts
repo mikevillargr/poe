@@ -5,42 +5,42 @@ const TENANT_ID = '00000000-0000-0000-0000-000000000000'
 
 const HEURISTICS_DATA = [
   // Brand Voice & Messaging
-  { category: 'Brand Voice & Messaging', rule: 'Use active voice and direct language', weight: 1.0 },
-  { category: 'Brand Voice & Messaging', rule: 'Avoid jargon and complex terminology unless necessary', weight: 0.9 },
-  { category: 'Brand Voice & Messaging', rule: 'Maintain a professional yet approachable tone', weight: 0.8 },
-  { category: 'Brand Voice & Messaging', rule: 'Use "you" to address the reader directly', weight: 0.7 },
+  { category: 'Brand Voice & Messaging', rule: 'Use active voice and direct language', weight: 10 },
+  { category: 'Brand Voice & Messaging', rule: 'Avoid jargon and complex terminology unless necessary', weight: 9 },
+  { category: 'Brand Voice & Messaging', rule: 'Maintain a professional yet approachable tone', weight: 8 },
+  { category: 'Brand Voice & Messaging', rule: 'Use "you" to address the reader directly', weight: 7 },
   
   // Entity Formation Standards
-  { category: 'Entity Formation Standards', rule: 'Clearly explain LLC formation requirements', weight: 1.0 },
-  { category: 'Entity Formation Standards', rule: 'Include state-specific information when relevant', weight: 0.9 },
-  { category: 'Entity Formation Standards', rule: 'Provide step-by-step guidance for complex processes', weight: 0.9 },
-  { category: 'Entity Formation Standards', rule: 'Reference official sources and regulations', weight: 0.8 },
-  { category: 'Entity Formation Standards', rule: 'Explain filing requirements and deadlines', weight: 0.8 },
+  { category: 'Entity Formation Standards', rule: 'Clearly explain LLC formation requirements', weight: 10 },
+  { category: 'Entity Formation Standards', rule: 'Include state-specific information when relevant', weight: 9 },
+  { category: 'Entity Formation Standards', rule: 'Provide step-by-step guidance for complex processes', weight: 9 },
+  { category: 'Entity Formation Standards', rule: 'Reference official sources and regulations', weight: 8 },
+  { category: 'Entity Formation Standards', rule: 'Explain filing requirements and deadlines', weight: 8 },
   
   // Target Audience Alignment
-  { category: 'Target Audience Alignment', rule: 'Address small business owners and entrepreneurs', weight: 1.0 },
-  { category: 'Target Audience Alignment', rule: 'Use practical examples and real-world scenarios', weight: 0.9 },
-  { category: 'Target Audience Alignment', rule: 'Explain complex topics in simple terms', weight: 0.9 },
-  { category: 'Target Audience Alignment', rule: 'Provide clear next steps and actionable advice', weight: 0.8 },
-  { category: 'Target Audience Alignment', rule: 'Anticipate common questions and concerns', weight: 0.7 },
+  { category: 'Target Audience Alignment', rule: 'Address small business owners and entrepreneurs', weight: 10 },
+  { category: 'Target Audience Alignment', rule: 'Use practical examples and real-world scenarios', weight: 9 },
+  { category: 'Target Audience Alignment', rule: 'Explain complex topics in simple terms', weight: 9 },
+  { category: 'Target Audience Alignment', rule: 'Provide clear next steps and actionable advice', weight: 8 },
+  { category: 'Target Audience Alignment', rule: 'Anticipate common questions and concerns', weight: 7 },
   
   // SEO & Readability
-  { category: 'SEO & Readability', rule: 'Use clear, descriptive headings (H1, H2, H3)', weight: 0.9 },
-  { category: 'SEO & Readability', rule: 'Keep paragraphs short (3-4 sentences max)', weight: 0.8 },
-  { category: 'SEO & Readability', rule: 'Use bullet points and lists for easy scanning', weight: 0.8 },
-  { category: 'SEO & Readability', rule: 'Include relevant keywords naturally', weight: 0.7 },
-  { category: 'SEO & Readability', rule: 'Write meta descriptions that summarize content', weight: 0.7 },
+  { category: 'SEO & Readability', rule: 'Use clear, descriptive headings (H1, H2, H3)', weight: 9 },
+  { category: 'SEO & Readability', rule: 'Keep paragraphs short (3-4 sentences max)', weight: 8 },
+  { category: 'SEO & Readability', rule: 'Use bullet points and lists for easy scanning', weight: 8 },
+  { category: 'SEO & Readability', rule: 'Include relevant keywords naturally', weight: 7 },
+  { category: 'SEO & Readability', rule: 'Write meta descriptions that summarize content', weight: 7 },
   
   // Compliance & Accuracy
-  { category: 'Compliance & Accuracy', rule: 'Ensure all legal information is current and accurate', weight: 1.0 },
-  { category: 'Compliance & Accuracy', rule: 'Include disclaimers where appropriate', weight: 0.9 },
-  { category: 'Compliance & Accuracy', rule: 'Cite sources for statistics and claims', weight: 0.8 },
-  { category: 'Compliance & Accuracy', rule: 'Avoid making guarantees or promises', weight: 0.8 },
+  { category: 'Compliance & Accuracy', rule: 'Ensure all legal information is current and accurate', weight: 10 },
+  { category: 'Compliance & Accuracy', rule: 'Include disclaimers where appropriate', weight: 9 },
+  { category: 'Compliance & Accuracy', rule: 'Cite sources for statistics and claims', weight: 8 },
+  { category: 'Compliance & Accuracy', rule: 'Avoid making guarantees or promises', weight: 8 },
   
   // Call-to-Action
-  { category: 'Call-to-Action', rule: 'Include clear CTAs that guide the reader', weight: 0.8 },
-  { category: 'Call-to-Action', rule: 'Link to relevant NCH services when appropriate', weight: 0.7 },
-  { category: 'Call-to-Action', rule: 'Provide contact information for further assistance', weight: 0.6 },
+  { category: 'Call-to-Action', rule: 'Include clear CTAs that guide the reader', weight: 8 },
+  { category: 'Call-to-Action', rule: 'Link to relevant NCH services when appropriate', weight: 7 },
+  { category: 'Call-to-Action', rule: 'Provide contact information for further assistance', weight: 6 },
 ]
 
 async function seed() {
