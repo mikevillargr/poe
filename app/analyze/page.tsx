@@ -155,11 +155,11 @@ const itemVariants = {
   },
 }
 
-// Counter for generating unique tab IDs (avoids Date.now() hydration issues)
-let tabIdCounter = 0
+// Generate unique tab IDs using crypto.randomUUID (avoids duplicates and hydration issues)
 const generateTabId = (prefix: string) => {
-  tabIdCounter++
-  return `${prefix}-${tabIdCounter}`
+  // Use a short random ID instead of counter to avoid duplicates
+  const randomId = Math.random().toString(36).substring(2, 9)
+  return `${prefix}-${randomId}`
 }
 
 export default function AnalyzePage() {
