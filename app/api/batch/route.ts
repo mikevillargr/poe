@@ -170,7 +170,7 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
         content = item.ref
       }
 
-      // Create document first with 'scoring' status
+      // Create document as draft (no auto-scoring)
       let documentId: string | undefined
       try {
         const docResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/documents`, {
@@ -181,61 +181,41 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
             content,
             source: item.type,
             sourceRef: item.ref,
-            status: 'scoring',
+            status: 'draft',
           }),
         })
         
         if (docResponse.ok) {
           const { document } = await docResponse.json()
           documentId = document.id
-          console.log(`Created document ${documentId} for ${item.ref}, status: scoring`)
+          console.log(`Created document ${documentId} for ${item.ref}, status: draft`)
+          
+          // Add to results
+          batchJob.results.push({
+            id: documentId,
+            documentId,
+            title,
+            type: item.type,
+            ref: item.ref,
+            status: 'draft',
+          })
+          batchJob.completed++
+        } else {
+          throw new Error('Failed to create document')
         }
-      } catch (docError) {
+      } catch (docError: any) {
         console.error('Failed to create document:', docError)
-      }
-
-      // Score the content
-      const scoreResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/score`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content,
-          source: item.type,
-          sourceRef: item.ref,
-          documentId,
-          apiKey,
-        }),
-      })
-
-      let result
-      if (scoreResponse.ok) {
-        const scoreData = await scoreResponse.json()
-        result = {
-          id: documentId || `result-${Date.now()}-${batchJob.completed}`,
-          documentId,
-          title,
-          type: item.type,
-          ref: item.ref,
-          status: 'complete',
-          score: scoreData.overallScore,
-          dimensionScores: scoreData.dimensionScores,
-          suggestions: scoreData.suggestions,
-        }
-        batchJob.completed++
-      } else {
-        result = {
-          id: documentId || `result-${Date.now()}-${batchJob.failed}`,
-          documentId,
+        batchJob.failed++
+        batchJob.results.push({
+          id: `result-${Date.now()}-${batchJob.failed}`,
+          documentId: undefined,
           title,
           type: item.type,
           ref: item.ref,
           status: 'error',
-          error: 'Scoring failed',
-        }
-        batchJob.failed++
+          error: docError?.message || 'Failed to create document',
+        })
       }
-
-      batchJob.results.push(result)
       
     } catch (error: any) {
       console.error('Item processing error:', error)

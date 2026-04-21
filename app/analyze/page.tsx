@@ -796,6 +796,7 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
   const { settings } = useSettings()
 
   // Poll for updates when there are documents in scoring status
+  // (Only needed if user manually scores documents)
   useEffect(() => {
     const hasScoring = items.some(item => item.status === 'scoring')
     if (!hasScoring) return
