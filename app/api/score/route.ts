@@ -22,13 +22,19 @@ export async function POST(request: NextRequest) {
     
     try {
       if (db) {
-        const dbHeuristics = await db.select().from(heuristics).where({ active: true } as any)
-        allHeuristics = dbHeuristics.map(h => ({
-          id: h.id,
-          category: h.category,
-          rule: h.rule,
-          weight: h.weight,
-        }))
+        const dbHeuristics = await db.select().from(heuristics)
+        allHeuristics = dbHeuristics.map((h: any) => {
+          // Parse category from rule text if it has [Category] prefix
+          let category = h.category
+          let rule = h.rule
+          const match = h.rule?.match(/^\[([^\]]+)\]\s*(.*)/)
+          if (match) {
+            category = match[1]
+            rule = match[2]
+          }
+          return { id: h.id, category, text: rule, weight: h.weight }
+        })
+        console.log('Loaded', allHeuristics.length, 'heuristics from database')
       }
     } catch (dbError) {
       console.warn('Database read failed, using in-memory heuristics')
@@ -36,8 +42,12 @@ export async function POST(request: NextRequest) {
 
     // Fallback to in-memory if database failed or empty
     if (allHeuristics.length === 0) {
-      allHeuristics = getInMemoryHeuristics()
+      const memHeuristics = getInMemoryHeuristics()
+      console.log('In-memory heuristics:', memHeuristics.length)
+      allHeuristics = memHeuristics
     }
+
+    console.log('Total heuristics for scoring:', allHeuristics.length)
 
     if (allHeuristics.length === 0) {
       return NextResponse.json({
@@ -48,7 +58,7 @@ export async function POST(request: NextRequest) {
     // Create scoring prompt
     const scoringPrompt = `You are an expert content quality analyst. Analyze the following content against these specific guidelines and rules:
 
-${allHeuristics.map((h, i) => `${i + 1}. [${h.category}] ${h.rule || h.text} (Weight: ${h.weight}/10)`).join('\n')}
+${allHeuristics.map((h: any, i: number) => `${i + 1}. [${h.category}] ${h.text || h.rule} (Weight: ${h.weight}/10)`).join('\n')}
 
 For each rule that is violated or could be improved:
 1. Identify the specific text that needs attention

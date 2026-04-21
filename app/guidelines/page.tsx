@@ -226,23 +226,32 @@ export default function GuidelinesPage() {
       }
       console.log('Save successful:', saveData)
 
-      // Reload heuristics from database to get the saved ones with IDs
-      const listResponse = await fetch('/api/guidelines/list')
-      if (listResponse.ok) {
-        const { heuristics } = await listResponse.json()
-        console.log('Loaded heuristics:', heuristics)
-        setSavedHeuristics(heuristics || [])
+      // Try to reload from storage
+      let loaded = false
+      try {
+        const listResponse = await fetch('/api/guidelines/list')
+        if (listResponse.ok) {
+          const data = await listResponse.json()
+          console.log('Loaded heuristics from storage:', data.heuristics?.length)
+          if (data.heuristics && data.heuristics.length > 0) {
+            setSavedHeuristics(data.heuristics)
+            loaded = true
+          }
+        }
+      } catch (listErr) {
+        console.warn('Failed to reload from storage:', listErr)
+      }
+
+      // Fallback: add extracted heuristics directly to local state
+      if (!loaded) {
+        console.log('Using extracted heuristics directly as fallback')
+        setSavedHeuristics(prev => [...prev, ...extractedHeuristics])
       }
 
       setExtractedHeuristics([])
-      setStep('complete')
-      
-      // Reset after 2 seconds
-      setTimeout(() => {
-        setStep('input')
-        setInputValue('')
-        setFile(null)
-      }, 2000)
+      setStep('input')
+      setInputValue('')
+      setFile(null)
     } catch (err: any) {
       console.error('Save error:', err)
       setError(err.message || 'Failed to save heuristics')
@@ -263,6 +272,9 @@ export default function GuidelinesPage() {
   const deleteHeuristic = (id: string) => {
     setExtractedHeuristics(prev => prev.filter(h => h.id !== id))
   }
+
+  // Get unique categories from saved heuristics for dynamic filter tabs
+  const savedCategories = Array.from(new Set(savedHeuristics.map(h => h.category)))
 
   // Filter heuristics
   const filteredHeuristics = savedHeuristics.filter(h => 
@@ -560,31 +572,13 @@ export default function GuidelinesPage() {
           </motion.div>
         )}
 
-        {/* Complete State */}
-        {step === 'complete' && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="glass-card p-12 text-center"
-          >
-            <div className="w-16 h-16 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-success" />
-            </div>
-            <h3 className="text-xl font-display text-heading mb-2">
-              Heuristics Saved!
-            </h3>
-            <p className="text-muted">
-              Your guidelines have been processed and saved to the heuristic store
-            </p>
-          </motion.div>
-        )}
 
-        {/* Saved Heuristics List */}
-        {savedHeuristics.length > 0 && step === 'input' && (
+        {/* Saved Heuristics List - always visible when heuristics exist */}
+        {savedHeuristics.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-8"
+            className="glass-card p-8 mt-10"
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-display text-heading">
@@ -593,8 +587,8 @@ export default function GuidelinesPage() {
                   {savedHeuristics.length} rules
                 </span>
               </h2>
-              <div className="flex gap-2">
-                {['All', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client'].map((filter) => (
+              <div className="flex gap-2 flex-wrap">
+                {['All', ...savedCategories].map((filter) => (
                   <button
                     key={filter}
                     onClick={() => setActiveFilter(filter)}
@@ -634,7 +628,7 @@ export default function GuidelinesPage() {
         )}
 
         {/* Empty State */}
-        {savedHeuristics.length === 0 && step === 'input' && (
+        {savedHeuristics.length === 0 && (step === 'input' || step === 'complete') && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
