@@ -37,6 +37,10 @@ interface DocumentTab {
   title: string
   type: 'url' | 'docx' | 'new'
   score?: number
+  content?: string
+  source?: string
+  sourceRef?: string
+  documentId?: string
 }
 
 interface Suggestion {
@@ -148,15 +152,8 @@ const itemVariants = {
 }
 
 export default function AnalyzePage() {
-  const [tabs, setTabs] = useState<DocumentTab[]>([
-    {
-      id: '1',
-      title: 'Nevada LLC Formation Guide',
-      type: 'url',
-      score: 74,
-    },
-  ])
-  const [activeTabId, setActiveTabId] = useState<string>('1')
+  const [tabs, setTabs] = useState<DocumentTab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string>('new')
   const [activeFilter, setActiveFilter] = useState<string>('All')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
   const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null)
@@ -290,8 +287,38 @@ export default function AnalyzePage() {
         <div className="flex-1 flex overflow-hidden bg-background">
           {activeTabId === 'batch' ? (
             <BatchQueueView onOpenTab={handleOpenBatchItem} />
-          ) : activeTab?.type === 'new' ? (
-            <BlankCanvasView />
+          ) : activeTabId === 'new' || !activeTab ? (
+            <BlankCanvasView onCreateDocument={async (title, content, source, sourceRef) => {
+              const newId = `doc-${Date.now()}`
+              
+              // Create document in DB
+              let documentId: string | undefined
+              try {
+                const response = await fetch('/api/documents', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ title, content, source, sourceRef }),
+                })
+                if (response.ok) {
+                  const { document } = await response.json()
+                  documentId = document.id
+                }
+              } catch (e) {
+                console.warn('Failed to create document in DB:', e)
+              }
+
+              const newTab: DocumentTab = {
+                id: newId,
+                title,
+                type: source === 'url' ? 'url' : 'docx',
+                content,
+                source,
+                sourceRef,
+                documentId,
+              }
+              setTabs([...tabs, newTab])
+              setActiveTabId(newId)
+            }} />
           ) : (
             <EditorView
               tab={activeTab}
@@ -304,6 +331,8 @@ export default function AnalyzePage() {
               onExpandSuggestion={setExpandedSuggestionId}
               editorRef={editorRef}
               onShowVersionHistory={() => setShowVersionHistory(true)}
+              initialContent={activeTab.content}
+              initialDocumentId={activeTab.documentId}
             />
           )}
         </div>
@@ -328,7 +357,83 @@ export default function AnalyzePage() {
 }
 
 // Blank Canvas View
-function BlankCanvasView() {
+function BlankCanvasView({ onCreateDocument }: { onCreateDocument: (title: string, content: string, source: string, sourceRef?: string) => void }) {
+  const [inputMethod, setInputMethod] = useState<'paste' | 'upload' | 'url'>('url')
+  const [urlInput, setUrlInput] = useState('')
+  const [pasteContent, setPasteContent] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFetchUrl = async () => {
+    if (!urlInput.trim()) {
+      setError('Please enter a URL')
+      return
+    }
+
+    setIsLoading(true)
+    setError('')
+    try {
+      const isGoogleDocs = urlInput.includes('docs.google.com')
+      const endpoint = isGoogleDocs ? '/api/content/fetch-gdoc' : '/api/content/parse'
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlInput }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to fetch URL')
+      }
+
+      const data = await response.json()
+      const title = data.title || urlInput.split('/').pop() || 'Untitled'
+      onCreateDocument(title, data.content, 'url', urlInput)
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch URL')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handlePaste = () => {
+    if (!pasteContent.trim()) {
+      setError('Please paste some content')
+      return
+    }
+    onCreateDocument('Pasted Content', pasteContent, 'paste')
+  }
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsLoading(true)
+    setError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/content/parse', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to parse file')
+      }
+
+      const data = await response.json()
+      onCreateDocument(file.name, data.content, 'docx', file.name)
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload file')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-10 bg-background relative overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/5 rounded-full blur-3xl pointer-events-none" />
@@ -350,8 +455,19 @@ function BlankCanvasView() {
           </p>
         </div>
 
+        {error && (
+          <div className="mb-6 bg-danger/10 border border-danger/20 rounded-input px-4 py-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="glass-card p-6 flex flex-col items-center text-center hover:border-accent/50 transition-colors cursor-pointer group">
+          <div 
+            onClick={() => setInputMethod('paste')}
+            className={`glass-card p-6 flex flex-col items-center text-center hover:border-accent/50 transition-colors cursor-pointer group ${
+              inputMethod === 'paste' ? 'border-accent/50 bg-accent/5' : ''
+            }`}
+          >
             <div className="w-10 h-10 bg-surface border border-border rounded-full flex items-center justify-center mb-3 group-hover:text-accent transition-colors">
               <FileTextIcon className="w-5 h-5" />
             </div>
@@ -359,16 +475,31 @@ function BlankCanvasView() {
             <p className="text-xs text-muted">Directly paste text</p>
           </div>
 
-          <div className="glass-card p-6 flex flex-col items-center text-center hover:border-accent/50 transition-colors cursor-pointer group relative overflow-hidden">
+          <div 
+            onClick={() => fileInputRef.current?.click()}
+            className="glass-card p-6 flex flex-col items-center text-center hover:border-accent/50 transition-colors cursor-pointer group relative overflow-hidden"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".docx,.doc"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
             <div className="absolute inset-0 dashed-border-animated opacity-20 group-hover:opacity-50 transition-opacity" />
             <div className="w-10 h-10 bg-surface border border-border rounded-full flex items-center justify-center mb-3 group-hover:text-accent transition-colors relative z-10">
               <Upload className="w-5 h-5" />
             </div>
-            <h3 className="font-medium text-heading text-sm mb-1 relative z-10">Drop DOCX</h3>
+            <h3 className="font-medium text-heading text-sm mb-1 relative z-10">Upload DOCX</h3>
             <p className="text-xs text-muted relative z-10">Upload a file</p>
           </div>
 
-          <div className="glass-card p-6 flex flex-col items-center text-center border-accent/30 bg-accent/5 cursor-pointer group">
+          <div 
+            onClick={() => setInputMethod('url')}
+            className={`glass-card p-6 flex flex-col items-center text-center hover:border-accent/50 transition-colors cursor-pointer group ${
+              inputMethod === 'url' ? 'border-accent/30 bg-accent/5' : ''
+            }`}
+          >
             <div className="w-10 h-10 bg-surface border border-border rounded-full flex items-center justify-center mb-3 text-accent shadow-glow-accent">
               <Link2 className="w-5 h-5" />
             </div>
@@ -377,19 +508,55 @@ function BlankCanvasView() {
           </div>
         </div>
 
-        <div className="glass-card p-2 flex items-center gap-2">
-          <div className="pl-3 text-muted">
-            <Link2 className="w-5 h-5" />
+        {inputMethod === 'url' && (
+          <div className="glass-card p-2 flex items-center gap-2">
+            <div className="pl-3 text-muted">
+              <Link2 className="w-5 h-5" />
+            </div>
+            <input
+              type="text"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFetchUrl()}
+              placeholder="https://example.com/blog-post or Google Docs URL"
+              className="flex-1 bg-transparent border-none text-body focus:outline-none focus:ring-0 text-sm"
+            />
+            <button 
+              onClick={handleFetchUrl}
+              disabled={isLoading}
+              className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-input text-sm font-medium transition-all shadow-glow-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Fetching...
+                </>
+              ) : (
+                'Fetch & Analyze'
+              )}
+            </button>
           </div>
-          <input
-            type="text"
-            placeholder="https://example.com/blog-post or Google Docs URL"
-            className="flex-1 bg-transparent border-none text-body focus:outline-none focus:ring-0 text-sm"
-          />
-          <button className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-input text-sm font-medium transition-all shadow-glow-accent">
-            Fetch & Score
-          </button>
-        </div>
+        )}
+
+        {inputMethod === 'paste' && (
+          <div className="glass-card p-4">
+            <textarea
+              value={pasteContent}
+              onChange={(e) => setPasteContent(e.target.value)}
+              placeholder="Paste your content here..."
+              className="w-full h-48 bg-transparent border-none text-body focus:outline-none focus:ring-0 text-sm resize-none"
+            />
+            <div className="flex justify-end mt-2">
+              <button
+                onClick={handlePaste}
+                disabled={!pasteContent.trim()}
+                className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-input text-sm font-medium transition-all shadow-glow-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Analyze Content
+              </button>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   )

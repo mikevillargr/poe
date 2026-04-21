@@ -29,6 +29,8 @@ interface EditorViewProps {
   onExpandSuggestion: (id: string | null) => void
   editorRef: React.MutableRefObject<any>
   onShowVersionHistory: () => void
+  initialContent?: string
+  initialDocumentId?: string
 }
 
 export function EditorView({
@@ -42,11 +44,13 @@ export function EditorView({
   onExpandSuggestion,
   editorRef,
   onShowVersionHistory,
+  initialContent,
+  initialDocumentId,
 }: EditorViewProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [isAnalyzingBase, setIsAnalyzingBase] = useState(false)
   const [baseSuggestions, setBaseSuggestions] = useState<any[]>([])
-  const [documentId, setDocumentId] = useState<string | null>(null)
+  const [documentId, setDocumentId] = useState<string | null>(initialDocumentId || null)
   const [currentScore, setCurrentScore] = useState<number | null>(tab?.score || null)
   const [currentDimensions, setCurrentDimensions] = useState<Array<{ category: string; score: number; passCount?: number; failCount?: number }>>([])
   const [heuristicsCount, setHeuristicsCount] = useState<number>(0)
@@ -69,8 +73,8 @@ export function EditorView({
   const { addVersion } = useVersionStore()
   const { settings } = useSettings()
 
-  // Plain content
-  const plainContent = `
+  // Content - use initialContent if provided, otherwise use default
+  const plainContent = initialContent || `
     <h1>${tab?.title || 'Nevada LLC Formation Guide'}</h1>
 
     <p>Starting a business in Nevada is an exciting venture that offers entrepreneurs significant advantages. From tax benefits to asset protection, the Silver State has become a premier destination for business formation.</p>
