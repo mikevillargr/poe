@@ -119,19 +119,8 @@ export function EditorView({
     }
   }
 
-  // Run base analysis when content changes (debounced)
-  useEffect(() => {
-    if (!editorRef.current) return
-    
-    const timer = setTimeout(() => {
-      const content = editorRef.current?.getText() || ''
-      if (content.length > 100) {
-        analyzeBaseContent(content)
-      }
-    }, 3000) // Wait 3 seconds after typing stops
-    
-    return () => clearTimeout(timer)
-  }, [editorRef.current?.getText()])
+  // Note: Auto-scoring disabled to save tokens
+  // User must manually click Score button to analyze content
 
   // Filter suggestions based on active filter
   const filteredSuggestions = Array.from(suggestions.values()).filter(s => {
@@ -236,64 +225,14 @@ export function EditorView({
           </div>
         )}
         
-        {/* Action Buttons */}
-        <div className="absolute top-14 left-4 z-20 flex gap-2">
+        {/* Version History Button */}
+        <div className="absolute top-14 left-4 z-20">
           <button
             onClick={onShowVersionHistory}
             className="bg-surface border border-border hover:bg-surface-hover text-muted px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1"
           >
             <Clock className="w-3 h-3" />
             {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Unsaved'}
-          </button>
-          <button
-            onClick={async () => {
-              if (!editorRef.current || !settings.apiKey) {
-                alert('Please set your API key in Settings')
-                return
-              }
-              
-              const content = editorRef.current.getText()
-              if (!content || content.length < 50) {
-                alert('Please add more content to analyze (minimum 50 characters)')
-                return
-              }
-
-              try {
-                const response = await fetch('/api/score', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    content,
-                    source: 'paste',
-                    apiKey: settings.apiKey,
-                  }),
-                })
-
-                if (!response.ok) {
-                  const error = await response.json()
-                  throw new Error(error.error || 'Scoring failed')
-                }
-
-                const data = await response.json()
-                console.log('Score results:', data)
-                
-                // Add suggestions to store
-                if (data.suggestions && data.suggestions.length > 0) {
-                  setSuggestions(data.suggestions)
-                  alert(`Scored! Found ${data.suggestions.length} suggestions. Overall score: ${data.overallScore}/100`)
-                } else {
-                  alert(`Scored! Overall score: ${data.overallScore}/100. No issues found!`)
-                }
-              } catch (error: any) {
-                console.error('Scoring error:', error)
-                alert(error.message || 'Failed to score content')
-              }
-            }}
-            disabled={isAnalyzingBase}
-            className="bg-accent hover:bg-accent/90 text-white px-4 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1 shadow-glow-accent disabled:opacity-50"
-          >
-            <Sparkles className="w-3 h-3" />
-            Score
           </button>
         </div>
         
@@ -483,6 +422,70 @@ export function EditorView({
           <p className="text-xs text-muted mt-8 font-mono">
             32 rules evaluated
           </p>
+          
+          {/* Score Button */}
+          <button
+            onClick={async () => {
+              if (!editorRef.current || !settings.apiKey) {
+                alert('Please set your API key in Settings')
+                return
+              }
+              
+              const content = editorRef.current.getText()
+              if (!content || content.length < 50) {
+                alert('Please add more content to analyze (minimum 50 characters)')
+                return
+              }
+
+              setIsAnalyzingBase(true)
+              try {
+                const response = await fetch('/api/score', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    content,
+                    source: 'paste',
+                    apiKey: settings.apiKey,
+                  }),
+                })
+
+                if (!response.ok) {
+                  const error = await response.json()
+                  throw new Error(error.error || 'Scoring failed')
+                }
+
+                const data = await response.json()
+                console.log('Score results:', data)
+                
+                // Add suggestions to store
+                if (data.suggestions && data.suggestions.length > 0) {
+                  setSuggestions(data.suggestions)
+                  alert(`Scored! Found ${data.suggestions.length} suggestions. Overall score: ${data.overallScore}/100`)
+                } else {
+                  alert(`Scored! Overall score: ${data.overallScore}/100. No issues found!`)
+                }
+              } catch (error: any) {
+                console.error('Scoring error:', error)
+                alert(error.message || 'Failed to score content')
+              } finally {
+                setIsAnalyzingBase(false)
+              }
+            }}
+            disabled={isAnalyzingBase}
+            className="mt-6 w-full bg-accent hover:bg-accent/90 text-white px-4 py-2.5 rounded-input text-sm font-medium transition-all shadow-glow-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isAnalyzingBase ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Scoring...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Score Content
+              </>
+            )}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
