@@ -616,6 +616,40 @@ export function EditorView({
                     <head>
                       <meta charset="utf-8">
                       <title>${tab?.title || 'Document'}</title>
+                      <style>
+                        body {
+                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                          line-height: 1.6;
+                          max-width: 800px;
+                          margin: 0 auto;
+                          padding: 20px;
+                        }
+                        p { margin: 0 0 1em 0; line-height: 1.6; }
+                        h1 { margin: 1.5em 0 0.5em 0; line-height: 1.2; }
+                        h2 { margin: 1.3em 0 0.5em 0; line-height: 1.3; }
+                        h3 { margin: 1.2em 0 0.5em 0; line-height: 1.4; }
+                        ul, ol { margin: 0.5em 0 1em 0; padding-left: 2em; }
+                        li { margin: 0.3em 0; line-height: 1.6; }
+                        .analysis-report { 
+                          margin-top: 3em; 
+                          padding-top: 2em; 
+                          border-top: 2px solid #e5e7eb; 
+                        }
+                        .suggestion-item {
+                          margin: 0.8em 0;
+                          padding: 0.5em;
+                          background: #f9fafb;
+                          border-left: 3px solid #3b82f6;
+                        }
+                        .original-text {
+                          color: #dc2626;
+                          text-decoration: line-through;
+                        }
+                        .replacement-text {
+                          color: #16a34a;
+                          font-weight: 500;
+                        }
+                      </style>
                     </head>
                     <body>
                       ${content}
@@ -624,7 +658,7 @@ export function EditorView({
                   // Append score data if checkbox is checked
                   if (includeScoreData && currentScore !== null) {
                     exportContent += `
-                      <div style="page-break-before: always; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                      <div class="analysis-report">
                         <h2>Content Analysis Report</h2>
                         <p><strong>Overall Score:</strong> ${currentScore}/100</p>
                         ${currentDimensions.length > 0 ? `
@@ -635,11 +669,13 @@ export function EditorView({
                         ` : ''}
                         ${suggestions.size > 0 ? `
                           <h3>Suggestions Applied</h3>
-                          <ul>
-                            ${Array.from(suggestions.values()).filter(s => s.status === 'accepted').map(s => 
-                              `<li>[${s.category}] ${s.title || 'Suggestion'}</li>`
-                            ).join('')}
-                          </ul>
+                          ${Array.from(suggestions.values()).filter(s => s.status === 'accepted').map(s => 
+                            `<div class="suggestion-item">
+                              <strong>[${s.category}]</strong> ${s.title || 'Change'}<br/>
+                              <span class="original-text">${s.original || 'Original text'}</span> → 
+                              <span class="replacement-text">${s.suggested || 'Replacement text'}</span>
+                            </div>`
+                          ).join('')}
                         ` : ''}
                       </div>
                     `
@@ -685,6 +721,40 @@ export function EditorView({
                     <head>
                       <meta charset="utf-8">
                       <title>${tab?.title || 'Document'}</title>
+                      <style>
+                        body {
+                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+                          line-height: 1.6;
+                          max-width: 800px;
+                          margin: 0 auto;
+                          padding: 20px;
+                        }
+                        p { margin: 0 0 1em 0; line-height: 1.6; }
+                        h1 { margin: 1.5em 0 0.5em 0; line-height: 1.2; }
+                        h2 { margin: 1.3em 0 0.5em 0; line-height: 1.3; }
+                        h3 { margin: 1.2em 0 0.5em 0; line-height: 1.4; }
+                        ul, ol { margin: 0.5em 0 1em 0; padding-left: 2em; }
+                        li { margin: 0.3em 0; line-height: 1.6; }
+                        .analysis-report { 
+                          margin-top: 3em; 
+                          padding-top: 2em; 
+                          border-top: 2px solid #e5e7eb; 
+                        }
+                        .suggestion-item {
+                          margin: 0.8em 0;
+                          padding: 0.5em;
+                          background: #f9fafb;
+                          border-left: 3px solid #3b82f6;
+                        }
+                        .original-text {
+                          color: #dc2626;
+                          text-decoration: line-through;
+                        }
+                        .replacement-text {
+                          color: #16a34a;
+                          font-weight: 500;
+                        }
+                      </style>
                     </head>
                     <body>
                       ${content}
@@ -693,23 +763,26 @@ export function EditorView({
                   // Append score data if checkbox is checked
                   if (includeScoreData && currentScore !== null) {
                     exportContent += `
-                      <hr style="margin: 40px 0 20px 0; border: 2px solid #e5e7eb;">
-                      <h2>Content Analysis Report</h2>
-                      <p><strong>Overall Score:</strong> ${currentScore}/100</p>
-                      ${currentDimensions.length > 0 ? `
-                        <h3>Dimension Breakdown</h3>
-                        <ul>
-                          ${currentDimensions.map(d => `<li><strong>${d.category}:</strong> ${d.score}/100</li>`).join('')}
-                        </ul>
-                      ` : ''}
-                      ${suggestions.size > 0 ? `
-                        <h3>Suggestions Applied</h3>
-                        <ul>
+                      <div class="analysis-report">
+                        <h2>Content Analysis Report</h2>
+                        <p><strong>Overall Score:</strong> ${currentScore}/100</p>
+                        ${currentDimensions.length > 0 ? `
+                          <h3>Dimension Breakdown</h3>
+                          <ul>
+                            ${currentDimensions.map(d => `<li><strong>${d.category}:</strong> ${d.score}/100</li>`).join('')}
+                          </ul>
+                        ` : ''}
+                        ${suggestions.size > 0 ? `
+                          <h3>Suggestions Applied</h3>
                           ${Array.from(suggestions.values()).filter(s => s.status === 'accepted').map(s => 
-                            `<li>[${s.category}] ${s.title || 'Suggestion'}</li>`
+                            `<div class="suggestion-item">
+                              <strong>[${s.category}]</strong> ${s.title || 'Change'}<br/>
+                              <span class="original-text">${s.original || 'Original text'}</span> → 
+                              <span class="replacement-text">${s.suggested || 'Replacement text'}</span>
+                            </div>`
                           ).join('')}
-                        </ul>
-                      ` : ''}
+                        ` : ''}
+                      </div>
                     `
                   }
 
