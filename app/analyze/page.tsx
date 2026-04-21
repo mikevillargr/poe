@@ -833,11 +833,40 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
         return
       }
 
+      // Helper function to parse CSV line properly (handles quoted values)
+      const parseCSVLine = (line: string, delimiter: string): string[] => {
+        const result = []
+        let current = ''
+        let inQuotes = false
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i]
+          const nextChar = line[i + 1]
+          
+          if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+              current += '"'
+              i++ // Skip next quote
+            } else {
+              inQuotes = !inQuotes
+            }
+          } else if (char === delimiter && !inQuotes) {
+            result.push(current.trim())
+            current = ''
+          } else {
+            current += char
+          }
+        }
+        result.push(current.trim())
+        return result.map(v => v.replace(/^["']|["']$/g, '')) // Remove surrounding quotes
+      }
+      
       // Parse header - handle both comma and semicolon delimiters
       const delimiter = lines[0].includes(';') ? ';' : ','
-      const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase().replace(/['"]/g, ''))
+      const headers = parseCSVLine(lines[0], delimiter).map(h => h.toLowerCase())
       
       console.log('[CSV] Headers found:', headers)
+      console.log('[CSV] Total lines:', lines.length)
       
       // Smart URL column detection - look for:
       // 1. Column named 'url'
@@ -853,7 +882,7 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
         // Check first few rows to find column with URLs
         for (let colIndex = 0; colIndex < headers.length; colIndex++) {
           const sampleValues = lines.slice(1, Math.min(4, lines.length))
-            .map(line => line.split(delimiter)[colIndex]?.trim().replace(/['"]/g, ''))
+            .map(line => parseCSVLine(line, delimiter)[colIndex])
           
           const hasUrls = sampleValues.some(val => 
             val && (val.startsWith('http://') || val.startsWith('https://'))
@@ -875,8 +904,10 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
       // Parse rows
       const items = []
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(delimiter).map(v => v.trim().replace(/['"]/g, ''))
+        const values = parseCSVLine(lines[i], delimiter)
         const url = values[urlIndex]
+        
+        console.log(`[CSV] Row ${i}: URL = ${url}`)
         
         if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
           items.push({
@@ -884,6 +915,8 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
             ref: url,
             title: url,
           })
+        } else {
+          console.warn(`[CSV] Row ${i}: Invalid or missing URL: ${url}`)
         }
       }
 
