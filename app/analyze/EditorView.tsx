@@ -67,29 +67,15 @@ export function EditorView({
   const [isUploadingToDrive, setIsUploadingToDrive] = useState(false)
   const [driveInitialized, setDriveInitialized] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [availableDimensions, setAvailableDimensions] = useState<string[]>([])
-
-  // Fetch available dimensions from heuristics
-  useEffect(() => {
-    // Fetch heuristics and extract unique categories
-    fetch('/api/score')
-      .then(res => res.json())
-      .then(data => {
-        // Extract unique categories from heuristics
-        const categories = new Set<string>()
-        if (data.heuristics && Array.isArray(data.heuristics)) {
-          data.heuristics.forEach((h: any) => {
-            if (h.category) categories.add(h.category)
-          })
-        }
-        setAvailableDimensions(Array.from(categories).sort())
-      })
-      .catch(err => {
-        console.error('Failed to fetch dimensions:', err)
-        // Fallback to empty array
-        setAvailableDimensions([])
-      })
-  }, [])
+  // Hardcoded dimensions from database (temporary fix until API works)
+  const [availableDimensions] = useState<string[]>([
+    'Brand Voice & Messaging',
+    'Call-to-Action',
+    'Compliance & Accuracy',
+    'Entity Formation Standards',
+    'SEO & Readability',
+    'Target Audience Alignment',
+  ])
 
   // Initialize Google Drive on mount
   useEffect(() => {
