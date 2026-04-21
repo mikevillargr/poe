@@ -180,32 +180,47 @@ export default function AnalyzePage() {
     const savedTabs = localStorage.getItem('analyze-tabs')
     const savedActiveTab = localStorage.getItem('analyze-active-tab')
     
+    console.log('[Tab Restore] Saved tabs:', savedTabs)
+    console.log('[Tab Restore] Saved active tab:', savedActiveTab)
+    
     if (savedTabs) {
       try {
-        setTabs(JSON.parse(savedTabs))
+        const parsedTabs = JSON.parse(savedTabs)
+        console.log('[Tab Restore] Restoring tabs:', parsedTabs)
+        setTabs(parsedTabs)
       } catch (e) {
         console.error('Failed to parse saved tabs:', e)
       }
     }
     
     if (savedActiveTab) {
+      console.log('[Tab Restore] Restoring active tab:', savedActiveTab)
       setActiveTabId(savedActiveTab)
     }
   }, [])
 
   // Persist tabs to localStorage
   useEffect(() => {
-    if (isHydrated && tabs.length > 0) {
+    if (!isHydrated) return
+    
+    if (tabs.length > 0) {
+      console.log('[Tab Persist] Saving tabs:', tabs.length, 'tabs')
       localStorage.setItem('analyze-tabs', JSON.stringify(tabs))
+    } else {
+      console.log('[Tab Persist] Clearing tabs (empty)')
+      localStorage.removeItem('analyze-tabs')
     }
   }, [tabs, isHydrated])
 
   // Persist active tab to localStorage
   useEffect(() => {
-    if (activeTabId) {
+    if (!isHydrated) return
+    
+    if (activeTabId && activeTabId !== 'new') {
+      console.log('[Tab Persist] Saving active tab:', activeTabId)
       localStorage.setItem('analyze-active-tab', activeTabId)
     }
-  }, [activeTabId])
+  }, [activeTabId, isHydrated])
   
   // Zustand stores
   const { suggestions, setSuggestions, acceptSuggestion, dismissSuggestion, updateSuggestion, startRecomposition, finishRecomposition } = useSuggestionStore()
