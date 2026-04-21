@@ -24,6 +24,7 @@ import Link from 'next/link'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
 import { PageErrorBoundary } from '@/components/feedback/PageErrorBoundary'
+import { RichTextEditor } from '@/components/editor/RichTextEditor'
 
 interface DocumentTab {
   id: string
@@ -40,6 +41,8 @@ interface Suggestion {
   original: string
   suggested: string
   accepted: boolean | null
+  charStart?: number
+  charEnd?: number
 }
 
 interface BatchItem {
@@ -58,8 +61,8 @@ const SUGGESTIONS: Suggestion[] = [
     category: 'SEO',
     severity: 'high',
     title: 'H2 missing question format for PAA capture',
-    original: 'Appointing a Registered Agent',
-    suggested: 'How Do I Appoint a Registered Agent in Nevada?',
+    original: 'What is a Registered Agent?',
+    suggested: 'What Does a Registered Agent Do in Nevada?',
     accepted: null,
   },
   {
@@ -67,8 +70,8 @@ const SUGGESTIONS: Suggestion[] = [
     category: 'Brand',
     severity: 'medium',
     title: 'Opening lacks a stat-led hook per brand guidelines',
-    original: 'Forming an LLC in Nevada offers significant benefits...',
-    suggested: 'According to the Nevada Secretary of State, over 78,000 LLCs were formed in 2023 alone...',
+    original: 'Starting a business in Nevada is an exciting venture',
+    suggested: 'With over 90,000 new LLCs formed in Nevada last year alone, starting a business',
     accepted: null,
   },
   {
@@ -76,8 +79,8 @@ const SUGGESTIONS: Suggestion[] = [
     category: 'Blacklist',
     severity: 'high',
     title: 'Blacklisted competitor mentioned: LegalZoom',
-    original: 'Many entrepreneurs choose to use a commercial service like LegalZoom...',
-    suggested: 'Many entrepreneurs choose to use a commercial registered agent service...',
+    original: 'services like LegalZoom or Rocket Lawyer',
+    suggested: 'professional registered agent services',
     accepted: null,
   },
   {
@@ -85,18 +88,18 @@ const SUGGESTIONS: Suggestion[] = [
     category: 'Agency',
     severity: 'low',
     title: 'Missing authoritative source citation',
-    original: 'The process requires careful attention to detail...',
-    suggested: 'According to Nevada Revised Statutes (NRS) 86.241, the process requires...',
+    original: 'Nevada law requires all LLCs to maintain this designation',
+    suggested: 'According to Nevada Revised Statutes Chapter 86, all LLCs must maintain this designation',
     accepted: null,
   },
 ]
 
 const DIMENSIONS = [
-  { category: 'Brand', score: 82, status: 'pass' },
-  { category: 'SEO', score: 61, status: 'fail' },
-  { category: 'Blacklist', score: 100, status: 'pass' },
-  { category: 'Agency', score: 70, status: 'pass' },
-  { category: 'Client', score: 68, status: 'fail' },
+  { category: 'Brand', score: 72, status: 'fail' },
+  { category: 'SEO', score: 58, status: 'fail' },
+  { category: 'Blacklist', score: 85, status: 'pass' },
+  { category: 'Agency', score: 88, status: 'pass' },
+  { category: 'Client', score: 64, status: 'fail' },
 ]
 
 const BATCH_ITEMS: BatchItem[] = [
@@ -185,6 +188,7 @@ export default function AnalyzePage() {
   ])
   const [activeTabId, setActiveTabId] = useState<string>('1')
   const [activeFilter, setActiveFilter] = useState<string>('All')
+  const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
 
   const handleNewTab = () => {
     const newId = `new-${Date.now()}`
@@ -309,6 +313,8 @@ export default function AnalyzePage() {
               dimensions={DIMENSIONS}
               activeFilter={activeFilter}
               onFilterChange={setActiveFilter}
+              activeSuggestionId={activeSuggestionId}
+              onSuggestionClick={setActiveSuggestionId}
             />
           )}
         </div>
@@ -391,85 +397,62 @@ function EditorView({
   suggestions,
   dimensions,
   activeFilter,
-  onFilterChange
+  onFilterChange,
+  activeSuggestionId,
+  onSuggestionClick
 }: {
   tab: DocumentTab | undefined,
   suggestions: typeof SUGGESTIONS,
   dimensions: typeof DIMENSIONS,
   activeFilter: string,
-  onFilterChange: (filter: string) => void
+  onFilterChange: (filter: string) => void,
+  activeSuggestionId: string | null,
+  onSuggestionClick: (id: string | null) => void
 }) {
+  // Plain content - no HTML markup
+  const plainContent = `
+    <h1>${tab?.title || 'Nevada LLC Formation Guide'}</h1>
+
+    <p>Starting a business in Nevada is an exciting venture that offers entrepreneurs significant advantages. From tax benefits to asset protection, the Silver State has become a premier destination for business formation.</p>
+
+    <h2>What is a Registered Agent?</h2>
+
+    <p>A registered agent is a person or entity designated to receive legal documents on behalf of your business. services like LegalZoom or Rocket Lawyer can provide this service, or you can act as your own registered agent if you meet the requirements.</p>
+
+    <h2>Filing Your Articles of Organization</h2>
+
+    <p>The Articles of Organization must be filed with the Nevada Secretary of State to officially form your LLC. Nevada law requires all LLCs to maintain this designation throughout the existence of your business entity.</p>
+  `
+
+  const handleSaveContent = (content: string) => {
+    // TODO: Implement actual save to backend
+    console.log('Saving content:', content)
+  }
+
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* LEFT: Content Editor (55%) */}
-      <div
-        className="w-[55%] flex flex-col border-r border-border relative"
-        style={{ background: 'var(--color-editor-bg)' }}
-      >
-        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar relative">
-          <div className="absolute left-0 top-10 bottom-0 w-8 flex flex-col items-end pr-2 text-[10px] font-mono select-none pointer-events-none space-y-6 leading-relaxed pt-14 opacity-20">
-            {Array.from({ length: 20 }).map((_, i) => (
-              <span key={i} className="text-muted">{i + 1}</span>
-            ))}
+      <div className="w-[55%] flex flex-col border-r border-border relative">
+        {activeSuggestionId && (
+          <div className="absolute top-14 right-4 z-20">
+            <button
+              onClick={() => onSuggestionClick(null)}
+              className="bg-surface border border-border hover:bg-surface-hover text-muted px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1"
+            >
+              <X className="w-3 h-3" />
+              Clear selection
+            </button>
           </div>
-
-          <div className="max-w-2xl mx-auto pl-6">
-            <h1 className="text-4xl font-display text-heading mb-8">
-              {tab?.title || 'Untitled Document'}
-            </h1>
-
-            <div className="text-body text-lg leading-relaxed space-y-6 font-serif">
-              <p>
-                <span className="border-b-2 border-dashed border-danger bg-danger/10 text-heading">
-                  Forming an LLC in Nevada offers significant benefits for
-                  business owners
-                </span>
-                , including strong asset protection and tax advantages. However,
-                the process requires careful attention to detail to ensure full
-                compliance with state regulations.
-              </p>
-
-              <h2 className="text-heading text-2xl font-display mt-10 mb-4">
-                <span className="bg-accent/10 border-b-2 border-dashed border-accent text-heading relative">
-                  Appointing a Registered Agent
-                  <span className="absolute -left-4 top-0 bottom-0 w-[3px] bg-accent rounded-full shadow-glow-accent" />
-                </span>
-              </h2>
-
-              <p>
-                Every Nevada LLC must have a registered agent with a physical
-                address in the state. Many entrepreneurs choose to use a
-                commercial service like{' '}
-                <span className="bg-danger/20 text-danger font-medium px-1 rounded border border-danger/30">
-                  LegalZoom
-                </span>{' '}
-                to handle this requirement, though you can also act as your own
-                agent if you reside in Nevada and maintain regular business
-                hours.
-              </p>
-
-              <p>
-                Once your agent is selected,{' '}
-                <span className="border-b-2 border-dashed border-warning bg-warning/10 text-heading">
-                  your Articles of Organization should be filed with the
-                  Secretary of State
-                </span>
-                . This document officially creates your business entity and must
-                include specific information about your company&apos;s management
-                structure.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="h-12 border-t border-border bg-surface backdrop-blur-md flex items-center justify-between px-6 shrink-0 text-xs text-muted font-mono">
-          <div className="flex items-center gap-6">
-            <span className="tabular-nums">342 words</span>
-            <span className="tabular-nums">2,184 characters</span>
-            <span>Readability: Grade 9</span>
-          </div>
-          <div>Last saved: 2 mins ago</div>
-        </div>
+        )}
+        <RichTextEditor
+          content={plainContent}
+          suggestions={suggestions}
+          placeholder="Start writing or paste your content here..."
+          onSave={handleSaveContent}
+          autoSaveDelay={2000}
+          activeSuggestionId={activeSuggestionId}
+          onSuggestionClick={onSuggestionClick}
+        />
       </div>
 
       {/* CENTER: Suggestions (25%) */}
@@ -484,7 +467,7 @@ function EditorView({
             </h2>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-            {['All', 'Brand', 'SEO', 'Blacklist'].map((filter) => (
+            {['All', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client'].map((filter) => (
               <button
                 key={filter}
                 onClick={() => onFilterChange(filter)}
@@ -499,15 +482,33 @@ function EditorView({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
-          {suggestions.map((suggestion) => (
-            <div key={suggestion.id} className="glass-card p-4 relative overflow-hidden" style={{ background: 'var(--color-card-bg)' }}>
-              <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${
-                suggestion.category === 'Brand' ? 'bg-badge-brand' :
-                suggestion.category === 'SEO' ? 'bg-badge-seo' :
-                suggestion.category === 'Blacklist' ? 'bg-badge-blacklist' :
-                suggestion.category === 'Agency' ? 'bg-badge-agency' :
-                'bg-badge-client'
-              } shadow-glow-accent`} />
+          {suggestions.map((suggestion) => {
+            const isActive = activeSuggestionId === suggestion.id
+            return (
+              <div
+                key={suggestion.id}
+                onClick={() => onSuggestionClick(suggestion.id)}
+                className={`glass-card p-4 relative overflow-hidden cursor-pointer transition-all ${
+                  isActive
+                    ? 'ring-2 ring-accent ring-offset-2 ring-offset-background bg-accent/10 shadow-lg'
+                    : 'hover:ring-1 hover:ring-accent/50'
+                }`}
+                style={{ background: 'var(--color-card-bg)' }}
+              >
+                {/* Active indicator badge */}
+                {isActive && (
+                  <div className="absolute -top-2 -right-2 bg-accent text-white px-2 py-0.5 rounded-full text-xs font-bold shadow-glow-accent animate-bounce">
+                    Active
+                  </div>
+                )}
+
+                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${
+                  suggestion.category === 'Brand' ? 'bg-badge-brand' :
+                  suggestion.category === 'SEO' ? 'bg-badge-seo' :
+                  suggestion.category === 'Blacklist' ? 'bg-badge-blacklist' :
+                  suggestion.category === 'Agency' ? 'bg-badge-agency' :
+                  'bg-badge-client'
+                } ${isActive ? 'shadow-glow-accent animate-pulse' : ''}`} />
 
               <div className="flex items-center justify-between mb-3">
                 <CategoryBadge category={suggestion.category} variant="solid" />
@@ -534,15 +535,22 @@ function EditorView({
               </div>
 
               <div className="flex items-center gap-2">
-                <button className="flex-1 bg-success/20 hover:bg-success/30 text-green-400 py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors border border-success/30">
+                <button className="flex-1 bg-success hover:bg-success/90 text-white py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors">
                   <Check className="w-3.5 h-3.5" /> Accept
                 </button>
-                <button className="flex-1 bg-surface border border-border hover:bg-surface-hover text-muted py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors">
-                  <X className="w-3.5 h-3.5" /> Deny
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSuggestionClick(null)
+                  }}
+                  className="flex-1 bg-surface border border-border hover:bg-surface-hover text-muted py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" /> Dismiss
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 

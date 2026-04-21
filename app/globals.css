@@ -151,3 +151,142 @@ h1, h2, h3, h4, h5, h6 {
     background-position: left 16px top, right 16px bottom, left bottom 16px, right top 16px;
   }
 }
+
+/* TipTap Editor Styles */
+.ProseMirror {
+  outline: none;
+  min-height: 500px;
+  font-family: 'Inter', sans-serif;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--color-muted);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.ProseMirror h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 2.5rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--color-heading);
+}
+
+.ProseMirror h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.875rem;
+  font-weight: 600;
+  line-height: 2.25rem;
+  margin-top: 1.25rem;
+  margin-bottom: 0.75rem;
+  color: var(--color-heading);
+}
+
+.ProseMirror p {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.75;
+  margin-bottom: 1rem;
+  color: var(--color-body);
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  font-family: 'Inter', sans-serif;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.ProseMirror li {
+  font-family: 'Inter', sans-serif;
+  margin-bottom: 0.5rem;
+  color: var(--color-body);
+}
+
+.ProseMirror ul {
+  list-style-type: disc;
+}
+
+.ProseMirror ol {
+  list-style-type: decimal;
+}
+
+.ProseMirror blockquote {
+  font-family: 'Inter', sans-serif;
+  border-left: 4px solid var(--color-accent);
+  padding-left: 1rem;
+  margin-bottom: 1rem;
+  font-style: italic;
+  color: var(--color-muted);
+}
+
+.ProseMirror strong {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  color: var(--color-heading);
+}
+
+.ProseMirror em {
+  font-family: 'Inter', sans-serif;
+  font-style: italic;
+}
+
+.ProseMirror code {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.875em;
+}
+
+.ProseMirror pre {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.ProseMirror pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.ProseMirror a {
+  font-family: 'Inter', sans-serif;
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.ProseMirror a:hover {
+  opacity: 0.8;
+}
+
+/* Selection */
+.ProseMirror ::selection {
+  background: rgba(232, 69, 10, 0.2);
+}
+
+/* Suggestion Highlights in Editor — applied via ProseMirror decorations */
+.ProseMirror .suggestion-highlight {
+  background-color: rgba(232, 69, 10, 0.15);
+  border-bottom: 3px dotted rgba(232, 69, 10, 0.7);
+  padding: 2px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.ProseMirror .suggestion-highlight:hover {
+  background-color: rgba(232, 69, 10, 0.3);
+  border-bottom-color: rgba(232, 69, 10, 1);
+}
