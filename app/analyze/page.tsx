@@ -188,13 +188,29 @@ export default function AnalyzePage() {
       try {
         const parsedTabs = JSON.parse(savedTabs)
         console.log('[Tab Restore] Restoring tabs:', parsedTabs)
-        setTabs(parsedTabs)
+        if (parsedTabs.length > 0) {
+          setTabs(parsedTabs)
+        } else {
+          // Create blank tab if saved tabs is empty
+          const newId = generateTabId('new')
+          setTabs([{ id: newId, title: 'New Analysis', type: 'new' }])
+          setActiveTabId(newId)
+        }
       } catch (e) {
         console.error('Failed to parse saved tabs:', e)
+        // Create blank tab on error
+        const newId = generateTabId('new')
+        setTabs([{ id: newId, title: 'New Analysis', type: 'new' }])
+        setActiveTabId(newId)
       }
+    } else {
+      // No saved tabs - create blank tab
+      const newId = generateTabId('new')
+      setTabs([{ id: newId, title: 'New Analysis', type: 'new' }])
+      setActiveTabId(newId)
     }
     
-    if (savedActiveTab) {
+    if (savedActiveTab && savedTabs) {
       console.log('[Tab Restore] Restoring active tab:', savedActiveTab)
       setActiveTabId(savedActiveTab)
     }
@@ -292,7 +308,15 @@ export default function AnalyzePage() {
     if (newTabs.length === 0) {
       localStorage.removeItem('analyze-tabs')
       localStorage.removeItem('analyze-active-tab')
-      setActiveTabId('new')
+      // Create a new blank tab when all tabs are closed
+      const newId = generateTabId('new')
+      const blankTab: DocumentTab = {
+        id: newId,
+        title: 'New Analysis',
+        type: 'new',
+      }
+      setTabs([blankTab])
+      setActiveTabId(newId)
     } else if (activeTabId === id) {
       // Switch to last tab if closing active tab
       setActiveTabId(newTabs[newTabs.length - 1].id)
@@ -442,7 +466,7 @@ export default function AnalyzePage() {
               onDeleteItem={(id) => setDeleteConfirm(id)}
               onRefresh={loadBatchItems}
             />
-          ) : activeTabId === 'new' || !activeTab ? (
+          ) : !activeTab || activeTab.type === 'new' ? (
             <BlankCanvasView onCreateDocument={async (title, content, source, sourceRef) => {
               const newId = generateTabId('doc')
               
