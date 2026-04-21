@@ -747,31 +747,85 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
   const csvInputRef = useRef<HTMLInputElement>(null)
   const docxInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
 
   const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setIsUploading(true)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
+    setUploadError(null)
+    setUploadSuccess(null)
 
+    try {
+      // Read and parse CSV file
+      const text = await file.text()
+      const lines = text.trim().split('\n')
+      
+      if (lines.length < 2) {
+        setUploadError('CSV file is empty or has no data rows')
+        return
+      }
+
+      // Parse header
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+      const urlIndex = headers.indexOf('url')
+      
+      if (urlIndex === -1) {
+        setUploadError('CSV must have a "url" column')
+        return
+      }
+
+      // Parse rows
+      const items = []
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim())
+        const url = values[urlIndex]
+        
+        if (url && url.startsWith('http')) {
+          items.push({
+            type: 'url',
+            ref: url,
+            title: url,
+          })
+        }
+      }
+
+      if (items.length === 0) {
+        setUploadError('No valid URLs found in CSV')
+        return
+      }
+
+      // Get API key from settings
+      const settingsRes = await fetch('/api/settings')
+      const { settings } = await settingsRes.json()
+      
+      if (!settings?.apiKey) {
+        setUploadError('API key not configured. Please set it in Settings.')
+        return
+      }
+
+      // Send to batch API
       const response = await fetch('/api/batch', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items,
+          apiKey: settings.apiKey,
+        }),
       })
 
       if (response.ok) {
-        alert('CSV uploaded successfully! Batch processing started.')
-        window.location.reload()
+        setUploadSuccess(`CSV uploaded! Processing ${items.length} URLs...`)
+        setTimeout(() => window.location.reload(), 2000)
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to upload CSV')
+        setUploadError(error.error || 'Failed to start batch processing')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('CSV upload error:', error)
-      alert('Failed to upload CSV')
+      setUploadError(error.message || 'Failed to parse CSV file')
     } finally {
       setIsUploading(false)
       if (csvInputRef.current) csvInputRef.current.value = ''
@@ -783,7 +837,11 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
     if (!files || files.length === 0) return
 
     setIsUploading(true)
+    setUploadError(null)
+    setUploadSuccess(null)
+
     try {
+      let successCount = 0
       for (const file of Array.from(files)) {
         const formData = new FormData()
         formData.append('file', file)
@@ -797,7 +855,7 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
           const { text } = await response.json()
           
           // Create document
-          await fetch('/api/documents', {
+          const docResponse = await fetch('/api/documents', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -807,14 +865,22 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
               sourceRef: file.name,
             }),
           })
+          
+          if (docResponse.ok) {
+            successCount++
+          }
         }
       }
       
-      alert(`${files.length} file(s) uploaded successfully!`)
-      window.location.reload()
-    } catch (error) {
+      if (successCount > 0) {
+        setUploadSuccess(`${successCount} file(s) uploaded successfully!`)
+        setTimeout(() => window.location.reload(), 2000)
+      } else {
+        setUploadError('Failed to upload any files')
+      }
+    } catch (error: any) {
       console.error('DOCX upload error:', error)
-      alert('Failed to upload DOCX files')
+      setUploadError(error.message || 'Failed to upload DOCX files')
     } finally {
       setIsUploading(false)
       if (docxInputRef.current) docxInputRef.current.value = ''
@@ -879,6 +945,55 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
         onChange={handleDOCXUpload}
         className="hidden"
       />
+
+      {/* Notification Banners */}
+      <AnimatePresence>
+        {uploadError && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mb-6 glass-card p-4 border-l-4 border-danger bg-danger/5"
+          >
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-heading mb-1">Upload Failed</h4>
+                <p className="text-sm text-muted">{uploadError}</p>
+              </div>
+              <button
+                onClick={() => setUploadError(null)}
+                className="text-muted hover:text-heading transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {uploadSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="mb-6 glass-card p-4 border-l-4 border-success bg-success/5"
+          >
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-success shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-heading mb-1">Upload Successful</h4>
+                <p className="text-sm text-muted">{uploadSuccess}</p>
+              </div>
+              <button
+                onClick={() => setUploadSuccess(null)}
+                className="text-muted hover:text-heading transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Drop Zones */}
       <motion.div
