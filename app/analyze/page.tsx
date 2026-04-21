@@ -32,6 +32,7 @@ import { useVersionStore } from '@/stores/useVersionStore'
 import { SuggestionRecomposition } from '@/components/SuggestionRecomposition'
 import { VersionHistory } from '@/components/VersionHistory'
 import { EditorView } from './EditorView'
+import { useSettings } from '@/hooks/useSettings'
 
 interface DocumentTab {
   id: string
@@ -764,6 +765,7 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null)
+  const { settings } = useSettings()
 
   const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -851,10 +853,7 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
       
       console.log('[CSV] Found', items.length, 'valid URLs')
 
-      // Get API key from settings
-      const settingsRes = await fetch('/api/settings')
-      const { settings } = await settingsRes.json()
-      
+      // Check API key from settings
       if (!settings?.apiKey) {
         setUploadError('API key not configured. Please set it in Settings.')
         return
@@ -874,8 +873,14 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
         setUploadSuccess(`CSV uploaded! Processing ${items.length} URLs...`)
         setTimeout(() => window.location.reload(), 2000)
       } else {
-        const error = await response.json()
-        setUploadError(error.error || 'Failed to start batch processing')
+        let errorMessage = 'Failed to start batch processing'
+        try {
+          const error = await response.json()
+          errorMessage = error.error || errorMessage
+        } catch (e) {
+          errorMessage = `Server error: ${response.status} ${response.statusText}`
+        }
+        setUploadError(errorMessage)
       }
     } catch (error: any) {
       console.error('CSV upload error:', error)
