@@ -5,6 +5,30 @@
 **MagicPatterns:** https://www.magicpatterns.com/c/2qmur5ajbx9funtxgnk3nr
 **Preview:** https://project-stellar-canyon-836.magicpatterns.app
 
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Set up database (automated)
+./scripts/db-init.sh
+npm run db:push
+npm run db:seed
+
+# Add your Anthropic API key to .env.local
+# ANTHROPIC_API_KEY=sk-ant-api03-...
+
+# Start development server
+npm run dev
+```
+
+Visit http://localhost:3001 and login with `admin` / `admin123`
+
+📚 **Full Documentation:**
+- [Quick Start Guide](./docs/QUICK_START.md)
+- [Database Setup](./docs/DATABASE_SETUP.md)
+
 ---
 
 ## Files
