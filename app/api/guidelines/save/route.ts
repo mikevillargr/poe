@@ -17,6 +17,11 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      // Check if database is available
+      if (!db) {
+        throw new Error('Database not available')
+      }
+
       // Try to save to database first
       const tenantId = '00000000-0000-0000-0000-000000000000'
 

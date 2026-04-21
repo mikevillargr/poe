@@ -1,9 +1,18 @@
 import { drizzle } from 'drizzle-orm/neon-http'
 import { neon } from '@neondatabase/serverless'
 
-if (!process.env.DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is not set')
+// Make database optional - will use in-memory storage if not configured
+let db: any = null
+
+if (process.env.DATABASE_URL) {
+  try {
+    const sql = neon(process.env.DATABASE_URL)
+    db = drizzle(sql)
+  } catch (error) {
+    console.warn('Database connection failed, will use in-memory storage:', error)
+  }
+} else {
+  console.warn('DATABASE_URL not set, using in-memory storage')
 }
 
-const sql = neon(process.env.DATABASE_URL)
-export const db = drizzle(sql)
+export { db }

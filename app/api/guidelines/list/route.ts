@@ -8,6 +8,11 @@ let inMemoryHeuristics: any[] = []
 export async function GET(request: NextRequest) {
   try {
     try {
+      // Check if database is available
+      if (!db) {
+        throw new Error('Database not available')
+      }
+
       // Try database first
       const allHeuristics = await db.select().from(heuristics)
 
