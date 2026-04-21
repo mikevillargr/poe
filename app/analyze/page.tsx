@@ -156,7 +156,20 @@ const itemVariants = {
 
 export default function AnalyzePage() {
   const searchParams = useSearchParams()
-  const [tabs, setTabs] = useState<DocumentTab[]>([])
+  const [tabs, setTabs] = useState<DocumentTab[]>(() => {
+    // Restore tabs from localStorage
+    if (typeof window !== 'undefined') {
+      const savedTabs = localStorage.getItem('analyze-tabs')
+      if (savedTabs) {
+        try {
+          return JSON.parse(savedTabs)
+        } catch (e) {
+          console.error('Failed to parse saved tabs:', e)
+        }
+      }
+    }
+    return []
+  })
   const [activeTabId, setActiveTabId] = useState<string>(() => {
     // Restore last active tab from localStorage
     if (typeof window !== 'undefined') {
@@ -171,6 +184,13 @@ export default function AnalyzePage() {
   const [batchItems, setBatchItems] = useState<any[]>([])
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const editorRef = useRef<any>(null)
+
+  // Persist tabs to localStorage
+  useEffect(() => {
+    if (tabs.length > 0) {
+      localStorage.setItem('analyze-tabs', JSON.stringify(tabs))
+    }
+  }, [tabs])
 
   // Persist active tab to localStorage
   useEffect(() => {
@@ -250,7 +270,14 @@ export default function AnalyzePage() {
     e.stopPropagation()
     const newTabs = tabs.filter((t) => t.id !== id)
     setTabs(newTabs)
-    if (activeTabId === id && newTabs.length > 0) {
+    
+    // Clear localStorage if no tabs left
+    if (newTabs.length === 0) {
+      localStorage.removeItem('analyze-tabs')
+      localStorage.removeItem('analyze-active-tab')
+      setActiveTabId('new')
+    } else if (activeTabId === id) {
+      // Switch to last tab if closing active tab
       setActiveTabId(newTabs[newTabs.length - 1].id)
     }
   }
