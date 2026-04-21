@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Upload, 
@@ -50,8 +50,20 @@ export default function GuidelinesPage() {
     if (uploadedFile) {
       setFile(uploadedFile)
       setInputMethod('upload')
+      setError('') // Clear any previous errors
     }
   }
+  
+  // Auto-trigger extraction when file is set
+  useEffect(() => {
+    if (file && inputMethod === 'upload' && step === 'input') {
+      // Small delay to show the file was uploaded
+      const timer = setTimeout(() => {
+        handleIngest()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [file, inputMethod])
 
   // Process the input and extract heuristics
   const handleIngest = async () => {
