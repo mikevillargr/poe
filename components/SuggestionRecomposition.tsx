@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Loader2, Sparkles } from 'lucide-react'
+import { useSettings } from '@/hooks/useSettings'
 
 interface SuggestionRecompositionProps {
   suggestionId: string
@@ -28,13 +29,21 @@ export function SuggestionRecomposition({
   const [tonality, setTonality] = useState<string>('')
   const [customPrompt, setCustomPrompt] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string>('')
+  const { settings } = useSettings()
 
   const handleRegenerate = async () => {
     if (!tonality && !customPrompt.trim()) {
       return
     }
 
+    if (!settings.apiKey) {
+      setError('API key not configured. Please set it in Settings.')
+      return
+    }
+
     setIsLoading(true)
+    setError('')
 
     try {
       const response = await fetch('/api/suggestions/recompose', {
@@ -46,11 +55,13 @@ export function SuggestionRecomposition({
           currentSuggestion,
           tonality: tonality || undefined,
           customPrompt: customPrompt.trim() || undefined,
+          apiKey: settings.apiKey,
         }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to recompose')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to recompose')
       }
 
       const data = await response.json()
@@ -62,9 +73,9 @@ export function SuggestionRecomposition({
       // Reset form
       setTonality('')
       setCustomPrompt('')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Recomposition failed:', error)
-      // TODO: Show error toast
+      setError(error.message || 'Failed to regenerate suggestion')
     } finally {
       setIsLoading(false)
     }
@@ -120,6 +131,13 @@ export function SuggestionRecomposition({
             className="w-full bg-surface border border-border rounded-input px-3 py-2 text-sm text-body focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 min-h-[80px] resize-none transition-all disabled:opacity-50"
           />
         </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="bg-danger/10 border border-danger/20 rounded-input px-3 py-2 text-xs text-red-400">
+            {error}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex items-center gap-2 pt-2">

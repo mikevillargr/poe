@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
-
 const TONALITY_PROMPTS: Record<string, string> = {
   professional: 'Rewrite this in a professional, formal tone suitable for business communication.',
   casual: 'Rewrite this in a casual, friendly tone that feels conversational and approachable.',
@@ -17,7 +13,14 @@ const TONALITY_PROMPTS: Record<string, string> = {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { suggestionId, originalText, currentSuggestion, tonality, customPrompt } = body
+    const { suggestionId, originalText, currentSuggestion, tonality, customPrompt, apiKey } = body
+
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: 'API key is required' },
+        { status: 400 }
+      )
+    }
 
     if (!originalText || !currentSuggestion) {
       return NextResponse.json(
@@ -39,6 +42,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Create Anthropic client with provided API key
+    const anthropic = new Anthropic({
+      apiKey,
+      baseURL: 'https://api.anthropic.com',
+    })
+
     // Call Claude API
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
@@ -59,8 +68,17 @@ export async function POST(request: NextRequest) {
       newSuggestion,
       suggestionId,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Recomposition error:', error)
+    
+    // Handle Anthropic API errors
+    if (error?.status === 401 || error?.status === 403) {
+      return NextResponse.json(
+        { error: 'Invalid API key. Please check your settings.' },
+        { status: 401 }
+      )
+    }
+    
     return NextResponse.json(
       { error: 'Failed to recompose suggestion' },
       { status: 500 }
