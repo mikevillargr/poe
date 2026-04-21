@@ -1,9 +1,10 @@
 'use client'
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { TrendingUp, AlertCircle, Plus, Eye } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
 import { PageErrorBoundary } from '@/components/feedback/PageErrorBoundary'
 
@@ -90,11 +91,72 @@ const itemVariants = {
   },
 }
 
-export default function DashboardPage() {
+export default function JobQueuePage() {
+  const router = useRouter()
+  const [jobs, setJobs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    scoredThisWeek: 0,
+    averageScore: 0,
+    flaggedIssues: 0,
+  })
+
+  useEffect(() => {
+    loadJobs()
+  }, [])
+
+  const loadJobs = async () => {
+    try {
+      const response = await fetch('/api/documents')
+      if (response.ok) {
+        const { documents } = await response.json()
+        
+        // Filter to only scored documents
+        const scoredDocs = documents.filter((d: any) => d.status === 'scored' && d.overallScore !== null)
+        setJobs(scoredDocs)
+
+        // Calculate stats
+        const weekAgo = new Date()
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        const scoredThisWeek = scoredDocs.filter((d: any) => new Date(d.updatedAt) > weekAgo).length
+        const avgScore = scoredDocs.length > 0 
+          ? Math.round(scoredDocs.reduce((sum: number, d: any) => sum + d.overallScore, 0) / scoredDocs.length)
+          : 0
+        const flagged = scoredDocs.filter((d: any) => d.overallScore < 70).length
+
+        setStats({
+          scoredThisWeek,
+          averageScore: avgScore,
+          flaggedIssues: flagged,
+        })
+      }
+    } catch (e) {
+      console.error('Failed to load jobs:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const getScoreColor = (score: number) => {
     if (score >= 90) return 'bg-success/20 text-green-400 border border-success/30'
     if (score >= 70) return 'bg-warning/20 text-orange-400 border border-warning/30'
     return 'bg-danger/20 text-red-400 border border-danger/30'
+  }
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays}d ago`
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
+
+  const handleOpenJob = (documentId: string) => {
+    // Navigate to analyze page with document ID as query param
+    router.push(`/analyze?doc=${documentId}`)
   }
 
   return (
@@ -107,7 +169,7 @@ export default function DashboardPage() {
       >
         {/* Header */}
         <motion.div variants={itemVariants} className="flex items-center justify-between mb-10">
-          <h1 className="text-3xl font-display text-heading">Dashboard</h1>
+          <h1 className="text-3xl font-display text-heading">Job Queue</h1>
           <Link
             href="/analyze"
             className="bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-input text-sm font-medium flex items-center gap-2 transition-all hover:shadow-glow-accent-strong"
@@ -130,10 +192,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-end gap-3 relative z-10">
               <span className="text-4xl font-mono font-bold text-heading tabular-nums">
-                47
-              </span>
-              <span className="text-success text-sm font-medium mb-1 flex items-center">
-                +12%
+                {stats.scoredThisWeek}
               </span>
             </div>
           </div>
@@ -146,7 +205,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-end gap-3 relative z-10">
               <span className="text-4xl font-mono font-bold text-success tabular-nums drop-shadow-[0_0_8px_rgba(39,103,73,0.4)]">
-                76
+                {stats.averageScore}
               </span>
               <span className="text-muted text-sm font-mono mb-1">/100</span>
             </div>
@@ -160,7 +219,7 @@ export default function DashboardPage() {
             </div>
             <div className="flex items-end gap-3 relative z-10">
               <span className="text-4xl font-mono font-bold text-danger tabular-nums drop-shadow-[0_0_8px_rgba(155,44,44,0.4)]">
-                12
+                {stats.flaggedIssues}
               </span>
               <span className="text-muted text-sm mb-1">requires review</span>
             </div>
@@ -169,7 +228,9 @@ export default function DashboardPage() {
 
         {/* Recent Jobs Table */}
         <motion.div variants={itemVariants} className="mb-6">
-          <h2 className="text-xl font-display text-heading mb-6">Recent Jobs</h2>
+          <h2 className="text-xl font-display text-heading mb-6">
+            Scored Content ({jobs.length})
+          </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse table-fixed">
               <colgroup>
@@ -200,39 +261,65 @@ export default function DashboardPage() {
                 variants={containerVariants}
                 className="divide-y divide-border"
               >
-                {RECENT_JOBS.map((job) => (
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-muted">
+                      Loading jobs...
+                    </td>
+                  </tr>
+                ) : jobs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-muted">
+                      No scored content yet. Start analyzing content to see jobs here.
+                    </td>
+                  </tr>
+                ) : jobs.map((job) => (
                   <motion.tr
                     variants={itemVariants}
                     key={job.id}
-                    className="group hover:bg-surface-hover transition-colors relative"
+                    className="group hover:bg-surface-hover transition-colors relative cursor-pointer"
+                    onClick={() => handleOpenJob(job.id)}
                   >
                     <td className="px-4 py-4 text-sm font-medium text-heading pl-6 truncate relative">
                       <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent opacity-0 group-hover:opacity-100 transition-opacity shadow-glow-accent" />
-                      <Link href="/analyze" className="hover:text-accent transition-colors">
+                      <span className="hover:text-accent transition-colors">
                         {job.title}
-                      </Link>
+                      </span>
                     </td>
                     <td className="px-4 py-4">
                       <span
-                        className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-mono font-bold tabular-nums ${getScoreColor(job.score)}`}
+                        className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-mono font-bold tabular-nums ${getScoreColor(job.overallScore)}`}
                       >
-                        {job.score}
+                        {job.overallScore}
                       </span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-1.5">
-                        {job.dimensions.map((dim) => (
-                          <CategoryBadge key={dim} category={dim} variant="outline" />
-                        ))}
+                        {job.dimensionScores && job.dimensionScores.length > 0 ? (
+                          job.dimensionScores.slice(0, 3).map((dim: any) => (
+                            <CategoryBadge key={dim.category} category={dim.category} variant="outline" />
+                          ))
+                        ) : (
+                          <span className="text-xs text-muted">—</span>
+                        )}
+                        {job.dimensionScores && job.dimensionScores.length > 3 && (
+                          <span className="text-xs text-muted">+{job.dimensionScores.length - 3}</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-4 text-sm text-muted font-mono">
-                      {job.date}
+                      {formatDate(job.updatedAt)}
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <Link href="/analyze" className="text-muted hover:text-accent transition-colors p-1 opacity-0 group-hover:opacity-100 inline-flex">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleOpenJob(job.id)
+                        }}
+                        className="text-muted hover:text-accent transition-colors p-1 opacity-0 group-hover:opacity-100 inline-flex"
+                      >
                         <Eye className="w-4 h-4" />
-                      </Link>
+                      </button>
                     </td>
                   </motion.tr>
                 ))}

@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useSearchParams } from 'next/navigation'
 import {
   Check,
   X,
@@ -152,6 +153,7 @@ const itemVariants = {
 }
 
 export default function AnalyzePage() {
+  const searchParams = useSearchParams()
   const [tabs, setTabs] = useState<DocumentTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string>('new')
   const [activeFilter, setActiveFilter] = useState<string>('All')
@@ -174,6 +176,14 @@ export default function AnalyzePage() {
     }))
     setSuggestions(initialSuggestions)
   }, [])
+
+  // Load document from query parameter
+  useEffect(() => {
+    const docId = searchParams.get('doc')
+    if (docId) {
+      handleOpenBatchItem(docId)
+    }
+  }, [searchParams])
 
   const handleNewTab = () => {
     const newId = `new-${Date.now()}`

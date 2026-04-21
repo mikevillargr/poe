@@ -24,7 +24,7 @@ export function Sidebar() {
   const navItems = [
     {
       path: '/dashboard',
-      label: 'Dashboard',
+      label: 'Job Queue',
       icon: LayoutDashboard,
     },
     {
