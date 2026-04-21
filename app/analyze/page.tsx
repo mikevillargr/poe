@@ -947,10 +947,13 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
       if (response.ok) {
         setUploadSuccess(`CSV uploaded! Processing ${items.length} URLs...`)
         // Refresh batch items to show new documents
+        // Multiple refreshes to ensure documents appear
+        setTimeout(() => onRefresh(), 1000)
+        setTimeout(() => onRefresh(), 3000)
         setTimeout(() => {
           onRefresh()
           setUploadSuccess(null)
-        }, 2000)
+        }, 5000)
       } else {
         let errorMessage = 'Failed to start batch processing'
         try {
