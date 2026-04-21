@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { heuristics } from '@/lib/db/schema'
-
-// In-memory storage as fallback when database is not available
-let inMemoryHeuristics: any[] = []
+import { addInMemoryHeuristics } from '@/lib/storage/in-memory'
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,7 +56,7 @@ export async function POST(request: NextRequest) {
         active: h.active ?? true,
       }))
 
-      inMemoryHeuristics = [...inMemoryHeuristics, ...savedHeuristics]
+      addInMemoryHeuristics(savedHeuristics)
 
       return NextResponse.json({
         success: true,
@@ -75,6 +73,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
-// Export in-memory heuristics for the list endpoint
-export { inMemoryHeuristics }

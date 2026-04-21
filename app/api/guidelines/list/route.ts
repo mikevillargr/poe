@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { heuristics } from '@/lib/db/schema'
-
-// In-memory storage (shared with save endpoint)
-let inMemoryHeuristics: any[] = []
+import { getInMemoryHeuristics } from '@/lib/storage/in-memory'
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,9 +30,10 @@ export async function GET(request: NextRequest) {
       console.warn('Database read failed, using in-memory storage:', dbError)
       
       // Fallback to in-memory storage
+      const memoryHeuristics = getInMemoryHeuristics()
       return NextResponse.json({
-        heuristics: inMemoryHeuristics,
-        count: inMemoryHeuristics.length,
+        heuristics: memoryHeuristics,
+        count: memoryHeuristics.length,
         warning: 'Using temporary storage. Database connection required for persistence.',
       })
     }
@@ -45,9 +44,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-// Allow save endpoint to update in-memory storage
-export function addToMemory(heuristics: any[]) {
-  inMemoryHeuristics = [...inMemoryHeuristics, ...heuristics]
 }
