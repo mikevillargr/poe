@@ -15,19 +15,24 @@ const batchRequestSchema = z.object({
 // In-memory batch job storage
 const batchJobs = new Map<string, any>()
 
-// Smart HTML content extraction
+// Smart HTML content extraction with paragraph preservation
 function extractTextFromHTML(html: string): string {
   // Remove script tags and their content
-  let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+  let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
   
   // Remove style tags and their content
-  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
   
   // Remove HTML comments
-  text = text.replace(/<!--[\s\S]*?-->/g, ' ')
+  text = text.replace(/<!--[\s\S]*?-->/g, '')
+  
+  // Convert block-level elements to newlines BEFORE removing tags
+  text = text.replace(/<\/(p|div|h[1-6]|li|tr|br)>/gi, '\n\n')
+  text = text.replace(/<br\s*\/?>/gi, '\n')
+  text = text.replace(/<\/li>/gi, '\n')
   
   // Remove all remaining HTML tags
-  text = text.replace(/<[^>]+>/g, ' ')
+  text = text.replace(/<[^>]+>/g, '')
   
   // Decode HTML entities
   text = text
@@ -39,9 +44,15 @@ function extractTextFromHTML(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&mdash;/g, '—')
     .replace(/&ndash;/g, '–')
+    .replace(/&rsquo;/g, "'")
+    .replace(/&lsquo;/g, "'")
+    .replace(/&rdquo;/g, '"')
+    .replace(/&ldquo;/g, '"')
   
-  // Replace multiple whitespace with single space
-  text = text.replace(/\s+/g, ' ')
+  // Clean up whitespace while preserving paragraph breaks
+  text = text.replace(/[ \t]+/g, ' ') // Multiple spaces/tabs to single space
+  text = text.replace(/\n\s+\n/g, '\n\n') // Clean up lines with only whitespace
+  text = text.replace(/\n{3,}/g, '\n\n') // Max 2 newlines (one blank line)
   
   // Trim and return
   return text.trim()
