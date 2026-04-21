@@ -6,17 +6,19 @@ import { eq, desc } from 'drizzle-orm'
 // GET - Get a single document with its latest score
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!db) {
       return NextResponse.json({ error: 'Database not available' }, { status: 503 })
     }
 
+    const { id } = await params
+
     const [doc] = await db
       .select()
       .from(contentDocuments)
-      .where(eq(contentDocuments.id, params.id))
+      .where(eq(contentDocuments.id, id))
 
     if (!doc) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
@@ -26,7 +28,7 @@ export async function GET(
     const scores = await db
       .select()
       .from(scoreJobs)
-      .where(eq(scoreJobs.documentId, params.id))
+      .where(eq(scoreJobs.documentId, id))
       .orderBy(desc(scoreJobs.createdAt))
       .limit(1)
 
@@ -64,13 +66,14 @@ export async function GET(
 // PATCH - Update a document (edited text, title, etc.)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!db) {
       return NextResponse.json({ error: 'Database not available' }, { status: 503 })
     }
 
+    const { id } = await params
     const updates = await request.json()
     
     const updateData: any = { updatedAt: new Date() }
@@ -83,7 +86,7 @@ export async function PATCH(
     const [doc] = await db
       .update(contentDocuments)
       .set(updateData)
-      .where(eq(contentDocuments.id, params.id))
+      .where(eq(contentDocuments.id, id))
       .returning()
 
     if (!doc) {
@@ -100,8 +103,9 @@ export async function PATCH(
 // DELETE - Delete a document
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   try {
     if (!db) {
       return NextResponse.json({ error: 'Database not available' }, { status: 503 })
@@ -109,7 +113,7 @@ export async function DELETE(
 
     await db
       .delete(contentDocuments)
-      .where(eq(contentDocuments.id, params.id))
+      .where(eq(contentDocuments.id, id))
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
