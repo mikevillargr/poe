@@ -945,15 +945,44 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: 
       })
 
       if (response.ok) {
-        setUploadSuccess(`CSV uploaded! Processing ${items.length} URLs...`)
-        // Refresh batch items to show new documents
-        // Multiple refreshes to ensure documents appear
-        setTimeout(() => onRefresh(), 1000)
-        setTimeout(() => onRefresh(), 3000)
-        setTimeout(() => {
-          onRefresh()
-          setUploadSuccess(null)
-        }, 5000)
+        const totalItems = items.length
+        const initialCount = items.length // Track initial count before upload
+        setUploadSuccess(`Processing ${totalItems} URLs...`)
+        
+        // Poll for progress - refresh every 2 seconds until all items are processed
+        let pollCount = 0
+        let processedCount = 0
+        const maxPolls = 60 // Max 2 minutes of polling
+        
+        const pollInterval = setInterval(async () => {
+          pollCount++
+          
+          // Fetch current document count to show progress
+          const docsResponse = await fetch('/api/documents')
+          if (docsResponse.ok) {
+            const { documents } = await docsResponse.json()
+            processedCount = documents.length
+            const progress = Math.min(processedCount, totalItems)
+            setUploadSuccess(`Processing... ${progress}/${totalItems} documents created`)
+          }
+          
+          await onRefresh()
+          
+          // Stop if all documents are created
+          if (processedCount >= totalItems) {
+            clearInterval(pollInterval)
+            setUploadSuccess(`✓ Processed ${totalItems} URLs`)
+            setTimeout(() => setUploadSuccess(null), 3000)
+            return
+          }
+          
+          // Check if we should stop polling (timeout)
+          if (pollCount >= maxPolls) {
+            clearInterval(pollInterval)
+            setUploadSuccess(`Processed ${processedCount}/${totalItems} URLs (timed out)`)
+            setTimeout(() => setUploadSuccess(null), 5000)
+          }
+        }, 2000)
       } else {
         let errorMessage = 'Failed to start batch processing'
         try {
