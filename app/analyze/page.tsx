@@ -440,6 +440,7 @@ export default function AnalyzePage() {
               items={batchItems}
               onOpenTab={handleOpenBatchItem}
               onDeleteItem={(id) => setDeleteConfirm(id)}
+              onRefresh={loadBatchItems}
             />
           ) : activeTabId === 'new' || !activeTab ? (
             <BlankCanvasView onCreateDocument={async (title, content, source, sourceRef) => {
@@ -759,7 +760,7 @@ function BlankCanvasView({ onCreateDocument }: { onCreateDocument: (title: strin
 }
 
 // Batch Queue View
-function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOpenTab: (id: string) => void; onDeleteItem: (id: string) => void }) {
+function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: any[]; onOpenTab: (id: string) => void; onDeleteItem: (id: string) => void; onRefresh: () => void }) {
   const csvInputRef = useRef<HTMLInputElement>(null)
   const docxInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -871,7 +872,11 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
 
       if (response.ok) {
         setUploadSuccess(`CSV uploaded! Processing ${items.length} URLs...`)
-        setTimeout(() => window.location.reload(), 2000)
+        // Refresh batch items to show new documents
+        setTimeout(() => {
+          onRefresh()
+          setUploadSuccess(null)
+        }, 2000)
       } else {
         let errorMessage = 'Failed to start batch processing'
         try {
@@ -933,7 +938,10 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
       
       if (successCount > 0) {
         setUploadSuccess(`${successCount} file(s) uploaded successfully!`)
-        setTimeout(() => window.location.reload(), 2000)
+        setTimeout(() => {
+          onRefresh()
+          setUploadSuccess(null)
+        }, 2000)
       } else {
         setUploadError('Failed to upload any files')
       }

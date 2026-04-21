@@ -15,6 +15,38 @@ const batchRequestSchema = z.object({
 // In-memory batch job storage
 const batchJobs = new Map<string, any>()
 
+// Smart HTML content extraction
+function extractTextFromHTML(html: string): string {
+  // Remove script tags and their content
+  let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+  
+  // Remove style tags and their content
+  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+  
+  // Remove HTML comments
+  text = text.replace(/<!--[\s\S]*?-->/g, ' ')
+  
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, ' ')
+  
+  // Decode HTML entities
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+  
+  // Replace multiple whitespace with single space
+  text = text.replace(/\s+/g, ' ')
+  
+  // Trim and return
+  return text.trim()
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -98,7 +130,9 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
         // Fetch URL content
         const response = await fetch(item.ref)
         const html = await response.text()
-        content = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+        content = extractTextFromHTML(html)
+        
+        console.log(`Extracted ${content.length} characters from ${item.ref}`)
       } else {
         // For other types, use ref as content for now
         content = item.ref
