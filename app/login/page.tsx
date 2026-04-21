@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import { motion } from 'framer-motion'
 import { Lock, User } from 'lucide-react'
 
@@ -50,14 +49,8 @@ export default function LoginPage() {
         <div className="glass-card p-8 rounded-card border border-border/50 backdrop-blur-xl">
           {/* Logo */}
           <div className="flex justify-center mb-8">
-            <div className="relative w-24 h-24">
-              <Image
-                src="/poe-logo.svg"
-                alt="Poe Logo"
-                width={96}
-                height={96}
-                className="w-full h-full"
-              />
+            <div className="text-6xl font-bold bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent">
+              Poe
             </div>
           </div>
 
