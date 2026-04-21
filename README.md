@@ -1,96 +1,281 @@
-# Poe — Content Grading & Scoring App
+# Poe — AI Content Intelligence Platform
 
-> AI-powered content scoring for brand compliance, SEO readiness, and topical safety.
+> AI-powered content grading and optimization for brand compliance, SEO readiness, and editorial excellence.
 
-**Version:** v1.0.0 (Production Ready)  
+**Status:** ✅ Production Ready  
+**Live Demo:** http://76.13.191.149:3001  
 **Repository:** https://github.com/mikevillargr/poe
 
-## ✨ Features
+---
 
-- 🔐 **Authentication** - Simple login (admin/admin)
-- 📝 **Analyze & Optimize** - AI-powered content analysis
-- 📊 **Batch CSV Upload** - Process multiple URLs at once
-- 📄 **DOCX Support** - Upload and analyze Word documents
-- 🌐 **URL Fetching** - Smart content extraction from web pages
-- 🤖 **AI Scoring** - Powered by Anthropic Claude
-- 💡 **Suggestion Highlighting** - Click to highlight text in editor
-- 📑 **Tab Management** - Work on multiple documents
-- 📋 **Guidelines** - Manage scoring criteria
-- ⚙️ **Settings** - Configure API keys and preferences
-- 📥 **Export** - Download scored content as DOCX
-- 🕐 **Version History** - Track document changes
+## 🎯 Overview
 
-## Quick Start (Local Development)
+Poe is a comprehensive content intelligence platform that uses AI (Anthropic Claude) to analyze, score, and optimize written content against customizable heuristics. Built for content teams, agencies, and publishers who need to maintain brand voice, SEO standards, and editorial quality at scale.
+
+## ✨ Key Features
+
+### � **Job Queue & Batch Processing**
+- Upload CSV files with URLs for bulk content analysis
+- Upload multiple DOCX files for batch scoring
+- Real-time scoring status tracking
+- Persistent queue across sessions
+
+### 📝 **Smart Content Editor**
+- Rich text editor with TipTap
+- AI-powered suggestions with inline highlighting
+- Click-to-highlight suggestion navigation
+- Multi-tab document management
+- Auto-save with version history
+- Export to DOCX with optional score data
+
+### 🤖 **AI-Powered Scoring**
+- **6 Heuristic Dimensions:**
+  - Brand Voice & Messaging
+  - Call-to-Action
+  - Compliance & Accuracy
+  - Entity Formation Standards
+  - SEO & Readability
+  - Target Audience Alignment
+- Overall score (0-100) + dimension breakdowns
+- Actionable suggestions with severity levels
+- Accept/dismiss suggestion workflow
+
+### 🎨 **Dynamic Filters**
+- Filter suggestions by heuristic category
+- Filter by status (pending, accepted, dismissed)
+- Filters auto-update based on active heuristics
+- Persistent filter state per document
+
+### � **Authentication & Security**
+- Simple credential-based login
+- Session persistence with cookies
+- Protected routes with middleware
+- Logout functionality
+
+### ⚙️ **Settings & Configuration**
+- Anthropic API key management
+- Custom heuristics editor
+- Theme toggle (light/dark)
+- Persistent settings storage
+
+---
+
+## � Tech Stack
+
+### Frontend
+- **Framework:** Next.js 15 (App Router)
+- **Language:** TypeScript
+- **Styling:** TailwindCSS
+- **UI Components:** Custom components with Framer Motion
+- **Editor:** TipTap (ProseMirror)
+- **State:** Zustand
+- **Icons:** Lucide React
+
+### Backend
+- **Runtime:** Node.js 20
+- **Database:** PostgreSQL 16
+- **ORM:** Drizzle ORM
+- **AI:** Anthropic Claude (Haiku)
+- **File Processing:** Mammoth (DOCX), Cheerio (HTML)
+
+### Infrastructure
+- **Deployment:** Docker + Docker Compose
+- **Hosting:** VPS (Ubuntu)
+- **Database:** PostgreSQL in Docker
+- **Port:** 3001
+
+---
+
+## 📦 Quick Start
+
+### Local Development
 
 ```bash
-# Install dependencies
+# 1. Clone repository
+git clone https://github.com/mikevillargr/poe.git
+cd poe
+
+# 2. Install dependencies
 npm install
 
-# Set up database
-npm run db:push
-
-# Add your Anthropic API key to .env
+# 3. Set up environment variables
+cp .env.example .env
+# Add your Anthropic API key to .env:
 # ANTHROPIC_API_KEY=sk-ant-api03-...
 
-# Start development server
+# 4. Set up database
+npm run db:push
+
+# 5. Start development server
 npm run dev
 ```
 
-Visit http://localhost:3001 and login with:
-- **Username:** admin
-- **Password:** admin
+Visit **http://localhost:3001** and login with:
+- **Username:** `admin`
+- **Password:** `admin`
 
-## 🚀 VPS Deployment
-
-### Automated Deployment
+### Docker Deployment (Production)
 
 ```bash
-# One-command deployment
-./deploy.sh <vps-ip> <vps-user>
+# 1. Build and start containers
+docker-compose up -d --build
 
-# Example
-./deploy.sh 192.168.1.100 ubuntu
+# 2. Check logs
+docker-compose logs -f app
+
+# 3. Access at http://localhost:3001
 ```
 
-### Manual Deployment
+---
 
-See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete step-by-step guide.
+## 🌐 VPS Deployment
 
-📚 **Documentation:**
-- [Deployment Guide](./DEPLOYMENT.md) - Complete VPS setup
-- [Quick Start Guide](./docs/QUICK_START.md) - Local development
-- [Database Setup](./docs/DATABASE_SETUP.md) - Database configuration
+### Prerequisites
+- Ubuntu 20.04+ VPS
+- Docker & Docker Compose installed
+- Port 3001 open
+
+### Deployment Steps
+
+```bash
+# 1. SSH into VPS
+ssh root@your-vps-ip
+
+# 2. Clone repository
+cd /var/www
+git clone https://github.com/mikevillargr/poe.git
+cd poe
+
+# 3. Create .env file
+nano .env
+# Add:
+# ANTHROPIC_API_KEY=your-key
+# DATABASE_URL=postgresql://poeuser:poepass@db:5432/poe
+
+# 4. Deploy with Docker
+docker-compose up -d --build
+
+# 5. Verify deployment
+docker-compose ps
+docker-compose logs app
+```
+
+### Update Deployment
+
+```bash
+cd /var/www/poe
+git pull origin main
+docker-compose down
+docker-compose up -d --build
+```
 
 ---
 
-## Files
+## 📁 Project Structure
 
-| File | Purpose |
-|---|---|
-| `CLAUDE.md` | Full project spec — routing, components, error handling, Docker, GitHub Actions |
-| `INITIAL_PROMPT.md` | First message to Claude Code — scaffold the full project |
-| `MAGICPATTERNS_PROMPT.md` | What's been built in MP + 8 extension prompts for new screens |
+```
+poe/
+├── app/
+│   ├── (auth)/              # Auth route group (no sidebar)
+│   │   └── login/           # Login page
+│   ├── (main)/              # Main app route group (with sidebar)
+│   │   ├── analyze/         # Content editor & analysis
+│   │   ├── dashboard/       # Job queue & batch uploads
+│   │   ├── guidelines/      # Heuristics management
+│   │   └── settings/        # App settings
+│   ├── api/                 # API routes
+│   │   ├── documents/       # Document CRUD
+│   │   ├── score/           # AI scoring endpoint
+│   │   └── settings/        # Settings API
+│   └── globals.css          # Global styles
+├── components/              # Reusable components
+│   ├── editor/              # Rich text editor
+│   ├── Sidebar.tsx          # Navigation sidebar
+│   └── AppProviders.tsx     # Context providers
+├── lib/
+│   ├── db/                  # Database schema & client
+│   └── ai/                  # AI scoring logic
+├── stores/                  # Zustand state stores
+├── docker-compose.yml       # Docker orchestration
+├── Dockerfile               # App container config
+└── .dockerignore            # Docker build exclusions
+```
 
 ---
 
-## What was added in this pass
+## 🔧 Configuration
 
-| Feature | CLAUDE.md | INITIAL_PROMPT.md | MAGICPATTERNS_PROMPT.md |
-|---|---|---|---|
-| Error handling system | Full spec: 5 tiers, toast/banner/modal, error state map | Build instructions for all 4 components | Prompts 2, 3, 4 |
-| Login page | Auth section: credentials-only, NextAuth config | Login page + NextAuth route + layout redirect | Prompt 1 |
-| GitHub Actions | CI + deploy workflows, required secrets | Create both workflow files | — |
-| Docker / VPS | Dockerfile, docker-compose, nginx.conf, VPS setup | Create all Docker files | — |
-| Remaining MP gaps | Updated gaps table | Fix during porting | Prompts 5–8 |
+### Environment Variables
+
+```bash
+# Required
+ANTHROPIC_API_KEY=sk-ant-api03-...
+
+# Database (auto-configured in Docker)
+DATABASE_URL=postgresql://poeuser:poepass@db:5432/poe
+```
+
+### Database Schema
+
+- **content_documents** - Stored documents with scores
+- **score_jobs** - Scoring history with suggestions
+- **heuristics** - Scoring rules and criteria
+- **settings** - App configuration
 
 ---
 
-## Build order
+## 🐛 Troubleshooting
 
-1. ✅ UI designed in MagicPatterns  
-2. → Extend MP prototype using prompts in `MAGICPATTERNS_PROMPT.md` (login + toasts + confirm modal + remaining gaps)
-3. → Port components to Next.js using `INITIAL_PROMPT.md`
-4. → Set up GitHub repo + add secrets (see `CLAUDE.md` GitHub section)
-5. → Set up VPS (see `CLAUDE.md` VPS Setup section)
-6. → Wire AI pipeline
-7. → Connect DB + auth
+### Issue: Suggestions disappear on refresh
+**Fixed:** Suggestions now persist to localStorage via tab state management.
+
+### Issue: Filters don't reflect active heuristics
+**Fixed:** Filters are now dynamically generated from database heuristics.
+
+### Issue: Sidebar shows on login page
+**Fixed:** Route groups separate auth layout (no sidebar) from main layout.
+
+### Issue: Docker changes not picked up
+**Solution:** Use `docker-compose up -d --build` (not just `restart`)
+
+### Issue: Module not found errors
+**Solution:** Ensure `.dockerignore` excludes `node_modules` and `.next`
+
+---
+
+## 📝 Default Credentials
+
+- **Username:** `admin`
+- **Password:** `admin`
+
+⚠️ **Change these in production!**
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is proprietary software. All rights reserved.
+
+---
+
+## 🙏 Acknowledgments
+
+- **AI:** Anthropic Claude
+- **Framework:** Next.js by Vercel
+- **Editor:** TipTap
+- **Database:** PostgreSQL
+- **Deployment:** Docker
+
+---
+
+**Built with ❤️ for Growth Rocket**
