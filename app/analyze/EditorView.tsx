@@ -71,10 +71,24 @@ export function EditorView({
 
   // Fetch available dimensions from heuristics
   useEffect(() => {
-    fetch('/api/heuristics/dimensions')
+    // Fetch heuristics and extract unique categories
+    fetch('/api/score')
       .then(res => res.json())
-      .then(data => setAvailableDimensions(data.dimensions || []))
-      .catch(err => console.error('Failed to fetch dimensions:', err))
+      .then(data => {
+        // Extract unique categories from heuristics
+        const categories = new Set<string>()
+        if (data.heuristics && Array.isArray(data.heuristics)) {
+          data.heuristics.forEach((h: any) => {
+            if (h.category) categories.add(h.category)
+          })
+        }
+        setAvailableDimensions(Array.from(categories).sort())
+      })
+      .catch(err => {
+        console.error('Failed to fetch dimensions:', err)
+        // Fallback to empty array
+        setAvailableDimensions([])
+      })
   }, [])
 
   // Initialize Google Drive on mount
