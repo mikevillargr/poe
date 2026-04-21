@@ -355,7 +355,7 @@ export default function AnalyzePage() {
     try {
       const response = await fetch(`/api/documents/${documentId}`)
       if (response.ok) {
-        const { document } = await response.json()
+        const { document, latestScore } = await response.json()
         const newId = generateTabId('doc')
         const newTab: DocumentTab = {
           id: newId,
@@ -366,6 +366,8 @@ export default function AnalyzePage() {
           source: document.source,
           sourceRef: document.sourceRef,
           documentId: document.id,
+          dimensionScores: latestScore?.dimensionScores || document.dimensionScores,
+          suggestions: latestScore?.suggestions || [],
         }
         setTabs([...tabs, newTab])
         setActiveTabId(newId)
@@ -500,6 +502,7 @@ export default function AnalyzePage() {
             }} />
           ) : (
             <EditorView
+              key={activeTab.id}
               tab={activeTab}
               dimensions={DIMENSIONS}
               activeFilter={activeFilter}
