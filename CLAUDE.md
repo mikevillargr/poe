@@ -255,7 +255,7 @@ github.com/mikevillargr/poe
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml           # Lint + typecheck on PR
-│       └── deploy.yml       # Build + push Docker image + deploy to VPS on main merge
+│       └── deploy.yml       # Build + deploy to VPS on git tag push (e.g., v0.1.0)
 ├── docker/
 │   ├── Dockerfile
 │   └── nginx.conf
@@ -287,7 +287,8 @@ jobs:
 name: Deploy to VPS
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*.*.*'
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -300,7 +301,8 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /opt/poe
-            git pull origin main
+            git fetch --tags
+            git checkout ${{ github.ref_name }}
             docker compose build
             docker compose up -d --remove-orphans
             docker image prune -f
@@ -600,17 +602,48 @@ DB_PASSWORD=
 ## Commands
 
 ```bash
-npm run dev
-npm run build
-npm run db:migrate
-npm run db:studio
-npm run lint
-npm run typecheck
+npm run dev              # Start development server
+npm run build            # Build for production
+npm run db:migrate       # Run database migrations
+npm run db:studio        # Open Drizzle Studio
+npm run lint             # Run ESLint
+npm run typecheck        # Run TypeScript checks
+npm run release:patch    # Release patch version (0.1.0 → 0.1.1)
+npm run release:minor    # Release minor version (0.1.0 → 0.2.0)
+npm run release:major    # Release major version (0.1.0 → 1.0.0)
 
 # Docker local
 docker compose up
 docker compose down
 
-# Prod deploy (automated via GitHub Actions on push to main)
-git push origin main
+# Release workflow (commits don't auto-deploy)
+npm run release:patch    # Create git tag → triggers VPS deployment
+```
+
+## Release Workflow
+
+**Version management:**
+- Semantic versioning: `MAJOR.MINOR.PATCH` (e.g., `0.1.0`)
+- Pre-production: `< 1.0.0` (breaking changes OK)
+- Tag format: `v{version}` (e.g., `v0.1.0`)
+
+**Release process:**
+1. Make changes on `main` branch and commit regularly
+2. When ready to release: `npm run release:patch` (or `:minor`, `:major`)
+3. Script automatically:
+   - Bumps `package.json` version
+   - Commits version bump
+   - Creates git tag (`v0.1.0`)
+   - Pushes to GitHub
+4. GitHub Actions detects tag → deploys to VPS
+
+**Example:**
+```bash
+# Make some changes
+git add .
+git commit -m "feat: add user authentication"
+git push
+
+# Ready to release
+npm run release:patch  # Creates v0.1.1, deploys to VPS
 ```

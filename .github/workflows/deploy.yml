@@ -2,7 +2,8 @@ name: Deploy to VPS
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*.*.*'
 
 jobs:
   deploy:
@@ -16,7 +17,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /opt/poe
-            git pull origin main
+            git fetch --tags
+            git checkout ${{ github.ref_name }}
             docker compose build
             docker compose up -d --remove-orphans
             docker image prune -f
+
+      - name: Notify deployment
+        run: echo "Deployed version ${{ github.ref_name }} to VPS"
