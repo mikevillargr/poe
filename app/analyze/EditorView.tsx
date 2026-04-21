@@ -107,11 +107,11 @@ export function EditorView({
         const from = pos + idx
         const to = from + suggestion.original.length
         
-        // Replace the text
+        // Replace the text - use deleteRange + insertContentAt to avoid HTML parsing
         editor.chain()
           .focus()
-          .setTextSelection({ from, to })
-          .insertContent(suggestion.suggested)
+          .deleteRange({ from, to })
+          .insertContentAt(from, suggestion.suggested)
           .run()
         
         found = true
@@ -240,7 +240,7 @@ export function EditorView({
                 key={suggestion.id}
                 layout
                 onClick={() => onSuggestionClick(suggestion.id)}
-                className={`glass-card p-4 relative overflow-hidden cursor-pointer transition-all ${
+                className={`glass-card p-4 relative overflow-visible cursor-pointer transition-all ${
                   isActive
                     ? 'ring-2 ring-accent ring-offset-2 ring-offset-background bg-accent/10 shadow-lg'
                     : 'hover:ring-1 hover:ring-accent/50'

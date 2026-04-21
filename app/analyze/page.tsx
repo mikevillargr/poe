@@ -419,7 +419,7 @@ function BlankCanvasView() {
           </div>
           <input
             type="text"
-            placeholder="https://example.com/blog-post"
+            placeholder="https://example.com/blog-post or Google Docs URL"
             className="flex-1 bg-transparent border-none text-body focus:outline-none focus:ring-0 text-sm"
           />
           <button className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-input text-sm font-medium transition-all shadow-glow-accent">
