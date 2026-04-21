@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: 'Sign in to Poe',
 }
 
-export default function LoginLayout({
+export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
