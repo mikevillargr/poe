@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import mammoth from 'mammoth'
+import { Readability } from '@mozilla/readability'
+import { JSDOM } from 'jsdom'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,8 +31,8 @@ export async function POST(request: NextRequest) {
       const arrayBuffer = await file.arrayBuffer()
       const buffer = Buffer.from(arrayBuffer)
 
-      // Parse DOCX using mammoth
-      const result = await mammoth.extractRawText({ buffer })
+      // Parse DOCX using mammoth - get HTML for better formatting
+      const result = await mammoth.convertToHtml({ buffer })
       const content = result.value
 
       if (!content || content.trim().length === 0) {
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
         content,
         source: 'docx',
         filename: file.name,
+        title: file.name.replace(/\.(docx?|DOCX?)$/, ''),
       })
     }
 
@@ -52,15 +55,34 @@ export async function POST(request: NextRequest) {
     const { url } = body
 
     if (url) {
-      // Simple URL content fetch
-      const response = await fetch(url)
+      // Fetch URL content
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; ContentBot/1.0)',
+        },
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch URL: ${response.status} ${response.statusText}`)
+      }
+
       const html = await response.text()
       
-      // Basic HTML to text conversion (strip tags)
-      const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      // Use Readability to extract main content
+      const dom = new JSDOM(html, { url })
+      const reader = new Readability(dom.window.document)
+      const article = reader.parse()
+
+      if (!article || !article.textContent) {
+        throw new Error('Could not extract readable content from URL')
+      }
+
+      // Convert to HTML for editor
+      const content = article.content || article.textContent
 
       return NextResponse.json({
-        content: text,
+        content,
+        title: article.title || url.split('/').pop() || 'Untitled',
         source: 'url',
         sourceRef: url,
       })

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Check, X, Sparkles, Clock, Loader2 } from 'lucide-react'
+import { Check, X, Sparkles, Clock, Loader2, Download, FileText } from 'lucide-react'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
 import { ScoreGauge } from '@/components/ScoreGauge'
@@ -54,6 +54,8 @@ export function EditorView({
   const [currentScore, setCurrentScore] = useState<number | null>(tab?.score || null)
   const [currentDimensions, setCurrentDimensions] = useState<Array<{ category: string; score: number; passCount?: number; failCount?: number }>>([])
   const [heuristicsCount, setHeuristicsCount] = useState<number>(0)
+  const [includeScoreData, setIncludeScoreData] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
   
   // Zustand stores
   const {
@@ -529,6 +531,93 @@ export function EditorView({
               </>
             )}
           </button>
+
+          {/* Export Section */}
+          <div className="mt-8 pt-6 border-t border-border">
+            <h3 className="text-xs font-medium text-muted mb-4 uppercase tracking-wider">
+              Export
+            </h3>
+            
+            <label className="flex items-center gap-2 mb-4 cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={includeScoreData}
+                onChange={(e) => setIncludeScoreData(e.target.checked)}
+                className="w-4 h-4 rounded border-border bg-surface text-accent focus:ring-accent focus:ring-offset-0"
+              />
+              <span className="text-xs text-body group-hover:text-heading transition-colors">
+                Include score & suggestions
+              </span>
+            </label>
+
+            <button
+              onClick={async () => {
+                if (!editorRef.current) return
+                
+                setIsExporting(true)
+                try {
+                  const content = editorRef.current.getHTML()
+                  let exportContent = content
+
+                  // Append score data if checkbox is checked
+                  if (includeScoreData && currentScore !== null) {
+                    exportContent += `
+                      <div style="page-break-before: always; margin-top: 40px; padding-top: 20px; border-top: 2px solid #e5e7eb;">
+                        <h2>Content Analysis Report</h2>
+                        <p><strong>Overall Score:</strong> ${currentScore}/100</p>
+                        ${currentDimensions.length > 0 ? `
+                          <h3>Dimension Breakdown</h3>
+                          <ul>
+                            ${currentDimensions.map(d => `<li><strong>${d.category}:</strong> ${d.score}/100</li>`).join('')}
+                          </ul>
+                        ` : ''}
+                        ${suggestions.size > 0 ? `
+                          <h3>Suggestions Applied</h3>
+                          <ul>
+                            ${Array.from(suggestions.values()).filter(s => s.status === 'accepted').map(s => 
+                              `<li>[${s.category}] ${s.title || 'Suggestion'}</li>`
+                            ).join('')}
+                          </ul>
+                        ` : ''}
+                      </div>
+                    `
+                  }
+
+                  // Create blob and download
+                  const blob = new Blob([exportContent], { type: 'text/html' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = `${tab?.title || 'document'}.html`
+                  a.click()
+                  URL.revokeObjectURL(url)
+                } catch (error: any) {
+                  console.error('Export error:', error)
+                  alert('Failed to export document')
+                } finally {
+                  setIsExporting(false)
+                }
+              }}
+              disabled={isExporting}
+              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download HTML
+                </>
+              )}
+            </button>
+
+            <p className="text-xs text-muted mt-3 text-center">
+              Convert to DOCX or upload to Google Docs manually
+            </p>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">

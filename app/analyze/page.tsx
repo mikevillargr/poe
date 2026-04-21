@@ -158,6 +158,8 @@ export default function AnalyzePage() {
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
   const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null)
   const [showVersionHistory, setShowVersionHistory] = useState(false)
+  const [batchItems, setBatchItems] = useState<any[]>([])
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const editorRef = useRef<any>(null)
   
   // Zustand stores
@@ -193,26 +195,70 @@ export default function AnalyzePage() {
     }
   }
 
-  const handleOpenBatchItem = (batchItemId: string) => {
-    const item = BATCH_ITEMS.find((b) => b.id === batchItemId)
+  // Load batch items from database
+  useEffect(() => {
+    loadBatchItems()
+  }, [])
+
+  const loadBatchItems = async () => {
+    try {
+      const response = await fetch('/api/documents')
+      if (response.ok) {
+        const { documents } = await response.json()
+        setBatchItems(documents)
+      }
+    } catch (e) {
+      console.error('Failed to load documents:', e)
+    }
+  }
+
+  const handleOpenBatchItem = async (documentId: string) => {
+    const item = batchItems.find((b) => b.id === documentId)
     if (!item) return
 
-    // Check if tab already exists for this item
-    const existingTab = tabs.find((t) => t.id === batchItemId)
+    // Check if tab already exists
+    const existingTab = tabs.find((t) => t.documentId === documentId)
     if (existingTab) {
-      setActiveTabId(batchItemId)
+      setActiveTabId(existingTab.id)
       return
     }
 
-    // Create new tab from batch item
-    const newTab: DocumentTab = {
-      id: batchItemId,
-      title: item.title,
-      type: 'url',
-      score: item.score,
+    // Load document content
+    try {
+      const response = await fetch(`/api/documents/${documentId}`)
+      if (response.ok) {
+        const { document } = await response.json()
+        const newId = `doc-${Date.now()}`
+        const newTab: DocumentTab = {
+          id: newId,
+          title: document.title,
+          type: document.source === 'url' ? 'url' : 'docx',
+          score: document.overallScore,
+          content: document.editedText || document.originalText,
+          source: document.source,
+          sourceRef: document.sourceRef,
+          documentId: document.id,
+        }
+        setTabs([...tabs, newTab])
+        setActiveTabId(newId)
+      }
+    } catch (e) {
+      console.error('Failed to load document:', e)
     }
-    setTabs([...tabs, newTab])
-    setActiveTabId(batchItemId)
+  }
+
+  const handleDeleteDocument = async (documentId: string) => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        setBatchItems(batchItems.filter(item => item.id !== documentId))
+        setDeleteConfirm(null)
+      }
+    } catch (e) {
+      console.error('Failed to delete document:', e)
+    }
   }
 
   const activeTab = tabs.find((t) => t.id === activeTabId)
@@ -286,7 +332,11 @@ export default function AnalyzePage() {
         {/* Tab Content */}
         <div className="flex-1 flex overflow-hidden bg-background">
           {activeTabId === 'batch' ? (
-            <BatchQueueView onOpenTab={handleOpenBatchItem} />
+            <BatchQueueView 
+              items={batchItems}
+              onOpenTab={handleOpenBatchItem}
+              onDeleteItem={(id) => setDeleteConfirm(id)}
+            />
           ) : activeTabId === 'new' || !activeTab ? (
             <BlankCanvasView onCreateDocument={async (title, content, source, sourceRef) => {
               const newId = `doc-${Date.now()}`
@@ -350,6 +400,46 @@ export default function AnalyzePage() {
               setShowVersionHistory(false)
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Dialog */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-card p-6 max-w-md w-full"
+            >
+              <h3 className="text-lg font-display text-heading mb-2">Delete Document?</h3>
+              <p className="text-sm text-muted mb-6">
+                This will permanently delete this document and all associated scores. This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4 py-2 rounded-input text-sm font-medium text-body hover:bg-surface transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteDocument(deleteConfirm)}
+                  className="px-4 py-2 rounded-input text-sm font-medium bg-danger hover:bg-danger/90 text-white transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </PageErrorBoundary>
@@ -563,8 +653,8 @@ function BlankCanvasView({ onCreateDocument }: { onCreateDocument: (title: strin
 }
 
 // Batch Queue View
-function BatchQueueView({ onOpenTab }: { onOpenTab: (id: string) => void }) {
-  const getStatusBadge = (status: BatchItem['status']) => {
+function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOpenTab: (id: string) => void; onDeleteItem: (id: string) => void }) {
+  const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Complete':
         return (
@@ -645,17 +735,14 @@ function BatchQueueView({ onOpenTab }: { onOpenTab: (id: string) => void }) {
       >
         <div className="p-6 border-b border-border flex items-center justify-between shrink-0 bg-surface">
           <h2 className="text-xl font-display text-heading">
-            Batch Queue — 7 items
+            Documents — {items.length} {items.length === 1 ? 'item' : 'items'}
           </h2>
           <div className="flex gap-2">
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-success/10 text-green-400 border border-success/20">
-              3 Complete
-            </span>
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-accent/10 text-accent border border-accent/20 shadow-glow-accent">
-              2 Scoring
+              {items.filter(i => i.status === 'scored').length} Scored
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-surface text-muted border border-border">
-              2 Queued/Error
+              {items.filter(i => i.status === 'draft').length} Draft
             </span>
           </div>
         </div>
@@ -691,7 +778,13 @@ function BatchQueueView({ onOpenTab }: { onOpenTab: (id: string) => void }) {
               variants={containerVariants}
               className="divide-y divide-border"
             >
-              {BATCH_ITEMS.map((item, index) => (
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-muted">
+                    No documents yet. Create one from the New Analysis tab.
+                  </td>
+                </tr>
+              ) : items.map((item, index) => (
                 <motion.tr
                   variants={itemVariants}
                   key={item.id}
@@ -714,47 +807,44 @@ function BatchQueueView({ onOpenTab }: { onOpenTab: (id: string) => void }) {
                   </td>
                   <td className="px-6 py-5">
                     <div
-                      className={`text-sm font-medium truncate max-w-[300px] transition-colors ${
-                        item.status === 'Complete'
-                          ? 'text-heading cursor-pointer hover:text-accent hover:underline'
-                          : 'text-heading'
-                      }`}
-                      onClick={() =>
-                        item.status === 'Complete' && onOpenTab(item.id)
-                      }
+                      className="text-sm font-medium truncate max-w-[300px] text-heading cursor-pointer hover:text-accent hover:underline transition-colors"
+                      onClick={() => onOpenTab(item.id)}
                     >
                       {item.title}
                     </div>
-                    {item.errorMsg && (
-                      <div className="text-xs text-red-400 mt-1">
-                        {item.errorMsg}
+                    {item.sourceRef && (
+                      <div className="text-xs text-muted mt-1 truncate max-w-[300px]">
+                        {item.sourceRef}
                       </div>
                     )}
                   </td>
                   <td className="px-6 py-5">{getStatusBadge(item.status)}</td>
                   <td className="px-6 py-5">
-                    {item.score ? (
+                    {item.overallScore ? (
                       <button
                         className={`inline-flex items-center justify-center px-2.5 py-1 rounded-full text-xs font-mono font-bold tabular-nums hover:opacity-80 transition-opacity ${getScoreColor(
-                          item.score
+                          item.overallScore
                         )}`}
                       >
-                        {item.score}
+                        {item.overallScore}
                       </button>
                     ) : (
                       <span className="text-muted text-sm">—</span>
                     )}
                   </td>
                   <td className="px-6 py-5">
-                    {item.dimensions ? (
+                    {item.dimensionScores && item.dimensionScores.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
-                        {item.dimensions.map((dim) => (
+                        {item.dimensionScores.slice(0, 3).map((dim: any) => (
                           <CategoryBadge
-                            key={dim}
-                            category={dim}
+                            key={dim.category}
+                            category={dim.category}
                             variant="outline"
                           />
                         ))}
+                        {item.dimensionScores.length > 3 && (
+                          <span className="text-xs text-muted">+{item.dimensionScores.length - 3}</span>
+                        )}
                       </div>
                     ) : (
                       <span className="text-muted text-sm">—</span>
@@ -762,27 +852,17 @@ function BatchQueueView({ onOpenTab }: { onOpenTab: (id: string) => void }) {
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {item.status === 'Complete' && (
-                        <button
-                          className="p-1.5 text-muted hover:text-accent transition-colors rounded hover:bg-surface"
-                          title="Open in editor"
-                          onClick={() => onOpenTab(item.id)}
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {(item.status === 'Complete' ||
-                        item.status === 'Error') && (
-                        <button
-                          className="p-1.5 text-muted hover:text-accent transition-colors rounded hover:bg-surface"
-                          title={item.status === 'Error' ? 'Retry' : 'Re-score'}
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        className="p-1.5 text-muted hover:text-accent transition-colors rounded hover:bg-surface"
+                        title="Open in editor"
+                        onClick={() => onOpenTab(item.id)}
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         className="p-1.5 text-muted hover:text-danger transition-colors rounded hover:bg-surface"
-                        title="Remove from queue"
+                        title="Delete document"
+                        onClick={() => onDeleteItem(item.id)}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -795,25 +875,27 @@ function BatchQueueView({ onOpenTab }: { onOpenTab: (id: string) => void }) {
         </div>
 
         {/* Bottom Status Bar */}
-        <div className="p-5 border-t border-border bg-surface shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-heading font-medium">
-              3 of 7 complete · 2 scoring · 2 queued/error
-            </span>
-            <span className="text-sm text-muted font-mono tabular-nums">
-              43%
-            </span>
-          </div>
-          <div
-            className="h-2 w-full rounded-full overflow-hidden border border-border"
-            style={{ background: 'var(--color-gauge-bg)' }}
-          >
+        {items.length > 0 && (
+          <div className="p-5 border-t border-border bg-surface shrink-0">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-heading font-medium">
+                {items.filter(i => i.status === 'scored').length} of {items.length} scored
+              </span>
+              <span className="text-sm text-muted font-mono tabular-nums">
+                {items.length > 0 ? Math.round((items.filter(i => i.status === 'scored').length / items.length) * 100) : 0}%
+              </span>
+            </div>
             <div
-              className="h-full bg-accent rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(232,69,10,0.6)]"
-              style={{ width: '43%' }}
-            />
+              className="h-2 w-full rounded-full overflow-hidden border border-border"
+              style={{ background: 'var(--color-gauge-bg)' }}
+            >
+              <div
+                className="h-full bg-accent rounded-full transition-all duration-500 shadow-[0_0_12px_rgba(232,69,10,0.6)]"
+                style={{ width: `${items.length > 0 ? Math.round((items.filter(i => i.status === 'scored').length / items.length) * 100) : 0}%` }}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </motion.div>
     </motion.div>
   )
