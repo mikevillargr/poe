@@ -556,27 +556,30 @@ export function EditorView({
             )}
           </button>
 
-          {/* Export Section */}
-          <div className="mt-8 pt-6 border-t border-border">
-            <h3 className="text-xs font-medium text-muted mb-4 uppercase tracking-wider">
-              Export
-            </h3>
-            
-            <label className="flex items-center gap-2 mb-4 cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={includeScoreData}
-                onChange={(e) => setIncludeScoreData(e.target.checked)}
-                className="w-4 h-4 rounded border-border bg-surface text-accent focus:ring-accent focus:ring-offset-0"
-              />
-              <span className="text-xs text-body group-hover:text-heading transition-colors">
-                Include score & suggestions
-              </span>
-            </label>
+          {/* Export Section - Compact */}
+          <div className="mt-6 pt-4 border-t border-border">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-medium text-muted uppercase tracking-wider">
+                Export
+              </h3>
+              <label className="flex items-center gap-1.5 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={includeScoreData}
+                  onChange={(e) => setIncludeScoreData(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-border bg-surface text-accent focus:ring-accent focus:ring-offset-0"
+                />
+                <span className="text-xs text-muted group-hover:text-body transition-colors">
+                  + Report
+                </span>
+              </label>
+            </div>
 
-            {/* Download DOCX */}
-            <button
-              onClick={async () => {
+            <div className="flex gap-2">
+              {/* Download DOCX */}
+              <button
+                title="Download as DOCX"
+                onClick={async () => {
                 if (!editorRef.current) return
                 
                 setIsExporting(true)
@@ -632,25 +635,20 @@ export function EditorView({
                   setIsExporting(false)
                 }
               }}
-              disabled={isExporting}
-              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-3"
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4" />
-                  Download DOCX
-                </>
-              )}
-            </button>
+                disabled={isExporting}
+                className="flex-1 bg-surface hover:bg-surface-hover border border-border text-body p-3 rounded-input transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              >
+                {isExporting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <FileText className="w-5 h-5" />
+                )}
+              </button>
 
-            {/* Google Drive */}
-            <button
-              onClick={async () => {
+              {/* Google Drive */}
+              <button
+                title="Save to Google Drive"
+                onClick={async () => {
                 if (!editorRef.current) return
                 
                 setIsUploadingToDrive(true)
@@ -717,50 +715,46 @@ export function EditorView({
                   setIsUploadingToDrive(false)
                 }
               }}
-              disabled={isUploadingToDrive}
-              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isUploadingToDrive ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12.01 1.485c-.276 0-.546.076-.785.22L2.36 7.103a1.57 1.57 0 0 0-.785 1.36v11.073c0 .56.299 1.077.785 1.36l8.865 5.398c.24.144.51.22.785.22.276 0 .546-.076.785-.22l8.865-5.398c.486-.283.785-.8.785-1.36V8.463c0-.56-.299-1.077-.785-1.36L12.795 1.705a1.57 1.57 0 0 0-.785-.22z"/>
+                disabled={isUploadingToDrive}
+                className="flex-1 bg-surface hover:bg-surface-hover border border-border p-3 rounded-input transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center group"
+              >
+                {isUploadingToDrive ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-body" />
+                ) : (
+                  <svg className="w-5 h-5" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                    <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                    <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                    <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                    <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                    <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                    <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
                   </svg>
-                  Save to Google Drive
-                </>
-              )}
-            </button>
-
-            <p className="text-xs text-muted mt-3 text-center">
-              Export with optional analysis report
-            </p>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-          <h3 className="text-sm font-medium text-heading mb-6 font-display">
+          <h3 className="text-base font-medium text-heading mb-6 font-display">
             Dimension Breakdown
           </h3>
           {currentDimensions.length > 0 ? (
-            <div className="space-y-6">
+            <div className="space-y-5">
               {currentDimensions.map((dim) => {
                 const pass = dim.score >= 70
                 return (
                   <div key={dim.category}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-body">{dim.category}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-heading tabular-nums">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-body">{dim.category}</span>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-sm font-mono font-bold text-heading tabular-nums">
                           {dim.score}
                         </span>
-                        <div className={`w-2 h-2 rounded-full ${pass ? 'bg-success' : 'bg-danger'}`} />
+                        <div className={`w-2.5 h-2.5 rounded-full ${pass ? 'bg-success shadow-glow-success' : 'bg-danger shadow-glow-danger'}`} />
                       </div>
                     </div>
-                    <div className="h-1.5 bg-surface rounded-full overflow-hidden">
+                    <div className="h-2 bg-surface rounded-full overflow-hidden border border-border/50">
                       <div
                         className={`h-full transition-all duration-500 ${pass ? 'bg-success' : 'bg-danger'}`}
                         style={{ width: `${dim.score}%` }}
@@ -771,7 +765,7 @@ export function EditorView({
               })}
             </div>
           ) : (
-            <p className="text-xs text-muted text-center py-4">
+            <p className="text-sm text-muted text-center py-8">
               Click "Score Content" to see dimension breakdown
             </p>
           )}
