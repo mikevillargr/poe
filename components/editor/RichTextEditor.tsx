@@ -5,6 +5,8 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
+import UnderlineExtension from '@tiptap/extension-underline'
+import Link from '@tiptap/extension-link'
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
@@ -20,6 +22,7 @@ import {
   Undo,
   Redo,
   Trash2,
+  Link2,
 } from 'lucide-react'
 
 interface RichTextEditorProps {
@@ -125,6 +128,13 @@ export function RichTextEditor({
       }),
       CharacterCount.configure({
         limit: null,
+      }),
+      UnderlineExtension,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-accent underline cursor-pointer',
+        },
       }),
       SuggestionHighlightExtension,
     ],
@@ -269,6 +279,7 @@ export function RichTextEditor({
     <div className="flex flex-col h-full">
       {/* Formatting Toolbar */}
       <div className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur-sm px-4 py-2 flex items-center gap-1 flex-wrap">
+        {/* Text Formatting */}
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!editor.can().chain().focus().toggleBold().run()}
@@ -296,6 +307,22 @@ export function RichTextEditor({
         </button>
 
         <button
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          disabled={!editor.can().chain().focus().toggleUnderline().run()}
+          className={`p-2 rounded transition-colors ${
+            editor.isActive('underline')
+              ? 'bg-accent text-white'
+              : 'text-muted hover:text-heading hover:bg-surface-hover'
+          }`}
+          title="Underline (Cmd+U)"
+        >
+          <Underline className="w-4 h-4" />
+        </button>
+
+        <div className="w-px h-6 bg-border mx-1" />
+
+        {/* Headings */}
+        <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
           className={`p-2 rounded transition-colors ${
             editor.isActive('heading', { level: 1 })
@@ -317,6 +344,26 @@ export function RichTextEditor({
           title="Heading 2"
         >
           <Heading2 className="w-4 h-4" />
+        </button>
+
+        <div className="w-px h-6 bg-border mx-1" />
+
+        {/* Link */}
+        <button
+          onClick={() => {
+            const url = window.prompt('Enter URL:')
+            if (url) {
+              editor.chain().focus().setLink({ href: url }).run()
+            }
+          }}
+          className={`p-2 rounded transition-colors ${
+            editor.isActive('link')
+              ? 'bg-accent text-white'
+              : 'text-muted hover:text-heading hover:bg-surface-hover'
+          }`}
+          title="Add Link"
+        >
+          <Link2 className="w-4 h-4" />
         </button>
 
         <div className="w-px h-6 bg-border mx-1" />
