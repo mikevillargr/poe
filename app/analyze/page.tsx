@@ -181,9 +181,42 @@ export default function AnalyzePage() {
   useEffect(() => {
     const docId = searchParams.get('doc')
     if (docId) {
-      handleOpenBatchItem(docId)
+      // Load document directly without waiting for batch items
+      loadDocumentById(docId)
     }
   }, [searchParams])
+
+  const loadDocumentById = async (documentId: string) => {
+    // Check if tab already exists
+    const existingTab = tabs.find((t) => t.documentId === documentId)
+    if (existingTab) {
+      setActiveTabId(existingTab.id)
+      return
+    }
+
+    // Load document content
+    try {
+      const response = await fetch(`/api/documents/${documentId}`)
+      if (response.ok) {
+        const { document } = await response.json()
+        const newId = `doc-${Date.now()}`
+        const newTab: DocumentTab = {
+          id: newId,
+          title: document.title,
+          type: document.source === 'url' ? 'url' : 'docx',
+          score: document.overallScore,
+          content: document.editedText || document.originalText,
+          source: document.source,
+          sourceRef: document.sourceRef,
+          documentId: document.id,
+        }
+        setTabs([...tabs, newTab])
+        setActiveTabId(newId)
+      }
+    } catch (e) {
+      console.error('Failed to load document:', e)
+    }
+  }
 
   const handleNewTab = () => {
     const newId = `new-${Date.now()}`

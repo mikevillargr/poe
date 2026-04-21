@@ -47,7 +47,9 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.38.4",
+    "file-saver": "^2.0.5",
     "framer-motion": "^11.15.0",
+    "html-docx-js": "^0.3.1",
     "jsdom": "^29.0.2",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.12.0",
@@ -63,6 +65,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/file-saver": "^2.0.7",
     "@types/jsdom": "^28.0.1",
     "@types/node": "^22",
     "@types/pdf-parse": "^1.1.4",

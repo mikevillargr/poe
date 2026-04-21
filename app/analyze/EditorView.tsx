@@ -10,6 +10,9 @@ import { SuggestionRecomposition } from '@/components/SuggestionRecomposition'
 import { useSuggestionStore } from '@/stores/useSuggestionStore'
 import { useVersionStore } from '@/stores/useVersionStore'
 import { useSettings } from '@/hooks/useSettings'
+import { saveAs } from 'file-saver'
+// @ts-ignore - no types available
+import htmlDocx from 'html-docx-js/dist/html-docx'
 
 interface DocumentTab {
   id: string
@@ -550,6 +553,7 @@ export function EditorView({
               </span>
             </label>
 
+            {/* Download DOCX */}
             <button
               onClick={async () => {
                 if (!editorRef.current) return
@@ -557,7 +561,16 @@ export function EditorView({
                 setIsExporting(true)
                 try {
                   const content = editorRef.current.getHTML()
-                  let exportContent = content
+                  let exportContent = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <title>${tab?.title || 'Document'}</title>
+                    </head>
+                    <body>
+                      ${content}
+                  `
 
                   // Append score data if checkbox is checked
                   if (includeScoreData && currentScore !== null) {
@@ -583,14 +596,14 @@ export function EditorView({
                     `
                   }
 
-                  // Create blob and download
-                  const blob = new Blob([exportContent], { type: 'text/html' })
-                  const url = URL.createObjectURL(blob)
-                  const a = document.createElement('a')
-                  a.href = url
-                  a.download = `${tab?.title || 'document'}.html`
-                  a.click()
-                  URL.revokeObjectURL(url)
+                  exportContent += `
+                    </body>
+                    </html>
+                  `
+
+                  // Convert to DOCX
+                  const converted = htmlDocx.asBlob(exportContent)
+                  saveAs(converted, `${tab?.title || 'document'}.docx`)
                 } catch (error: any) {
                   console.error('Export error:', error)
                   alert('Failed to export document')
@@ -599,7 +612,7 @@ export function EditorView({
                 }
               }}
               disabled={isExporting}
-              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-3"
             >
               {isExporting ? (
                 <>
@@ -608,14 +621,27 @@ export function EditorView({
                 </>
               ) : (
                 <>
-                  <Download className="w-4 h-4" />
-                  Download HTML
+                  <FileText className="w-4 h-4" />
+                  Download DOCX
                 </>
               )}
             </button>
 
+            {/* Google Drive */}
+            <button
+              onClick={() => {
+                alert('Google Drive integration coming soon. For now, download DOCX and upload to Drive manually.')
+              }}
+              className="w-full bg-surface hover:bg-surface-hover border border-border text-body px-4 py-2.5 rounded-input text-sm font-medium transition-all flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.01 1.485c-.276 0-.546.076-.785.22L2.36 7.103a1.57 1.57 0 0 0-.785 1.36v11.073c0 .56.299 1.077.785 1.36l8.865 5.398c.24.144.51.22.785.22.276 0 .546-.076.785-.22l8.865-5.398c.486-.283.785-.8.785-1.36V8.463c0-.56-.299-1.077-.785-1.36L12.795 1.705a1.57 1.57 0 0 0-.785-.22z"/>
+              </svg>
+              Save to Google Drive
+            </button>
+
             <p className="text-xs text-muted mt-3 text-center">
-              Convert to DOCX or upload to Google Docs manually
+              Export with optional analysis report
             </p>
           </div>
         </div>

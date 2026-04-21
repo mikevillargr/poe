@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { TrendingUp, AlertCircle, Plus, Eye } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { TrendingUp, AlertCircle, Plus, Eye, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
@@ -95,6 +95,7 @@ export default function JobQueuePage() {
   const router = useRouter()
   const [jobs, setJobs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [stats, setStats] = useState({
     scoredThisWeek: 0,
     averageScore: 0,
@@ -157,6 +158,23 @@ export default function JobQueuePage() {
   const handleOpenJob = (documentId: string) => {
     // Navigate to analyze page with document ID as query param
     router.push(`/analyze?doc=${documentId}`)
+  }
+
+  const handleDeleteJob = async (documentId: string) => {
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      })
+      if (response.ok) {
+        // Remove from local state
+        setJobs(jobs.filter(j => j.id !== documentId))
+        setDeleteConfirm(null)
+        // Reload to update stats
+        loadJobs()
+      }
+    } catch (e) {
+      console.error('Failed to delete job:', e)
+    }
   }
 
   return (
@@ -311,15 +329,28 @@ export default function JobQueuePage() {
                       {formatDate(job.updatedAt)}
                     </td>
                     <td className="px-4 py-4 text-right">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleOpenJob(job.id)
-                        }}
-                        className="text-muted hover:text-accent transition-colors p-1 opacity-0 group-hover:opacity-100 inline-flex"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenJob(job.id)
+                          }}
+                          className="text-muted hover:text-accent transition-colors p-1.5 rounded hover:bg-surface"
+                          title="Open in editor"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeleteConfirm(job.id)
+                          }}
+                          className="text-muted hover:text-danger transition-colors p-1.5 rounded hover:bg-surface"
+                          title="Delete job"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </motion.tr>
                 ))}
@@ -328,6 +359,46 @@ export default function JobQueuePage() {
           </div>
         </motion.div>
       </motion.div>
+
+      {/* Delete Confirmation Dialog */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-card p-6 max-w-md w-full"
+            >
+              <h3 className="text-lg font-display text-heading mb-2">Delete Job?</h3>
+              <p className="text-sm text-muted mb-6">
+                This will permanently delete this scored content and all associated data. This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4 py-2 rounded-input text-sm font-medium text-body hover:bg-surface transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDeleteJob(deleteConfirm)}
+                  className="px-4 py-2 rounded-input text-sm font-medium bg-danger hover:bg-danger/90 text-white transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageErrorBoundary>
   )
 }
