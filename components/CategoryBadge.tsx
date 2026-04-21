@@ -63,7 +63,7 @@ export function CategoryBadge({
   const colors = colorMap[category] || defaultColors
 
   const baseStyle =
-    'inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full'
+    'inline-flex items-center justify-center px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap'
   const variantStyle =
     variant === 'solid'
       ? colors.solid
