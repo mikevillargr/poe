@@ -67,6 +67,15 @@ export function EditorView({
   const [isUploadingToDrive, setIsUploadingToDrive] = useState(false)
   const [driveInitialized, setDriveInitialized] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [availableDimensions, setAvailableDimensions] = useState<string[]>([])
+
+  // Fetch available dimensions from heuristics
+  useEffect(() => {
+    fetch('/api/heuristics/dimensions')
+      .then(res => res.json())
+      .then(data => setAvailableDimensions(data.dimensions || []))
+      .catch(err => console.error('Failed to fetch dimensions:', err))
+  }, [])
 
   // Initialize Google Drive on mount
   useEffect(() => {
@@ -331,7 +340,7 @@ export function EditorView({
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {['All', 'Quality', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client', 'Accepted', 'Dismissed'].map((filter) => (
+            {['All', ...availableDimensions, 'Accepted', 'Dismissed'].map((filter) => (
               <button
                 key={filter}
                 onClick={() => onFilterChange(filter)}
