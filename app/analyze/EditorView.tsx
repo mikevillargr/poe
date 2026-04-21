@@ -559,6 +559,8 @@ export function EditorView({
                 if (data.suggestions && data.suggestions.length > 0) {
                   setSuggestions(data.suggestions)
                 }
+                
+                // Note: Scores are automatically saved to database by the score API
               } catch (error: any) {
                 console.error('Scoring error:', error)
                 alert(error.message || 'Failed to score content')

@@ -203,14 +203,7 @@ export default function AnalyzePage() {
   const { suggestions, setSuggestions, acceptSuggestion, dismissSuggestion, updateSuggestion, startRecomposition, finishRecomposition } = useSuggestionStore()
   const { addVersion, restoreVersion } = useVersionStore()
   
-  // Initialize suggestions from mock data
-  useEffect(() => {
-    const initialSuggestions: SuggestionState[] = SUGGESTIONS.map(s => ({
-      ...s,
-      status: 'pending' as const,
-    }))
-    setSuggestions(initialSuggestions)
-  }, [])
+  // Note: Suggestions are loaded from document data, not mock data
 
   // Load document from query parameter
   useEffect(() => {
