@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Check,
@@ -19,12 +19,18 @@ import {
   CheckCircle2,
   Loader2,
   AlertCircle,
+  Clock,
+  Sparkles,
 } from 'lucide-react'
 import Link from 'next/link'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
 import { PageErrorBoundary } from '@/components/feedback/PageErrorBoundary'
-import { RichTextEditor } from '@/components/editor/RichTextEditor'
+import { useSuggestionStore, SuggestionState } from '@/stores/useSuggestionStore'
+import { useVersionStore } from '@/stores/useVersionStore'
+import { SuggestionRecomposition } from '@/components/SuggestionRecomposition'
+import { VersionHistory } from '@/components/VersionHistory'
+import { EditorView } from './EditorView'
 
 interface DocumentTab {
   id: string
@@ -189,6 +195,22 @@ export default function AnalyzePage() {
   const [activeTabId, setActiveTabId] = useState<string>('1')
   const [activeFilter, setActiveFilter] = useState<string>('All')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
+  const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null)
+  const [showVersionHistory, setShowVersionHistory] = useState(false)
+  const editorRef = useRef<any>(null)
+  
+  // Zustand stores
+  const { suggestions, setSuggestions, acceptSuggestion, dismissSuggestion, updateSuggestion, startRecomposition, finishRecomposition } = useSuggestionStore()
+  const { addVersion, restoreVersion } = useVersionStore()
+  
+  // Initialize suggestions from mock data
+  useEffect(() => {
+    const initialSuggestions: SuggestionState[] = SUGGESTIONS.map(s => ({
+      ...s,
+      status: 'pending' as const,
+    }))
+    setSuggestions(initialSuggestions)
+  }, [])
 
   const handleNewTab = () => {
     const newId = `new-${Date.now()}`
@@ -309,16 +331,34 @@ export default function AnalyzePage() {
           ) : (
             <EditorView
               tab={activeTab}
-              suggestions={filteredSuggestions}
               dimensions={DIMENSIONS}
               activeFilter={activeFilter}
               onFilterChange={setActiveFilter}
               activeSuggestionId={activeSuggestionId}
               onSuggestionClick={setActiveSuggestionId}
+              expandedSuggestionId={expandedSuggestionId}
+              onExpandSuggestion={setExpandedSuggestionId}
+              editorRef={editorRef}
+              onShowVersionHistory={() => setShowVersionHistory(true)}
             />
           )}
         </div>
       </motion.div>
+      
+      {/* Version History Modal */}
+      <AnimatePresence>
+        {showVersionHistory && (
+          <VersionHistory
+            onClose={() => setShowVersionHistory(false)}
+            onRestore={(version) => {
+              if (editorRef.current) {
+                editorRef.current.commands.setContent(version.content)
+              }
+              setShowVersionHistory(false)
+            }}
+          />
+        )}
+      </AnimatePresence>
     </PageErrorBoundary>
   )
 }
@@ -387,237 +427,6 @@ function BlankCanvasView() {
           </button>
         </div>
       </motion.div>
-    </div>
-  )
-}
-
-// Editor View
-function EditorView({
-  tab,
-  suggestions,
-  dimensions,
-  activeFilter,
-  onFilterChange,
-  activeSuggestionId,
-  onSuggestionClick
-}: {
-  tab: DocumentTab | undefined,
-  suggestions: typeof SUGGESTIONS,
-  dimensions: typeof DIMENSIONS,
-  activeFilter: string,
-  onFilterChange: (filter: string) => void,
-  activeSuggestionId: string | null,
-  onSuggestionClick: (id: string | null) => void
-}) {
-  // Plain content - no HTML markup
-  const plainContent = `
-    <h1>${tab?.title || 'Nevada LLC Formation Guide'}</h1>
-
-    <p>Starting a business in Nevada is an exciting venture that offers entrepreneurs significant advantages. From tax benefits to asset protection, the Silver State has become a premier destination for business formation.</p>
-
-    <h2>What is a Registered Agent?</h2>
-
-    <p>A registered agent is a person or entity designated to receive legal documents on behalf of your business. services like LegalZoom or Rocket Lawyer can provide this service, or you can act as your own registered agent if you meet the requirements.</p>
-
-    <h2>Filing Your Articles of Organization</h2>
-
-    <p>The Articles of Organization must be filed with the Nevada Secretary of State to officially form your LLC. Nevada law requires all LLCs to maintain this designation throughout the existence of your business entity.</p>
-  `
-
-  const handleSaveContent = (content: string) => {
-    // TODO: Implement actual save to backend
-    console.log('Saving content:', content)
-  }
-
-  return (
-    <div className="flex-1 flex overflow-hidden">
-      {/* LEFT: Content Editor (55%) */}
-      <div className="w-[55%] flex flex-col border-r border-border relative">
-        {activeSuggestionId && (
-          <div className="absolute top-14 right-4 z-20">
-            <button
-              onClick={() => onSuggestionClick(null)}
-              className="bg-surface border border-border hover:bg-surface-hover text-muted px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1"
-            >
-              <X className="w-3 h-3" />
-              Clear selection
-            </button>
-          </div>
-        )}
-        <RichTextEditor
-          content={plainContent}
-          suggestions={suggestions}
-          placeholder="Start writing or paste your content here..."
-          onSave={handleSaveContent}
-          autoSaveDelay={2000}
-          activeSuggestionId={activeSuggestionId}
-          onSuggestionClick={onSuggestionClick}
-        />
-      </div>
-
-      {/* CENTER: Suggestions (25%) */}
-      <div className="w-[25%] flex flex-col border-r border-border bg-background">
-        <div className="p-5 border-b border-border shrink-0">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-heading font-display text-lg flex items-center gap-2">
-              Suggestions
-              <span className="bg-surface text-muted px-2 py-0.5 rounded-full text-xs font-mono border border-border">
-                {suggestions.length}
-              </span>
-            </h2>
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-            {['All', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client'].map((filter) => (
-              <button
-                key={filter}
-                onClick={() => onFilterChange(filter)}
-                className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  activeFilter === filter ? 'bg-accent text-white shadow-glow-accent' : 'bg-surface text-muted hover:text-body border border-border'
-                }`}
-              >
-                {filter}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar">
-          {suggestions.map((suggestion) => {
-            const isActive = activeSuggestionId === suggestion.id
-            return (
-              <div
-                key={suggestion.id}
-                onClick={() => onSuggestionClick(suggestion.id)}
-                className={`glass-card p-4 relative overflow-hidden cursor-pointer transition-all ${
-                  isActive
-                    ? 'ring-2 ring-accent ring-offset-2 ring-offset-background bg-accent/10 shadow-lg'
-                    : 'hover:ring-1 hover:ring-accent/50'
-                }`}
-                style={{ background: 'var(--color-card-bg)' }}
-              >
-                {/* Active indicator badge */}
-                {isActive && (
-                  <div className="absolute -top-2 -right-2 bg-accent text-white px-2 py-0.5 rounded-full text-xs font-bold shadow-glow-accent animate-bounce">
-                    Active
-                  </div>
-                )}
-
-                <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${
-                  suggestion.category === 'Brand' ? 'bg-badge-brand' :
-                  suggestion.category === 'SEO' ? 'bg-badge-seo' :
-                  suggestion.category === 'Blacklist' ? 'bg-badge-blacklist' :
-                  suggestion.category === 'Agency' ? 'bg-badge-agency' :
-                  'bg-badge-client'
-                } ${isActive ? 'shadow-glow-accent animate-pulse' : ''}`} />
-
-              <div className="flex items-center justify-between mb-3">
-                <CategoryBadge category={suggestion.category} variant="solid" />
-                <span className={`text-xs font-mono ${
-                  suggestion.severity === 'high' ? 'text-red-400' :
-                  suggestion.severity === 'medium' ? 'text-orange-400' :
-                  'text-green-400'
-                }`}>
-                  {suggestion.severity === 'high' ? 'High Impact' :
-                   suggestion.severity === 'medium' ? 'Medium Impact' : 'Low Impact'}
-                </span>
-              </div>
-              <p className="text-sm text-heading font-medium mb-3">
-                {suggestion.title}
-              </p>
-
-              <div className="space-y-2 mb-4">
-                <div className="bg-danger/10 border border-danger/20 rounded p-2 text-xs text-red-400 line-through">
-                  {suggestion.original}
-                </div>
-                <div className="bg-success/10 border border-success/20 rounded p-2 text-xs text-green-400">
-                  {suggestion.suggested}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button className="flex-1 bg-success hover:bg-success/90 text-white py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors">
-                  <Check className="w-3.5 h-3.5" /> Accept
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onSuggestionClick(null)
-                  }}
-                  className="flex-1 bg-surface border border-border hover:bg-surface-hover text-muted py-1.5 rounded text-xs font-medium flex items-center justify-center gap-1 transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" /> Dismiss
-                </button>
-              </div>
-            </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* RIGHT: Score Summary (20%) */}
-      <div className="w-[20%] bg-background flex flex-col relative">
-        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-surface to-transparent pointer-events-none opacity-30" />
-
-        <div className="p-8 border-b border-border flex flex-col items-center justify-center shrink-0 relative z-10">
-          <h2 className="text-sm font-medium text-muted mb-8 w-full text-left uppercase tracking-wider text-[10px]">
-            Overall Score
-          </h2>
-          <ScoreGauge score={tab?.score || 74} size={160} />
-          <p className="text-xs text-muted mt-8 font-mono">
-            32 rules evaluated
-          </p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-          <h3 className="text-sm font-medium text-heading mb-6 font-display">
-            Dimension Breakdown
-          </h3>
-          <div className="space-y-6">
-            {dimensions.map((dim) => (
-              <div key={dim.category}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-body">{dim.category}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-heading tabular-nums">
-                      {dim.score}
-                    </span>
-                    {dim.status === 'pass' ? (
-                      <span className="text-success text-xs">✓</span>
-                    ) : (
-                      <span className="text-warning text-xs">⚠</span>
-                    )}
-                  </div>
-                </div>
-                <div
-                  className="h-1 w-full rounded-full overflow-hidden"
-                  style={{ background: 'var(--color-gauge-bg)' }}
-                >
-                  <div
-                    className={`h-full rounded-full shadow-[0_0_8px_rgba(232,69,10,0.5)] ${
-                      dim.category === 'Brand' ? 'bg-badge-brand' :
-                      dim.category === 'SEO' ? 'bg-badge-seo' :
-                      dim.category === 'Blacklist' ? 'bg-badge-blacklist' :
-                      dim.category === 'Agency' ? 'bg-badge-agency' :
-                      'bg-badge-client'
-                    }`}
-                    style={{ width: `${dim.score}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-6 border-t border-border shrink-0 space-y-3 bg-surface">
-          <button className="w-full bg-accent hover:bg-accent/90 text-white py-2.5 rounded-input text-sm font-medium transition-all hover:shadow-glow-accent">
-            Re-Score Content
-          </button>
-          <button className="w-full bg-transparent border border-border hover:bg-surface-hover text-heading py-2.5 rounded-input text-sm font-medium flex items-center justify-center gap-2 transition-colors">
-            <Download className="w-4 h-4" />
-            Export Report
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

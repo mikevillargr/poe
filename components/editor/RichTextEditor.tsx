@@ -36,6 +36,8 @@ interface RichTextEditorProps {
   autoSaveDelay?: number
   activeSuggestionId?: string | null
   onSuggestionClick?: (id: string) => void
+  onContentChange?: (content: string, wordCount: number, charCount: number) => void
+  editorRef?: React.MutableRefObject<any>
 }
 
 // Plugin key for our decoration plugin
@@ -101,6 +103,8 @@ export function RichTextEditor({
   autoSaveDelay = 2000,
   activeSuggestionId,
   onSuggestionClick,
+  onContentChange,
+  editorRef,
 }: RichTextEditorProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [wordCount, setWordCount] = useState(0)
@@ -135,8 +139,21 @@ export function RichTextEditor({
       const text = editor.getText()
       const words = text.trim().split(/\s+/).filter(word => word.length > 0)
       setWordCount(words.length)
+      
+      // Notify parent of content changes
+      if (onContentChange) {
+        const charCount = editor.storage.characterCount.characters()
+        onContentChange(editor.getHTML(), words.length, charCount)
+      }
     },
   })
+
+  // Expose editor instance to parent via ref
+  useEffect(() => {
+    if (editorRef && editor) {
+      editorRef.current = editor
+    }
+  }, [editor, editorRef])
 
   // Apply/remove decorations when active suggestion changes
   useEffect(() => {
