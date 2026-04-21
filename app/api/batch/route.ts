@@ -123,16 +123,33 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
 
   for (const item of items) {
     try {
-      // Fetch content based on type
+      // Fetch and parse content using the same API as one-off URL fetch
       let content = ''
+      let title = item.title || item.ref
       
       if (item.type === 'url') {
-        // Fetch URL content
-        const response = await fetch(item.ref)
-        const html = await response.text()
-        content = extractTextFromHTML(html)
-        
-        console.log(`Extracted ${content.length} characters from ${item.ref}`)
+        try {
+          const parseResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/content/parse`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: item.ref }),
+          })
+          
+          if (parseResponse.ok) {
+            const parseData = await parseResponse.json()
+            content = parseData.content || parseData.text || ''
+            title = parseData.title || item.ref
+            console.log(`Parsed ${content.length} characters from ${item.ref}, title: ${title}`)
+          } else {
+            throw new Error('Failed to parse URL')
+          }
+        } catch (parseError) {
+          console.error('Parse error, falling back to direct fetch:', parseError)
+          // Fallback to direct fetch if parse fails
+          const response = await fetch(item.ref)
+          const html = await response.text()
+          content = extractTextFromHTML(html)
+        }
       } else {
         // For other types, use ref as content for now
         content = item.ref
@@ -145,7 +162,7 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            title: item.title || item.ref,
+            title,
             content,
             source: item.type,
             sourceRef: item.ref,
@@ -180,7 +197,7 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
         result = {
           id: documentId || `result-${Date.now()}-${batchJob.completed}`,
           documentId,
-          title: item.title || item.ref,
+          title,
           type: item.type,
           ref: item.ref,
           status: 'complete',
@@ -193,7 +210,7 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
         result = {
           id: documentId || `result-${Date.now()}-${batchJob.failed}`,
           documentId,
-          title: item.title || item.ref,
+          title,
           type: item.type,
           ref: item.ref,
           status: 'error',
