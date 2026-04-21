@@ -35,6 +35,8 @@ interface EditorViewProps {
   onShowVersionHistory: () => void
   initialContent?: string
   initialDocumentId?: string
+  initialDimensions?: Array<{ category: string; score: number; passCount?: number; failCount?: number }>
+  initialSuggestions?: any[]
 }
 
 export function EditorView({
@@ -50,13 +52,15 @@ export function EditorView({
   onShowVersionHistory,
   initialContent,
   initialDocumentId,
+  initialDimensions,
+  initialSuggestions,
 }: EditorViewProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [isAnalyzingBase, setIsAnalyzingBase] = useState(false)
   const [baseSuggestions, setBaseSuggestions] = useState<any[]>([])
   const [documentId, setDocumentId] = useState<string | null>(initialDocumentId || null)
   const [currentScore, setCurrentScore] = useState<number | null>(tab?.score || null)
-  const [currentDimensions, setCurrentDimensions] = useState<Array<{ category: string; score: number; passCount?: number; failCount?: number }>>([])
+  const [currentDimensions, setCurrentDimensions] = useState<Array<{ category: string; score: number; passCount?: number; failCount?: number }>>(initialDimensions || [])
   const [heuristicsCount, setHeuristicsCount] = useState<number>(0)
   const [includeScoreData, setIncludeScoreData] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -69,6 +73,13 @@ export function EditorView({
       .then(() => setDriveInitialized(true))
       .catch((err) => console.warn('Google Drive init failed:', err))
   }, [])
+
+  // Restore suggestions from initial data
+  useEffect(() => {
+    if (initialSuggestions && initialSuggestions.length > 0) {
+      setSuggestions(initialSuggestions)
+    }
+  }, [initialSuggestions])
   
   // Zustand stores
   const {
