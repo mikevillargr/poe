@@ -122,6 +122,11 @@ export function RichTextEditor({
         heading: {
           levels: [1, 2],
         },
+        paragraph: {
+          HTMLAttributes: {
+            class: 'mb-4', // Add margin between paragraphs
+          },
+        },
       }),
       Placeholder.configure({
         placeholder,
@@ -142,7 +147,7 @@ export function RichTextEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-6',
+        class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-6 whitespace-pre-wrap',
       },
     },
     onUpdate: ({ editor }) => {
