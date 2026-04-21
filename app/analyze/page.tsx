@@ -497,7 +497,6 @@ export default function AnalyzePage() {
               onOpenTab={handleOpenBatchItem}
               onDeleteItem={(id) => setDeleteConfirm(id)}
               onRefresh={loadBatchItems}
-              onNewAnalysis={handleNewTab}
             />
           ) : !activeTab || activeTab.type === 'new' ? (
             <BlankCanvasView onCreateDocument={async (title, content, source, sourceRef) => {
@@ -831,7 +830,7 @@ function BlankCanvasView({ onCreateDocument }: { onCreateDocument: (title: strin
 }
 
 // Batch Queue View
-function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh, onNewAnalysis }: { items: any[]; onOpenTab: (id: string) => void; onDeleteItem: (id: string) => void; onRefresh: () => void; onNewAnalysis: () => void }) {
+function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh }: { items: any[]; onOpenTab: (id: string) => void; onDeleteItem: (id: string) => void; onRefresh: () => void }) {
   const csvInputRef = useRef<HTMLInputElement>(null)
   const docxInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -1285,22 +1284,13 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem, onRefresh, onNewAnalys
           <h2 className="text-xl font-display text-heading">
             Documents — {items.length} {items.length === 1 ? 'item' : 'items'}
           </h2>
-          <div className="flex gap-3 items-center">
-            <div className="flex gap-2">
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-success/10 text-green-400 border border-success/20">
-                {items.filter(i => i.status === 'scored').length} Scored
-              </span>
-              <span className="px-3 py-1 rounded-full text-xs font-medium bg-surface text-muted border border-border">
-                {items.filter(i => i.status === 'draft').length} Draft
-              </span>
-            </div>
-            <button
-              onClick={onNewAnalysis}
-              className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-input text-sm font-medium transition-all shadow-glow-accent"
-            >
-              <PenLine className="w-4 h-4" />
-              New Analysis
-            </button>
+          <div className="flex gap-2">
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-success/10 text-green-400 border border-success/20">
+              {items.filter(i => i.status === 'scored').length} Scored
+            </span>
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-surface text-muted border border-border">
+              {items.filter(i => i.status === 'draft').length} Draft
+            </span>
           </div>
         </div>
 

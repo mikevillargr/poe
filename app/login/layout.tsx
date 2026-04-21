@@ -1,4 +1,6 @@
 import type { Metadata } from 'next'
+import '../globals.css'
+import { AppProviders } from '@/components/AppProviders'
 
 export const metadata: Metadata = {
   title: 'Login — Poe',
@@ -10,5 +12,13 @@ export default function LoginLayout({
 }: {
   children: React.ReactNode
 }) {
-  return children
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <AppProviders>
+          {children}
+        </AppProviders>
+      </body>
+    </html>
+  )
 }
