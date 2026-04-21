@@ -199,14 +199,29 @@ export default function GuidelinesPage() {
       })
 
       console.log('Save response status:', response.status)
+      console.log('Save response ok:', response.ok)
+      
+      // Get response text first to see what we're dealing with
+      const responseText = await response.text()
+      console.log('Save response text:', responseText)
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        let errorData: any = {}
+        try {
+          errorData = JSON.parse(responseText)
+        } catch (e) {
+          console.error('Could not parse error response:', responseText)
+        }
         console.error('Save failed:', errorData)
         throw new Error(errorData.error || `Failed to save heuristics (${response.status})`)
       }
 
-      const saveData = await response.json()
+      let saveData = {}
+      try {
+        saveData = JSON.parse(responseText)
+      } catch (e) {
+        console.error('Could not parse success response:', responseText)
+      }
       console.log('Save successful:', saveData)
 
       // Reload heuristics from database to get the saved ones with IDs
