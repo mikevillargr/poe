@@ -236,14 +236,24 @@ export function EditorView({
           </div>
         )}
         
-        {/* Version History Button */}
-        <div className="absolute top-14 left-4 z-20">
+        {/* Action Buttons */}
+        <div className="absolute top-14 left-4 z-20 flex gap-2">
           <button
             onClick={onShowVersionHistory}
             className="bg-surface border border-border hover:bg-surface-hover text-muted px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1"
           >
             <Clock className="w-3 h-3" />
             {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Unsaved'}
+          </button>
+          <button
+            onClick={() => {
+              // TODO: Implement scoring logic
+              console.log('Score content')
+            }}
+            className="bg-accent hover:bg-accent/90 text-white px-4 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1 shadow-glow-accent"
+          >
+            <Sparkles className="w-3 h-3" />
+            Score
           </button>
         </div>
         
