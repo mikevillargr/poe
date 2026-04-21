@@ -455,7 +455,7 @@ function EditorView({
                   Secretary of State
                 </span>
                 . This document officially creates your business entity and must
-                include specific information about your company's management
+                include specific information about your company&apos;s management
                 structure.
               </p>
             </div>
@@ -672,7 +672,7 @@ function BatchQueueView({ onOpenTab }: { onOpenTab: (id: string) => void }) {
             <h3 className="text-heading font-medium mb-1 text-lg">
               Upload CSV
             </h3>
-            <p className="text-sm text-muted">File must have a 'url' column</p>
+            <p className="text-sm text-muted">File must have a &apos;url&apos; column</p>
           </div>
         </div>
 

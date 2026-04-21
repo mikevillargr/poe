@@ -263,7 +263,7 @@ export default function GuidelinesPage() {
                     </h2>
                     <p className="text-sm text-muted mt-2 flex items-center gap-2">
                       <FileText className="w-4 h-4" />
-                      Claude extracted 18 rules from 'NCH Brand Guidelines v3.pdf'.
+                      Claude extracted 18 rules from &apos;NCH Brand Guidelines v3.pdf&apos;.
                     </p>
                   </div>
                   <button
