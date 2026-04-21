@@ -149,6 +149,21 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
           const response = await fetch(item.ref)
           const html = await response.text()
           content = extractTextFromHTML(html)
+          
+          // Try to extract title from HTML
+          const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+          if (titleMatch && titleMatch[1]) {
+            title = titleMatch[1].trim()
+            // Decode HTML entities in title
+            title = title
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#39;/g, "'")
+          }
+          console.log(`Fallback fetch: ${content.length} characters, title: ${title}`)
         }
       } else {
         // For other types, use ref as content for now
