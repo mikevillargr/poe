@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Check, X, Sparkles, Clock, Loader2, Download, FileText } from 'lucide-react'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
@@ -66,6 +66,7 @@ export function EditorView({
   const [isExporting, setIsExporting] = useState(false)
   const [isUploadingToDrive, setIsUploadingToDrive] = useState(false)
   const [driveInitialized, setDriveInitialized] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
   // Initialize Google Drive on mount
   useEffect(() => {
@@ -155,6 +156,30 @@ export function EditorView({
 
   // Note: Auto-scoring disabled to save tokens
   // User must manually click Score button to analyze content
+
+  const handleDelete = async () => {
+    if (!documentId) {
+      alert('No document to delete')
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      })
+
+      if (response.ok) {
+        setShowDeleteConfirm(false)
+        // Navigate back or close tab - handled by parent
+        window.location.href = '/analyze'
+      } else {
+        alert('Failed to delete document')
+      }
+    } catch (error) {
+      console.error('Delete error:', error)
+      alert('Failed to delete document')
+    }
+  }
 
   // Filter suggestions based on active filter
   const filteredSuggestions = Array.from(suggestions.values()).filter(s => {
@@ -289,6 +314,7 @@ export function EditorView({
           onSuggestionClick={onSuggestionClick}
           onContentChange={handleContentChange}
           editorRef={editorRef}
+          onDelete={documentId ? () => setShowDeleteConfirm(true) : undefined}
         />
       </div>
 
@@ -771,6 +797,46 @@ export function EditorView({
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AnimatePresence>
+        {showDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-card p-6 max-w-md w-full"
+            >
+              <h3 className="text-lg font-display text-heading mb-2">Delete Document?</h3>
+              <p className="text-sm text-muted mb-6">
+                This will permanently delete "{tab?.title}" and all associated data including scores and suggestions. This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 rounded-input text-sm font-medium text-body hover:bg-surface transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="px-4 py-2 rounded-input text-sm font-medium bg-danger hover:bg-danger/90 text-white transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

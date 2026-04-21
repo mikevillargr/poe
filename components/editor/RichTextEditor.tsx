@@ -19,6 +19,7 @@ import {
   Quote,
   Undo,
   Redo,
+  Trash2,
 } from 'lucide-react'
 
 interface RichTextEditorProps {
@@ -38,6 +39,7 @@ interface RichTextEditorProps {
   onSuggestionClick?: (id: string) => void
   onContentChange?: (content: string, wordCount: number, charCount: number) => void
   editorRef?: React.MutableRefObject<any>
+  onDelete?: () => void
 }
 
 // Plugin key for our decoration plugin
@@ -105,6 +107,7 @@ export function RichTextEditor({
   onSuggestionClick,
   onContentChange,
   editorRef,
+  onDelete,
 }: RichTextEditorProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [wordCount, setWordCount] = useState(0)
@@ -373,6 +376,19 @@ export function RichTextEditor({
         >
           <Redo className="w-4 h-4" />
         </button>
+
+        {onDelete && (
+          <>
+            <div className="w-px h-6 bg-border mx-1" />
+            <button
+              onClick={onDelete}
+              className="p-2 rounded transition-colors text-muted hover:text-danger hover:bg-danger/10"
+              title="Delete document"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </>
+        )}
 
         <div className="flex-1" />
 
