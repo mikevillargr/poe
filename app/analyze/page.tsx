@@ -154,29 +154,18 @@ const itemVariants = {
   },
 }
 
+// Counter for generating unique tab IDs (avoids Date.now() hydration issues)
+let tabIdCounter = 0
+const generateTabId = (prefix: string) => {
+  tabIdCounter++
+  return `${prefix}-${tabIdCounter}`
+}
+
 export default function AnalyzePage() {
   const searchParams = useSearchParams()
-  const [tabs, setTabs] = useState<DocumentTab[]>(() => {
-    // Restore tabs from localStorage
-    if (typeof window !== 'undefined') {
-      const savedTabs = localStorage.getItem('analyze-tabs')
-      if (savedTabs) {
-        try {
-          return JSON.parse(savedTabs)
-        } catch (e) {
-          console.error('Failed to parse saved tabs:', e)
-        }
-      }
-    }
-    return []
-  })
-  const [activeTabId, setActiveTabId] = useState<string>(() => {
-    // Restore last active tab from localStorage
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('analyze-active-tab') || 'new'
-    }
-    return 'new'
-  })
+  const [tabs, setTabs] = useState<DocumentTab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string>('new')
+  const [isHydrated, setIsHydrated] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string>('All')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
   const [expandedSuggestionId, setExpandedSuggestionId] = useState<string | null>(null)
@@ -185,12 +174,31 @@ export default function AnalyzePage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const editorRef = useRef<any>(null)
 
+  // Restore from localStorage after hydration
+  useEffect(() => {
+    setIsHydrated(true)
+    const savedTabs = localStorage.getItem('analyze-tabs')
+    const savedActiveTab = localStorage.getItem('analyze-active-tab')
+    
+    if (savedTabs) {
+      try {
+        setTabs(JSON.parse(savedTabs))
+      } catch (e) {
+        console.error('Failed to parse saved tabs:', e)
+      }
+    }
+    
+    if (savedActiveTab) {
+      setActiveTabId(savedActiveTab)
+    }
+  }, [])
+
   // Persist tabs to localStorage
   useEffect(() => {
-    if (tabs.length > 0) {
+    if (isHydrated && tabs.length > 0) {
       localStorage.setItem('analyze-tabs', JSON.stringify(tabs))
     }
-  }, [tabs])
+  }, [tabs, isHydrated])
 
   // Persist active tab to localStorage
   useEffect(() => {
@@ -227,7 +235,7 @@ export default function AnalyzePage() {
       const response = await fetch(`/api/documents/${documentId}`)
       if (response.ok) {
         const { document, latestScore } = await response.json()
-        const newId = `doc-${Date.now()}`
+        const newId = generateTabId('doc')
         const newTab: DocumentTab = {
           id: newId,
           title: document.title,
@@ -249,7 +257,7 @@ export default function AnalyzePage() {
   }
 
   const handleNewTab = () => {
-    const newId = `new-${Date.now()}`
+    const newId = generateTabId('new')
     const newTab: DocumentTab = {
       id: newId,
       title: 'New Analysis',
@@ -308,7 +316,7 @@ export default function AnalyzePage() {
       const response = await fetch(`/api/documents/${documentId}`)
       if (response.ok) {
         const { document } = await response.json()
-        const newId = `doc-${Date.now()}`
+        const newId = generateTabId('doc')
         const newTab: DocumentTab = {
           id: newId,
           title: document.title,
@@ -419,7 +427,7 @@ export default function AnalyzePage() {
             />
           ) : activeTabId === 'new' || !activeTab ? (
             <BlankCanvasView onCreateDocument={async (title, content, source, sourceRef) => {
-              const newId = `doc-${Date.now()}`
+              const newId = generateTabId('doc')
               
               // Create document in DB
               let documentId: string | undefined
@@ -736,6 +744,83 @@ function BlankCanvasView({ onCreateDocument }: { onCreateDocument: (title: strin
 
 // Batch Queue View
 function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOpenTab: (id: string) => void; onDeleteItem: (id: string) => void }) {
+  const csvInputRef = useRef<HTMLInputElement>(null)
+  const docxInputRef = useRef<HTMLInputElement>(null)
+  const [isUploading, setIsUploading] = useState(false)
+
+  const handleCSVUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/batch', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        alert('CSV uploaded successfully! Batch processing started.')
+        window.location.reload()
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to upload CSV')
+      }
+    } catch (error) {
+      console.error('CSV upload error:', error)
+      alert('Failed to upload CSV')
+    } finally {
+      setIsUploading(false)
+      if (csvInputRef.current) csvInputRef.current.value = ''
+    }
+  }
+
+  const handleDOCXUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploading(true)
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('/api/content/parse', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (response.ok) {
+          const { text } = await response.json()
+          
+          // Create document
+          await fetch('/api/documents', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: file.name.replace('.docx', ''),
+              content: text,
+              source: 'docx',
+              sourceRef: file.name,
+            }),
+          })
+        }
+      }
+      
+      alert(`${files.length} file(s) uploaded successfully!`)
+      window.location.reload()
+    } catch (error) {
+      console.error('DOCX upload error:', error)
+      alert('Failed to upload DOCX files')
+    } finally {
+      setIsUploading(false)
+      if (docxInputRef.current) docxInputRef.current.value = ''
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Complete':
@@ -778,16 +863,40 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
       animate="show"
       className="p-10 max-w-6xl mx-auto flex-1 flex flex-col overflow-hidden w-full"
     >
+      {/* Hidden File Inputs */}
+      <input
+        ref={csvInputRef}
+        type="file"
+        accept=".csv"
+        onChange={handleCSVUpload}
+        className="hidden"
+      />
+      <input
+        ref={docxInputRef}
+        type="file"
+        accept=".docx"
+        multiple
+        onChange={handleDOCXUpload}
+        className="hidden"
+      />
+
       {/* Drop Zones */}
       <motion.div
         variants={itemVariants}
         className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10 shrink-0"
       >
-        <div className="relative rounded-card p-[1px] overflow-hidden group cursor-pointer">
+        <div 
+          onClick={() => csvInputRef.current?.click()}
+          className="relative rounded-card p-[1px] overflow-hidden group cursor-pointer"
+        >
           <div className="absolute inset-0 dashed-border-animated opacity-30 group-hover:opacity-100 transition-opacity" />
           <div className="relative bg-background/80 backdrop-blur-sm rounded-card p-10 flex flex-col items-center justify-center text-center m-[1px] hover:bg-surface-hover transition-colors">
             <div className="w-14 h-14 bg-surface border border-border rounded-full flex items-center justify-center mb-4 group-hover:animate-bounce-subtle">
-              <FileSpreadsheet className="w-6 h-6 text-accent drop-shadow-[0_0_8px_rgba(232,69,10,0.5)]" />
+              {isUploading ? (
+                <Loader2 className="w-6 h-6 text-accent animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-6 h-6 text-accent drop-shadow-[0_0_8px_rgba(232,69,10,0.5)]" />
+              )}
             </div>
             <h3 className="text-heading font-medium mb-1 text-lg">
               Upload CSV
@@ -796,11 +905,18 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
           </div>
         </div>
 
-        <div className="relative rounded-card p-[1px] overflow-hidden group cursor-pointer">
+        <div 
+          onClick={() => docxInputRef.current?.click()}
+          className="relative rounded-card p-[1px] overflow-hidden group cursor-pointer"
+        >
           <div className="absolute inset-0 dashed-border-animated opacity-30 group-hover:opacity-100 transition-opacity" />
           <div className="relative bg-background/80 backdrop-blur-sm rounded-card p-10 flex flex-col items-center justify-center text-center m-[1px] hover:bg-surface-hover transition-colors">
             <div className="w-14 h-14 bg-surface border border-border rounded-full flex items-center justify-center mb-4 group-hover:animate-bounce-subtle">
-              <FileTextIcon className="w-6 h-6 text-muted group-hover:text-heading" />
+              {isUploading ? (
+                <Loader2 className="w-6 h-6 text-muted animate-spin" />
+              ) : (
+                <FileTextIcon className="w-6 h-6 text-muted group-hover:text-heading" />
+              )}
             </div>
             <h3 className="text-heading font-medium mb-1 text-lg">
               Drop DOCX Files

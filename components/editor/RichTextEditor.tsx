@@ -168,6 +168,15 @@ export function RichTextEditor({
     }
   }, [editor, editorRef])
 
+  // Initialize word count when editor content is loaded
+  useEffect(() => {
+    if (editor && content) {
+      const text = editor.getText()
+      const words = text.trim().split(/\s+/).filter(word => word.length > 0)
+      setWordCount(words.length)
+    }
+  }, [editor, content])
+
   // Apply/remove decorations  // Highlight active suggestion
   useEffect(() => {
     if (!editor || !editor.view || !editor.isEditable) return
