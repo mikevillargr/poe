@@ -110,21 +110,29 @@ export default function GuidelinesPage() {
 
   // Poll for job completion when processing
   useEffect(() => {
-    if (!currentJobId || !isProcessing) return
+    if (!currentJobId || !isProcessing) {
+      console.log('Polling skipped - jobId:', currentJobId, 'isProcessing:', isProcessing)
+      return
+    }
 
+    console.log('Starting polling for job:', currentJobId)
     const pollInterval = setInterval(async () => {
       try {
+        console.log('Polling job status:', currentJobId)
         const response = await fetch(`/api/guidelines/ingest-job?id=${currentJobId}`)
         if (response.ok) {
           const { job } = await response.json()
+          console.log('Job status:', job.status, 'step:', job.step)
           
           if (job.status === 'complete') {
+            console.log('Job complete! Heuristics:', job.extractedHeuristics?.length)
             setExtractedHeuristics(job.extractedHeuristics || [])
             setDiscoveredDimensions(job.discoveredDimensions || [])
             setStep('review')
             setIsProcessing(false)
             setCurrentJobId(null)
           } else if (job.status === 'error') {
+            console.error('Job failed:', job.error)
             setError(job.error || 'Processing failed')
             setStep('input')
             setIsProcessing(false)
@@ -136,7 +144,10 @@ export default function GuidelinesPage() {
       }
     }, 2000) // Poll every 2 seconds
 
-    return () => clearInterval(pollInterval)
+    return () => {
+      console.log('Stopping polling for job:', currentJobId)
+      clearInterval(pollInterval)
+    }
   }, [currentJobId, isProcessing])
 
   // Auto-trigger extraction when file is set
@@ -221,6 +232,7 @@ export default function GuidelinesPage() {
       }
 
       // Create persistent ingest job
+      console.log('Creating ingest job with content length:', content.length)
       const jobResponse = await fetch('/api/guidelines/ingest-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -233,19 +245,23 @@ export default function GuidelinesPage() {
         }),
       })
 
+      console.log('Job response status:', jobResponse.status)
+      
       if (!jobResponse.ok) {
-        throw new Error('Failed to start ingest job')
+        const errorData = await jobResponse.json().catch(() => ({}))
+        console.error('Job creation failed:', errorData)
+        throw new Error(errorData.error || 'Failed to start ingest job')
       }
 
       const { job } = await jobResponse.json()
+      console.log('Job created:', job.id)
       setCurrentJobId(job.id)
       
-      // Polling will handle the rest
+      // Keep isProcessing true - polling will set to false when job completes
     } catch (err: any) {
       console.error('Ingest error:', err)
       setError(err.message || 'Failed to process guidelines')
       setStep('input')
-    } finally {
       setIsProcessing(false)
     }
   }
