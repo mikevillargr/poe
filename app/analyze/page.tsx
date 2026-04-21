@@ -547,6 +547,19 @@ export default function AnalyzePage() {
               initialDocumentId={activeTab.documentId}
               initialDimensions={activeTab.dimensionScores}
               initialSuggestions={activeTab.suggestions}
+              onScoreComplete={(data) => {
+                // Update the tab object with new score data so it persists to localStorage
+                setTabs(prevTabs => prevTabs.map(t => 
+                  t.id === activeTab.id 
+                    ? { 
+                        ...t, 
+                        score: data.overallScore, 
+                        dimensionScores: data.dimensionScores, 
+                        suggestions: data.suggestions,
+                      } 
+                    : t
+                ))
+              }}
             />
           )}
         </div>

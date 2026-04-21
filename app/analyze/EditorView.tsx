@@ -37,6 +37,7 @@ interface EditorViewProps {
   initialDocumentId?: string
   initialDimensions?: Array<{ category: string; score: number; passCount?: number; failCount?: number }>
   initialSuggestions?: any[]
+  onScoreComplete?: (data: { overallScore: number; dimensionScores: any[]; suggestions: any[] }) => void
 }
 
 export function EditorView({
@@ -54,6 +55,7 @@ export function EditorView({
   initialDocumentId,
   initialDimensions,
   initialSuggestions,
+  onScoreComplete,
 }: EditorViewProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [isAnalyzingBase, setIsAnalyzingBase] = useState(false)
@@ -567,6 +569,15 @@ export function EditorView({
                 // Add suggestions to store
                 if (data.suggestions && data.suggestions.length > 0) {
                   setSuggestions(data.suggestions)
+                }
+                
+                // Sync score results back to parent tab for persistence
+                if (onScoreComplete) {
+                  onScoreComplete({
+                    overallScore: data.overallScore,
+                    dimensionScores: data.dimensionScores || [],
+                    suggestions: data.suggestions || [],
+                  })
                 }
                 
                 // Note: Scores are automatically saved to database by the score API
