@@ -11,7 +11,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - UPLOADS_DIR=/app/uploads
     ports:
-      - "3000:3000"
+      - "3001:3001"
     volumes:
       - ./uploads:/app/uploads
     depends_on:
