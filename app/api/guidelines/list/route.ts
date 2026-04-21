@@ -5,50 +5,41 @@ import { getInMemoryHeuristics } from '@/lib/storage/in-memory'
 
 export async function GET(request: NextRequest) {
   try {
-    try {
-      // Check if database is available
-      if (!db) {
-        throw new Error('Database not available')
-      }
+    // Try database first
+    if (db) {
+      try {
+        const rows = await db.select().from(heuristics)
+        console.log(`Loaded ${rows.length} heuristics from database`)
 
-      // Try database first
-      const allHeuristics = await db.select().from(heuristics)
-
-      const formatted = allHeuristics.map(h => {
-        // Extract original category from rule text if it has [Category] prefix
-        let category = h.category.charAt(0).toUpperCase() + h.category.slice(1)
-        let text = h.rule
-        
-        const categoryMatch = h.rule.match(/^\[([^\]]+)\]\s*(.*)/)
-        if (categoryMatch) {
-          category = categoryMatch[1]
-          text = categoryMatch[2]
-        }
-        
-        return {
+        const formatted = rows.map((h: any) => ({
           id: h.id,
-          category,
-          text,
+          category: h.category,
+          text: h.rule,
           weight: h.weight,
           active: h.active,
-        }
-      })
+        }))
 
-      return NextResponse.json({
-        heuristics: formatted,
-        count: formatted.length,
-      })
-    } catch (dbError) {
-      console.warn('Database read failed, using in-memory storage:', dbError)
-      
-      // Fallback to in-memory storage
-      const memoryHeuristics = getInMemoryHeuristics()
-      return NextResponse.json({
-        heuristics: memoryHeuristics,
-        count: memoryHeuristics.length,
-        warning: 'Using temporary storage. Database connection required for persistence.',
-      })
+        return NextResponse.json({
+          heuristics: formatted,
+          count: formatted.length,
+          source: 'database',
+        })
+      } catch (dbError: any) {
+        console.error('Database read failed:', dbError.message)
+        // Fall through to file storage
+      }
     }
+
+    // Fallback: file-based storage
+    const fileHeuristics = getInMemoryHeuristics()
+    console.log(`Loaded ${fileHeuristics.length} heuristics from file storage`)
+
+    return NextResponse.json({
+      heuristics: fileHeuristics,
+      count: fileHeuristics.length,
+      source: 'file',
+    })
+
   } catch (error: any) {
     console.error('List heuristics error:', error)
     return NextResponse.json(

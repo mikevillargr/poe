@@ -14,68 +14,57 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    try {
-      // Check if database is available
-      if (!db) {
-        throw new Error('Database not available')
-      }
+    const tenantId = '00000000-0000-0000-0000-000000000000'
 
-      // Try to save to database first
-      const tenantId = '00000000-0000-0000-0000-000000000000'
-
-      // Map categories to database enum - use 'client' as fallback for custom categories
-      const mapCategoryForDB = (cat: string): 'brand' | 'blacklist' | 'seo' | 'agency' | 'client' => {
-        const lower = cat.toLowerCase()
-        if (lower === 'brand') return 'brand'
-        if (lower === 'seo') return 'seo'
-        if (lower === 'blacklist') return 'blacklist'
-        if (lower === 'agency') return 'agency'
-        // All custom categories stored as 'client' in DB, but preserve original in rule text
-        return 'client'
-      }
-
-      const insertData = newHeuristics.map(h => ({
-        tenantId,
-        category: mapCategoryForDB(h.category),
-        rule: `[${h.category}] ${h.text}`, // Preserve original category in rule text
-        weight: h.weight,
-        active: h.active ?? true,
-      }))
-
-      const result = await db.insert(heuristics).values(insertData).returning()
-
-      return NextResponse.json({
-        success: true,
-        count: result.length,
-        heuristics: result.map((h, index) => ({
-          id: h.id,
-          category: newHeuristics[index].category, // Return original category
-          text: newHeuristics[index].text, // Return original text without prefix
+    // Try database first
+    if (db) {
+      try {
+        const insertData = newHeuristics.map((h: any) => ({
+          tenantId,
+          category: h.category,
+          rule: h.text,
           weight: h.weight,
-          active: h.active,
-        })),
-      })
-    } catch (dbError) {
-      console.warn('Database save failed, using in-memory storage:', dbError)
-      
-      // Fallback to in-memory storage
-      const savedHeuristics = newHeuristics.map((h, index) => ({
-        id: `temp-${Date.now()}-${index}`,
-        category: h.category,
-        text: h.text,
-        weight: h.weight,
-        active: h.active ?? true,
-      }))
+          active: h.active ?? true,
+        }))
 
-      addInMemoryHeuristics(savedHeuristics)
+        const result = await db.insert(heuristics).values(insertData).returning()
+        console.log(`Saved ${result.length} heuristics to database`)
 
-      return NextResponse.json({
-        success: true,
-        count: savedHeuristics.length,
-        heuristics: savedHeuristics,
-        warning: 'Saved to temporary storage. Database connection required for persistence.',
-      })
+        return NextResponse.json({
+          success: true,
+          count: result.length,
+          heuristics: result.map((h: any) => ({
+            id: h.id,
+            category: h.category,
+            text: h.rule,
+            weight: h.weight,
+            active: h.active,
+          })),
+        })
+      } catch (dbError: any) {
+        console.error('Database save failed:', dbError.message)
+        // Fall through to file storage
+      }
     }
+
+    // Fallback: file-based storage
+    console.log('Using file-based storage fallback')
+    const saved = newHeuristics.map((h: any, i: number) => ({
+      id: `h-${Date.now()}-${i}`,
+      category: h.category,
+      text: h.text,
+      weight: h.weight,
+      active: h.active ?? true,
+    }))
+
+    addInMemoryHeuristics(saved)
+
+    return NextResponse.json({
+      success: true,
+      count: saved.length,
+      heuristics: saved,
+    })
+
   } catch (error: any) {
     console.error('Save heuristics error:', error)
     return NextResponse.json(

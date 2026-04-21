@@ -1,18 +1,20 @@
-import { drizzle } from 'drizzle-orm/neon-http'
-import { neon } from '@neondatabase/serverless'
+import { drizzle } from 'drizzle-orm/node-postgres'
+import pg from 'pg'
 
-// Make database optional - will use in-memory storage if not configured
-let db: any = null
+const { Pool } = pg
+
+let db: ReturnType<typeof drizzle> | null = null
 
 if (process.env.DATABASE_URL) {
   try {
-    const sql = neon(process.env.DATABASE_URL)
-    db = drizzle(sql)
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+    db = drizzle(pool)
+    console.log('Database connected:', process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@'))
   } catch (error) {
-    console.warn('Database connection failed, will use in-memory storage:', error)
+    console.error('Database connection failed:', error)
   }
 } else {
-  console.warn('DATABASE_URL not set, using in-memory storage')
+  console.warn('DATABASE_URL not set — using file-based fallback storage')
 }
 
 export { db }

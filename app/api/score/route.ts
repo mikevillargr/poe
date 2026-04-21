@@ -17,37 +17,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { content, source, sourceRef, apiKey } = scoreRequestSchema.parse(body)
 
-    // Get heuristics from database or in-memory storage
+    // Load heuristics: database first, file fallback
     let allHeuristics: any[] = []
     
-    try {
-      if (db) {
-        const dbHeuristics = await db.select().from(heuristics)
-        allHeuristics = dbHeuristics.map((h: any) => {
-          // Parse category from rule text if it has [Category] prefix
-          let category = h.category
-          let rule = h.rule
-          const match = h.rule?.match(/^\[([^\]]+)\]\s*(.*)/)
-          if (match) {
-            category = match[1]
-            rule = match[2]
-          }
-          return { id: h.id, category, text: rule, weight: h.weight }
-        })
-        console.log('Loaded', allHeuristics.length, 'heuristics from database')
+    if (db) {
+      try {
+        const rows = await db.select().from(heuristics)
+        allHeuristics = rows.map((h: any) => ({
+          id: h.id, category: h.category, text: h.rule, weight: h.weight,
+        }))
+        console.log(`Score: loaded ${allHeuristics.length} heuristics from database`)
+      } catch (dbError) {
+        console.warn('Score: database read failed, trying file storage')
       }
-    } catch (dbError) {
-      console.warn('Database read failed, using in-memory heuristics')
     }
 
-    // Fallback to in-memory if database failed or empty
     if (allHeuristics.length === 0) {
-      const memHeuristics = getInMemoryHeuristics()
-      console.log('In-memory heuristics:', memHeuristics.length)
-      allHeuristics = memHeuristics
+      allHeuristics = getInMemoryHeuristics()
+      console.log(`Score: loaded ${allHeuristics.length} heuristics from file storage`)
     }
-
-    console.log('Total heuristics for scoring:', allHeuristics.length)
 
     if (allHeuristics.length === 0) {
       return NextResponse.json({

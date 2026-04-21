@@ -1,6 +1,4 @@
 import { pgTable, text, timestamp, uuid, boolean, integer, jsonb } from 'drizzle-orm/pg-core'
-import { drizzle } from 'drizzle-orm/neon-http'
-import { neon } from '@neondatabase/serverless'
 
 // Tables
 export const tenants = pgTable('tenants', {
@@ -14,7 +12,9 @@ export const tenants = pgTable('tenants', {
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').references(() => tenants.id, { onDelete: 'set null' }),
   username: text('username').notNull().unique(),
+  email: text('email').unique(),
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -38,7 +38,7 @@ export const heuristics = pgTable('heuristics', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
   sourceGuidelineId: uuid('source_guideline_id').references(() => guidelines.id, { onDelete: 'set null' }),
-  category: text('category').notNull().$type<'brand' | 'blacklist' | 'seo' | 'agency' | 'client'>(),
+  category: text('category').notNull(),
   rule: text('rule').notNull(),
   weight: integer('weight').notNull(),
   active: boolean('active').notNull().default(true),
