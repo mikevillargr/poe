@@ -776,29 +776,66 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
     try {
       // Read and parse CSV file
       const text = await file.text()
-      const lines = text.trim().split('\n')
+      
+      // Check if it's actually HTML (common error)
+      if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+        setUploadError('File appears to be HTML, not CSV. Please upload a valid CSV file.')
+        return
+      }
+      
+      const lines = text.trim().split('\n').filter(line => line.trim())
       
       if (lines.length < 2) {
         setUploadError('CSV file is empty or has no data rows')
         return
       }
 
-      // Parse header
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
-      const urlIndex = headers.indexOf('url')
+      // Parse header - handle both comma and semicolon delimiters
+      const delimiter = lines[0].includes(';') ? ';' : ','
+      const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase().replace(/['"]/g, ''))
+      
+      console.log('[CSV] Headers found:', headers)
+      
+      // Smart URL column detection - look for:
+      // 1. Column named 'url'
+      // 2. Column containing 'url' in the name
+      // 3. First column that contains URLs
+      let urlIndex = headers.indexOf('url')
       
       if (urlIndex === -1) {
-        setUploadError('CSV must have a "url" column')
+        urlIndex = headers.findIndex(h => h.includes('url'))
+      }
+      
+      if (urlIndex === -1) {
+        // Check first few rows to find column with URLs
+        for (let colIndex = 0; colIndex < headers.length; colIndex++) {
+          const sampleValues = lines.slice(1, Math.min(4, lines.length))
+            .map(line => line.split(delimiter)[colIndex]?.trim().replace(/['"]/g, ''))
+          
+          const hasUrls = sampleValues.some(val => 
+            val && (val.startsWith('http://') || val.startsWith('https://'))
+          )
+          
+          if (hasUrls) {
+            urlIndex = colIndex
+            console.log('[CSV] Found URL column at index:', colIndex, 'header:', headers[colIndex])
+            break
+          }
+        }
+      }
+      
+      if (urlIndex === -1) {
+        setUploadError(`Could not find URL column. Headers found: ${headers.join(', ')}`)
         return
       }
 
       // Parse rows
       const items = []
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim())
+        const values = lines[i].split(delimiter).map(v => v.trim().replace(/['"]/g, ''))
         const url = values[urlIndex]
         
-        if (url && url.startsWith('http')) {
+        if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
           items.push({
             type: 'url',
             ref: url,
@@ -808,9 +845,11 @@ function BatchQueueView({ items, onOpenTab, onDeleteItem }: { items: any[]; onOp
       }
 
       if (items.length === 0) {
-        setUploadError('No valid URLs found in CSV')
+        setUploadError('No valid URLs found in CSV. Make sure URLs start with http:// or https://')
         return
       }
+      
+      console.log('[CSV] Found', items.length, 'valid URLs')
 
       // Get API key from settings
       const settingsRes = await fetch('/api/settings')
