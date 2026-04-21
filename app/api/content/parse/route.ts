@@ -1,52 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server'
 import mammoth from 'mammoth'
-import * as cheerio from 'cheerio'
 
-// Extract clean content from HTML
+// Simple HTML content extraction using regex (works on Node 18)
 function extractMainContent(html: string, url: string): { content: string; title: string } {
-  const $ = cheerio.load(html)
-  
   // Extract title
-  const title = $('title').text().trim() || 
-                $('h1').first().text().trim() || 
-                url.split('/').pop() || 
-                'Untitled'
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+  const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i)
+  const title = (titleMatch?.[1] || h1Match?.[1] || url.split('/').pop() || 'Untitled').trim()
   
-  // Remove unwanted elements
-  $('script, style, nav, header, footer, aside, iframe, noscript').remove()
-  $('.nav, .navigation, .menu, .sidebar, .footer, .header, .advertisement, .ad').remove()
+  // Remove unwanted sections
+  let cleanHtml = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
+    .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '')
+    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
+    .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
   
-  // Try to find main content area
-  let mainContent = $('main').html() || 
-                    $('article').html() || 
-                    $('.content').html() ||
-                    $('.post-content').html() ||
-                    $('.entry-content').html() ||
-                    $('body').html() || 
-                    ''
+  // Try to extract main content area
+  const mainMatch = cleanHtml.match(/<main[^>]*>([\s\S]*?)<\/main>/i) ||
+                    cleanHtml.match(/<article[^>]*>([\s\S]*?)<\/article>/i) ||
+                    cleanHtml.match(/<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/i) ||
+                    cleanHtml.match(/<div[^>]*class="[^"]*post-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i)
   
-  // Load the main content into cheerio for further processing
-  const $main = cheerio.load(mainContent)
-  
-  // Convert to clean HTML with proper paragraph structure
-  const paragraphs: string[] = []
+  const contentHtml = mainMatch?.[1] || cleanHtml
   
   // Extract headings and paragraphs
-  $main('h1, h2, h3, h4, h5, h6, p, li').each((_, elem) => {
-    const text = $main(elem).text().trim()
-    if (text && text.length > 0) {
-      const tagName = elem.tagName.toLowerCase()
-      if (tagName.startsWith('h')) {
-        paragraphs.push(`<${tagName}>${text}</${tagName}>`)
-      } else {
-        paragraphs.push(`<p>${text}</p>`)
-      }
+  const paragraphs: string[] = []
+  
+  // Extract H1-H6
+  const headingRegex = /<(h[1-6])[^>]*>([^<]+)<\/\1>/gi
+  let match
+  while ((match = headingRegex.exec(contentHtml)) !== null) {
+    const tag = match[1].toLowerCase()
+    const text = match[2].trim()
+    if (text) {
+      paragraphs.push(`<${tag}>${text}</${tag}>`)
     }
-  })
+  }
+  
+  // Extract paragraphs
+  const pRegex = /<p[^>]*>([^<]+)<\/p>/gi
+  while ((match = pRegex.exec(contentHtml)) !== null) {
+    const text = match[1].trim()
+    if (text && text.length > 20) { // Filter out short/empty paragraphs
+      paragraphs.push(`<p>${text}</p>`)
+    }
+  }
+  
+  // Extract list items
+  const liRegex = /<li[^>]*>([^<]+)<\/li>/gi
+  while ((match = liRegex.exec(contentHtml)) !== null) {
+    const text = match[1].trim()
+    if (text) {
+      paragraphs.push(`<p>${text}</p>`)
+    }
+  }
   
   const content = paragraphs.join('\n')
   
-  return { content, title }
+  return { content: content || contentHtml, title }
 }
 
 export async function POST(request: NextRequest) {
