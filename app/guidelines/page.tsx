@@ -42,6 +42,7 @@ export default function GuidelinesPage() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
   const [activeFilter, setActiveFilter] = useState<string>('All')
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null)
   const { settings } = useSettings()
 
   // Handle file upload
@@ -70,6 +71,74 @@ export default function GuidelinesPage() {
     loadHeuristics()
   }, [])
 
+  // Check for active ingest job on mount and poll for completion
+  useEffect(() => {
+    const checkActiveJob = async () => {
+      try {
+        const response = await fetch('/api/guidelines/ingest-job')
+        if (response.ok) {
+          const { job } = await response.json()
+          if (job && job.status === 'processing') {
+            // Resume the job
+            setCurrentJobId(job.id)
+            setStep('processing')
+            setIsProcessing(true)
+            setInputMethod(job.inputMethod)
+            if (job.fileName) setFile({ name: job.fileName } as File)
+            if (job.url) setInputValue(job.url)
+          } else if (job && job.status === 'complete') {
+            // Show results
+            setCurrentJobId(job.id)
+            setExtractedHeuristics(job.extractedHeuristics || [])
+            setDiscoveredDimensions(job.discoveredDimensions || [])
+            setStep('review')
+            setIsProcessing(false)
+          } else if (job && job.status === 'error') {
+            // Show error
+            setError(job.error || 'Processing failed')
+            setStep('input')
+            setIsProcessing(false)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to check active job:', error)
+      }
+    }
+
+    checkActiveJob()
+  }, [])
+
+  // Poll for job completion when processing
+  useEffect(() => {
+    if (!currentJobId || !isProcessing) return
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/guidelines/ingest-job?id=${currentJobId}`)
+        if (response.ok) {
+          const { job } = await response.json()
+          
+          if (job.status === 'complete') {
+            setExtractedHeuristics(job.extractedHeuristics || [])
+            setDiscoveredDimensions(job.discoveredDimensions || [])
+            setStep('review')
+            setIsProcessing(false)
+            setCurrentJobId(null)
+          } else if (job.status === 'error') {
+            setError(job.error || 'Processing failed')
+            setStep('input')
+            setIsProcessing(false)
+            setCurrentJobId(null)
+          }
+        }
+      } catch (error) {
+        console.error('Job polling error:', error)
+      }
+    }, 2000) // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval)
+  }, [currentJobId, isProcessing])
+
   // Auto-trigger extraction when file is set
   useEffect(() => {
     if (file && inputMethod === 'upload' && step === 'input') {
@@ -94,12 +163,10 @@ export default function GuidelinesPage() {
 
     try {
       let content = ''
-      let source = ''
 
       // Get content based on input method
       if (inputMethod === 'paste') {
         content = inputValue
-        source = 'paste'
       } else if (inputMethod === 'url') {
         if (!inputValue.trim()) {
           throw new Error('Please enter a URL')
@@ -120,7 +187,6 @@ export default function GuidelinesPage() {
 
           const data = await response.json()
           content = data.content
-          source = 'gdoc'
         } else {
           // Regular URL - use existing parse endpoint
           const response = await fetch('/api/content/parse', {
@@ -135,7 +201,6 @@ export default function GuidelinesPage() {
 
           const data = await response.json()
           content = data.content
-          source = 'url'
         }
       } else if (inputMethod === 'upload' && file) {
         // Handle file upload
@@ -153,29 +218,29 @@ export default function GuidelinesPage() {
 
         const data = await response.json()
         content = data.content
-        source = 'docx'
       }
 
-      // Extract heuristics using AI
-      const extractResponse = await fetch('/api/guidelines/extract', {
+      // Create persistent ingest job
+      const jobResponse = await fetch('/api/guidelines/ingest-job', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          inputMethod,
+          fileName: file?.name,
+          url: inputValue,
           content,
-          source,
           apiKey: settings.apiKey,
         }),
       })
 
-      if (!extractResponse.ok) {
-        const errorData = await extractResponse.json()
-        throw new Error(errorData.error || 'Failed to extract heuristics')
+      if (!jobResponse.ok) {
+        throw new Error('Failed to start ingest job')
       }
 
-      const { heuristics, dimensions } = await extractResponse.json()
-      setExtractedHeuristics(heuristics)
-      setDiscoveredDimensions(dimensions || [])
-      setStep('review')
+      const { job } = await jobResponse.json()
+      setCurrentJobId(job.id)
+      
+      // Polling will handle the rest
     } catch (err: any) {
       console.error('Ingest error:', err)
       setError(err.message || 'Failed to process guidelines')
