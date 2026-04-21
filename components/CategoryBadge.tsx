@@ -2,7 +2,7 @@
 
 import React from 'react'
 
-export type CategoryType = 'Brand' | 'SEO' | 'Blacklist' | 'Agency' | 'Client' | 'Quality'
+export type CategoryType = string // Allow any category - AI discovers dimensions dynamically
 
 interface CategoryBadgeProps {
   category: CategoryType
@@ -15,52 +15,59 @@ export function CategoryBadge({
   className = '',
   variant = 'outline',
 }: CategoryBadgeProps) {
-  const colorMap: Record<
-    CategoryType,
-    {
-      solid: string
-      outlineDark: string
-      outlineLight: string
-    }
-  > = {
-    Brand: {
+  // Default color schemes for known categories
+  const colorMap: Record<string, {
+    solid: string
+    outlineDark: string
+    outlineLight: string
+  }> = {
+    'Brand': {
       solid: 'bg-badge-brand text-white',
       outlineDark: 'border-badge-brand text-badge-brand',
       outlineLight: 'border-badge-brand text-[#C23808]',
     },
-    SEO: {
+    'SEO': {
       solid: 'bg-badge-seo text-white',
       outlineDark: 'border-badge-seo text-blue-400',
       outlineLight: 'border-badge-seo text-[#1E40AF]',
     },
-    Blacklist: {
+    'Blacklist': {
       solid: 'bg-badge-blacklist text-white',
       outlineDark: 'border-badge-blacklist text-red-400',
       outlineLight: 'border-badge-blacklist text-[#991B1B]',
     },
-    Agency: {
+    'Agency': {
       solid: 'bg-badge-agency text-white',
       outlineDark: 'border-badge-agency text-green-400',
       outlineLight: 'border-badge-agency text-[#166534]',
     },
-    Client: {
+    'Client': {
       solid: 'bg-badge-client text-white',
       outlineDark: 'border-badge-client text-purple-400',
       outlineLight: 'border-badge-client text-[#6B21A8]',
     },
-    Quality: {
+    'Quality': {
       solid: 'bg-yellow-600 text-white',
       outlineDark: 'border-yellow-500 text-yellow-400',
       outlineLight: 'border-yellow-600 text-yellow-700',
     },
   }
 
+  // Fallback for unknown/dynamic categories
+  const defaultColors = {
+    solid: 'bg-gray-600 text-white',
+    outlineDark: 'border-gray-500 text-gray-400',
+    outlineLight: 'border-gray-600 text-gray-700',
+  }
+
+  const colors = colorMap[category] || defaultColors
+
   const baseStyle =
     'inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full'
   const variantStyle =
     variant === 'solid'
-      ? colorMap[category].solid
-      : `border bg-transparent badge-outline-${category.toLowerCase()}`
+      ? colors.solid
+      : `border bg-transparent badge-outline-${category.toLowerCase().replace(/\s+/g, '-')}`
 
   return (
     <>

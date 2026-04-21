@@ -23,10 +23,21 @@ export async function POST(request: NextRequest) {
       // Try to save to database first
       const tenantId = '00000000-0000-0000-0000-000000000000'
 
+      // Map categories to database enum - use 'client' as fallback for custom categories
+      const mapCategoryForDB = (cat: string): 'brand' | 'blacklist' | 'seo' | 'agency' | 'client' => {
+        const lower = cat.toLowerCase()
+        if (lower === 'brand') return 'brand'
+        if (lower === 'seo') return 'seo'
+        if (lower === 'blacklist') return 'blacklist'
+        if (lower === 'agency') return 'agency'
+        // All custom categories stored as 'client' in DB, but preserve original in rule text
+        return 'client'
+      }
+
       const insertData = newHeuristics.map(h => ({
         tenantId,
-        category: h.category.toLowerCase() as 'brand' | 'blacklist' | 'seo' | 'agency' | 'client',
-        rule: h.text,
+        category: mapCategoryForDB(h.category),
+        rule: `[${h.category}] ${h.text}`, // Preserve original category in rule text
         weight: h.weight,
         active: h.active ?? true,
       }))
@@ -36,10 +47,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         count: result.length,
-        heuristics: result.map(h => ({
+        heuristics: result.map((h, index) => ({
           id: h.id,
-          category: h.category.charAt(0).toUpperCase() + h.category.slice(1),
-          text: h.rule,
+          category: newHeuristics[index].category, // Return original category
+          text: newHeuristics[index].text, // Return original text without prefix
           weight: h.weight,
           active: h.active,
         })),

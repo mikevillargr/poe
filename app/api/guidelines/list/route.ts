@@ -14,13 +14,25 @@ export async function GET(request: NextRequest) {
       // Try database first
       const allHeuristics = await db.select().from(heuristics)
 
-      const formatted = allHeuristics.map(h => ({
-        id: h.id,
-        category: h.category.charAt(0).toUpperCase() + h.category.slice(1),
-        text: h.rule,
-        weight: h.weight,
-        active: h.active,
-      }))
+      const formatted = allHeuristics.map(h => {
+        // Extract original category from rule text if it has [Category] prefix
+        let category = h.category.charAt(0).toUpperCase() + h.category.slice(1)
+        let text = h.rule
+        
+        const categoryMatch = h.rule.match(/^\[([^\]]+)\]\s*(.*)/)
+        if (categoryMatch) {
+          category = categoryMatch[1]
+          text = categoryMatch[2]
+        }
+        
+        return {
+          id: h.id,
+          category,
+          text,
+          weight: h.weight,
+          active: h.active,
+        }
+      })
 
       return NextResponse.json({
         heuristics: formatted,

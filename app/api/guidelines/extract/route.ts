@@ -160,37 +160,12 @@ export async function POST(request: NextRequest) {
       throw new Error('Unexpected response format from AI')
     }
 
-    // Map category names to standard CategoryType (for database compatibility)
-    const categoryMap: Record<string, CategoryType> = {
-      'brand': 'Brand',
-      'seo': 'SEO',
-      'blacklist': 'Blacklist',
-      'agency': 'Agency',
-      'client': 'Client',
-    }
-
-    const mapToStandardCategory = (category: string): CategoryType => {
-      const lower = category.toLowerCase()
-      // Try exact match first
-      if (categoryMap[lower]) return categoryMap[lower]
-      
-      // Try partial match
-      if (lower.includes('brand') || lower.includes('voice') || lower.includes('tone')) return 'Brand'
-      if (lower.includes('seo') || lower.includes('search') || lower.includes('keyword')) return 'SEO'
-      if (lower.includes('blacklist') || lower.includes('prohibit') || lower.includes('avoid')) return 'Blacklist'
-      if (lower.includes('agency') || lower.includes('quality') || lower.includes('standard')) return 'Agency'
-      if (lower.includes('client') || lower.includes('legal') || lower.includes('compliance')) return 'Client'
-      
-      // Default to Client for custom categories
-      return 'Client'
-    }
-
-    // Validate and format heuristics
+    // Validate and format heuristics - preserve discovered categories as-is
     const heuristics: ExtractedHeuristic[] = extractedRules
       .filter((rule: any) => rule.category && rule.text && rule.weight)
       .map((rule: any, index: number) => ({
         id: `heuristic-${Date.now()}-${index}`,
-        category: mapToStandardCategory(rule.category),
+        category: rule.category as CategoryType, // Use discovered category directly
         text: rule.text,
         weight: Math.min(10, Math.max(1, parseInt(rule.weight) || 5)),
         active: true,
