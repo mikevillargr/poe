@@ -246,11 +246,51 @@ export function EditorView({
             {saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Unsaved'}
           </button>
           <button
-            onClick={() => {
-              // TODO: Implement scoring logic
-              console.log('Score content')
+            onClick={async () => {
+              if (!editorRef.current || !settings.apiKey) {
+                alert('Please set your API key in Settings')
+                return
+              }
+              
+              const content = editorRef.current.getText()
+              if (!content || content.length < 50) {
+                alert('Please add more content to analyze (minimum 50 characters)')
+                return
+              }
+
+              try {
+                const response = await fetch('/api/score', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    content,
+                    source: 'paste',
+                    apiKey: settings.apiKey,
+                  }),
+                })
+
+                if (!response.ok) {
+                  const error = await response.json()
+                  throw new Error(error.error || 'Scoring failed')
+                }
+
+                const data = await response.json()
+                console.log('Score results:', data)
+                
+                // Add suggestions to store
+                if (data.suggestions && data.suggestions.length > 0) {
+                  setSuggestions(data.suggestions)
+                  alert(`Scored! Found ${data.suggestions.length} suggestions. Overall score: ${data.overallScore}/100`)
+                } else {
+                  alert(`Scored! Overall score: ${data.overallScore}/100. No issues found!`)
+                }
+              } catch (error: any) {
+                console.error('Scoring error:', error)
+                alert(error.message || 'Failed to score content')
+              }
             }}
-            className="bg-accent hover:bg-accent/90 text-white px-4 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1 shadow-glow-accent"
+            disabled={isAnalyzingBase}
+            className="bg-accent hover:bg-accent/90 text-white px-4 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-1 shadow-glow-accent disabled:opacity-50"
           >
             <Sparkles className="w-3 h-3" />
             Score

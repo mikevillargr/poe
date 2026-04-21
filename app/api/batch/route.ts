@@ -6,26 +6,159 @@ const batchRequestSchema = z.object({
     z.object({
       type: z.enum(['url', 'docx', 'csv_row']),
       ref: z.string(),
+      title: z.string().optional(),
     })
   ),
+  apiKey: z.string().min(1),
 })
+
+// In-memory batch job storage
+const batchJobs = new Map<string, any>()
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { items } = batchRequestSchema.parse(body)
+    const { items, apiKey } = batchRequestSchema.parse(body)
 
-    // TODO: Implement batch processing
-    // For now, return a stub response
+    if (items.length === 0) {
+      return NextResponse.json(
+        { error: 'No items to process' },
+        { status: 400 }
+      )
+    }
+
+    // Create batch job
+    const batchJobId = `batch-${Date.now()}`
+    const batchJob = {
+      id: batchJobId,
+      status: 'processing',
+      total: items.length,
+      completed: 0,
+      failed: 0,
+      results: [],
+      createdAt: new Date().toISOString(),
+    }
+
+    batchJobs.set(batchJobId, batchJob)
+
+    // Process items asynchronously
+    processBatchItems(batchJobId, items, apiKey).catch(console.error)
+
     return NextResponse.json({
-      ok: true,
-      message: 'Batch processing endpoint - Not yet implemented',
-      batchJobId: 'stub-job-id',
+      success: true,
+      batchJobId,
+      total: items.length,
+      message: 'Batch processing started',
     })
-  } catch (error) {
+
+  } catch (error: any) {
+    console.error('Batch error:', error)
     return NextResponse.json(
-      { error: 'Invalid request', code: 'INVALID_REQUEST' },
+      { error: error.message || 'Invalid request' },
       { status: 400 }
     )
   }
+}
+
+// GET endpoint to check batch status
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const batchJobId = searchParams.get('id')
+
+  if (!batchJobId) {
+    return NextResponse.json(
+      { error: 'Batch job ID required' },
+      { status: 400 }
+    )
+  }
+
+  const batchJob = batchJobs.get(batchJobId)
+  
+  if (!batchJob) {
+    return NextResponse.json(
+      { error: 'Batch job not found' },
+      { status: 404 }
+    )
+  }
+
+  return NextResponse.json(batchJob)
+}
+
+// Process batch items
+async function processBatchItems(batchJobId: string, items: any[], apiKey: string) {
+  const batchJob = batchJobs.get(batchJobId)
+  if (!batchJob) return
+
+  for (const item of items) {
+    try {
+      // Fetch content based on type
+      let content = ''
+      
+      if (item.type === 'url') {
+        // Fetch URL content
+        const response = await fetch(item.ref)
+        const html = await response.text()
+        content = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      } else {
+        // For other types, use ref as content for now
+        content = item.ref
+      }
+
+      // Score the content
+      const scoreResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          source: item.type,
+          sourceRef: item.ref,
+          apiKey,
+        }),
+      })
+
+      let result
+      if (scoreResponse.ok) {
+        const scoreData = await scoreResponse.json()
+        result = {
+          id: `result-${Date.now()}-${batchJob.completed}`,
+          title: item.title || item.ref,
+          type: item.type,
+          ref: item.ref,
+          status: 'complete',
+          score: scoreData.overallScore,
+          dimensionScores: scoreData.dimensionScores,
+          suggestions: scoreData.suggestions,
+        }
+        batchJob.completed++
+      } else {
+        result = {
+          id: `result-${Date.now()}-${batchJob.failed}`,
+          title: item.title || item.ref,
+          type: item.type,
+          ref: item.ref,
+          status: 'error',
+          error: 'Scoring failed',
+        }
+        batchJob.failed++
+      }
+
+      batchJob.results.push(result)
+      
+    } catch (error: any) {
+      console.error('Item processing error:', error)
+      batchJob.failed++
+      batchJob.results.push({
+        id: `result-${Date.now()}-${batchJob.failed}`,
+        title: item.title || item.ref,
+        type: item.type,
+        ref: item.ref,
+        status: 'error',
+        error: error.message || 'Processing failed',
+      })
+    }
+  }
+
+  // Mark batch as complete
+  batchJob.status = 'complete'
+  batchJob.completedAt = new Date().toISOString()
 }
