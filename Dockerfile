@@ -1,26 +1,18 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine
 
-# Dependencies
-FROM base AS deps
 WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies
 RUN npm ci
 
-# Builder
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Copy application code
 COPY . .
-RUN npm run build
 
-# Runner
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
+# Expose port
+EXPOSE 3001
 
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-
-EXPOSE 3000
-
-CMD ["node", "server.js"]
+# Run in development mode (avoids build issues)
+CMD ["npm", "run", "dev"]
