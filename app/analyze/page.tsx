@@ -166,7 +166,7 @@ const generateTabId = (prefix: string) => {
 export default function AnalyzePage() {
   const searchParams = useSearchParams()
   const [tabs, setTabs] = useState<DocumentTab[]>([])
-  const [activeTabId, setActiveTabId] = useState<string>('new')
+  const [activeTabId, setActiveTabId] = useState<string>('batch')
   const [isHydrated, setIsHydrated] = useState(false)
   const [activeFilter, setActiveFilter] = useState<string>('All')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
@@ -205,10 +205,8 @@ export default function AnalyzePage() {
         setActiveTabId(newId)
       }
     } else {
-      // No saved tabs - create blank tab
-      const newId = generateTabId('new')
-      setTabs([{ id: newId, title: 'New Analysis', type: 'new' }])
-      setActiveTabId(newId)
+      // No saved tabs - show batch queue by default
+      setActiveTabId('batch')
     }
     
     if (savedActiveTab && savedTabs) {

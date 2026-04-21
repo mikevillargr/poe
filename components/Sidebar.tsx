@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard,
@@ -18,8 +18,19 @@ import {
 import { useTheme } from './ThemeProvider'
 
 export function Sidebar() {
-  const { theme, toggleTheme } = useTheme()
   const pathname = usePathname()
+  const router = useRouter()
+  const { theme, toggleTheme } = useTheme()
+
+  const handleLogout = () => {
+    // Clear authentication
+    document.cookie = 'isAuthenticated=; path=/; max-age=0'
+    localStorage.removeItem('isAuthenticated')
+    localStorage.removeItem('user')
+    
+    // Redirect to login
+    router.push('/login')
+  }
 
   const navItems = [
     {
@@ -130,7 +141,11 @@ export function Sidebar() {
               Mike Villar
             </span>
           </div>
-          <button className="text-[#64748B] hover:text-danger transition-colors">
+          <button 
+            onClick={handleLogout}
+            className="text-[#64748B] hover:text-danger transition-colors"
+            title="Logout"
+          >
             <LogOut className="w-4 h-4" />
           </button>
         </div>
