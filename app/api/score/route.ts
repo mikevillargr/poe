@@ -3,19 +3,21 @@ import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { getInMemoryHeuristics } from '@/lib/storage/in-memory'
 import { db } from '@/lib/db'
-import { heuristics } from '@/lib/db/schema'
+import { heuristics, scoreJobs, contentDocuments } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
 
 const scoreRequestSchema = z.object({
   content: z.string().min(1),
   source: z.enum(['url', 'docx', 'gdoc', 'paste', 'csv_batch']),
   sourceRef: z.string().optional(),
+  documentId: z.string().uuid().optional(),
   apiKey: z.string().min(1),
 })
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { content, source, sourceRef, apiKey } = scoreRequestSchema.parse(body)
+    const { content, source, sourceRef, documentId, apiKey } = scoreRequestSchema.parse(body)
 
     // Load heuristics: database first, file fallback
     let allHeuristics: any[] = []
@@ -130,14 +132,54 @@ Analyze thoroughly and return the JSON object:`
       status: 'pending',
     }))
 
+    const overallScore = scoreData.overallScore || 0
+    const dimensionScores = scoreData.dimensionScores || []
+    const tenantId = '00000000-0000-0000-0000-000000000000'
+
+    // Persist to database
+    if (db) {
+      try {
+        // Save score job
+        await db.insert(scoreJobs).values({
+          tenantId,
+          documentId: documentId || null,
+          contentText: content.substring(0, 10000), // Truncate for storage
+          contentSource: source,
+          sourceRef: sourceRef || null,
+          status: 'complete',
+          overallScore,
+          dimensionScores,
+          suggestions,
+        })
+
+        // Update the document with the score if documentId is provided
+        if (documentId) {
+          await db.update(contentDocuments)
+            .set({
+              overallScore,
+              dimensionScores,
+              status: 'scored',
+              updatedAt: new Date(),
+            })
+            .where(eq(contentDocuments.id, documentId))
+        }
+
+        console.log(`Score saved to database. Document: ${documentId || 'none'}, Score: ${overallScore}`)
+      } catch (dbError: any) {
+        console.error('Failed to save score to database:', dbError.message)
+        // Non-fatal: still return the results
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      overallScore: scoreData.overallScore || 0,
-      dimensionScores: scoreData.dimensionScores || [],
+      overallScore,
+      dimensionScores,
       suggestions,
       heuristicsCount: allHeuristics.length,
       source,
       sourceRef,
+      documentId,
     })
 
   } catch (error: any) {

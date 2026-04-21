@@ -46,6 +46,10 @@ export function EditorView({
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
   const [isAnalyzingBase, setIsAnalyzingBase] = useState(false)
   const [baseSuggestions, setBaseSuggestions] = useState<any[]>([])
+  const [documentId, setDocumentId] = useState<string | null>(null)
+  const [currentScore, setCurrentScore] = useState<number | null>(tab?.score || null)
+  const [currentDimensions, setCurrentDimensions] = useState<Array<{ category: string; score: number; passCount?: number; failCount?: number }>>([])
+  const [heuristicsCount, setHeuristicsCount] = useState<number>(0)
   
   // Zustand stores
   const {
@@ -127,8 +131,7 @@ export function EditorView({
     if (activeFilter === 'All') return s.status === 'pending'
     if (activeFilter === 'Accepted') return s.status === 'accepted'
     if (activeFilter === 'Dismissed') return s.status === 'dismissed'
-    if (activeFilter === 'Quality') return s.category === 'Quality' && s.status === 'pending'
-    return s.category === activeFilter && s.status === 'pending'
+    return (s.category as string) === activeFilter && s.status === 'pending'
   })
 
   // Handle accept suggestion
@@ -205,8 +208,18 @@ export function EditorView({
     }, 1000)
   }
 
-  const handleSaveContent = (content: string) => {
-    console.log('Saving content:', content)
+  const handleSaveContent = async (content: string) => {
+    if (documentId) {
+      try {
+        await fetch(`/api/documents/${documentId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ editedText: content }),
+        })
+      } catch (e) {
+        console.warn('Failed to save content to DB:', e)
+      }
+    }
   }
 
   return (
@@ -418,9 +431,9 @@ export function EditorView({
           <h2 className="text-sm font-medium text-muted mb-8 w-full text-left uppercase tracking-wider text-[10px]">
             Overall Score
           </h2>
-          <ScoreGauge score={tab?.score || 74} size={160} />
+          <ScoreGauge score={currentScore ?? 0} size={160} />
           <p className="text-xs text-muted mt-8 font-mono">
-            32 rules evaluated
+            {currentScore !== null ? `${heuristicsCount} rules evaluated` : 'Not scored yet'}
           </p>
           
           {/* Score Button */}
@@ -439,12 +452,36 @@ export function EditorView({
 
               setIsAnalyzingBase(true)
               try {
+                // Create document in DB if not already tracked
+                let docId = documentId
+                if (!docId) {
+                  try {
+                    const docRes = await fetch('/api/documents', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        title: tab?.title || 'Untitled Analysis',
+                        content,
+                        source: 'paste',
+                      }),
+                    })
+                    if (docRes.ok) {
+                      const { document } = await docRes.json()
+                      docId = document.id
+                      setDocumentId(document.id)
+                    }
+                  } catch (e) {
+                    console.warn('Could not create document in DB:', e)
+                  }
+                }
+
                 const response = await fetch('/api/score', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     content,
                     source: 'paste',
+                    documentId: docId || undefined,
                     apiKey: settings.apiKey,
                   }),
                 })
@@ -456,13 +493,15 @@ export function EditorView({
 
                 const data = await response.json()
                 console.log('Score results:', data)
+
+                // Update local state with score results
+                setCurrentScore(data.overallScore)
+                setCurrentDimensions(data.dimensionScores || [])
+                setHeuristicsCount(data.heuristicsCount || 0)
                 
                 // Add suggestions to store
                 if (data.suggestions && data.suggestions.length > 0) {
                   setSuggestions(data.suggestions)
-                  alert(`Scored! Found ${data.suggestions.length} suggestions. Overall score: ${data.overallScore}/100`)
-                } else {
-                  alert(`Scored! Overall score: ${data.overallScore}/100. No issues found!`)
                 }
               } catch (error: any) {
                 console.error('Scoring error:', error)
@@ -492,31 +531,36 @@ export function EditorView({
           <h3 className="text-sm font-medium text-heading mb-6 font-display">
             Dimension Breakdown
           </h3>
-          <div className="space-y-6">
-            {dimensions.map((dim) => (
-              <div key={dim.category}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-body">{dim.category}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-heading tabular-nums">
-                      {dim.score}
-                    </span>
-                    <div className={`w-2 h-2 rounded-full ${
-                      dim.status === 'pass' ? 'bg-success' : 'bg-danger'
-                    }`} />
+          {currentDimensions.length > 0 ? (
+            <div className="space-y-6">
+              {currentDimensions.map((dim) => {
+                const pass = dim.score >= 70
+                return (
+                  <div key={dim.category}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-body">{dim.category}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-mono text-heading tabular-nums">
+                          {dim.score}
+                        </span>
+                        <div className={`w-2 h-2 rounded-full ${pass ? 'bg-success' : 'bg-danger'}`} />
+                      </div>
+                    </div>
+                    <div className="h-1.5 bg-surface rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-500 ${pass ? 'bg-success' : 'bg-danger'}`}
+                        style={{ width: `${dim.score}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-                <div className="h-1.5 bg-surface rounded-full overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-500 ${
-                      dim.status === 'pass' ? 'bg-success' : 'bg-danger'
-                    }`}
-                    style={{ width: `${dim.score}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted text-center py-4">
+              Click "Score Content" to see dimension breakdown
+            </p>
+          )}
         </div>
       </div>
     </div>

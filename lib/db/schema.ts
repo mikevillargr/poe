@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, boolean, integer, jsonb } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, uuid, boolean, integer, jsonb, pgEnum } from 'drizzle-orm/pg-core'
 
 // Tables
 export const tenants = pgTable('tenants', {
@@ -46,16 +46,34 @@ export const heuristics = pgTable('heuristics', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
+// Content uploaded for analysis
+export const contentDocuments = pgTable('content_documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  originalText: text('original_text').notNull(),
+  editedText: text('edited_text'),
+  source: text('source').notNull(), // 'url' | 'docx' | 'gdoc' | 'paste'
+  sourceRef: text('source_ref'), // URL, filename, etc.
+  overallScore: integer('overall_score'),
+  dimensionScores: jsonb('dimension_scores').$type<Array<{ category: string; score: number; passCount: number; failCount: number }>>(),
+  status: text('status').notNull().default('draft'), // 'draft' | 'scored' | 'editing' | 'finalized'
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
 export const scoreJobs = pgTable('score_jobs', {
   id: uuid('id').primaryKey().defaultRandom(),
   tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  documentId: uuid('document_id').references(() => contentDocuments.id, { onDelete: 'cascade' }),
   contentText: text('content_text').notNull(),
-  contentSource: text('content_source').notNull().$type<'url' | 'docx' | 'gdoc' | 'paste' | 'csv_batch'>(),
+  contentSource: text('content_source').notNull(),
   sourceRef: text('source_ref'),
-  status: text('status').notNull().$type<'pending' | 'scoring' | 'complete' | 'error'>(),
+  status: text('status').notNull().default('pending'), // 'pending' | 'scoring' | 'complete' | 'error'
   overallScore: integer('overall_score'),
   dimensionScores: jsonb('dimension_scores').$type<Array<{ category: string; score: number; passCount: number; failCount: number }>>(),
-  suggestions: jsonb('suggestions').$type<Array<{ heuristicId: string; type: string; originalText: string; suggestedText: string; charStart: number; charEnd: number; reason: string; severity: string }>>(),
+  suggestions: jsonb('suggestions'),
+  errorMsg: text('error_msg'),
   batchJobId: uuid('batch_job_id').references(() => batchJobs.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
