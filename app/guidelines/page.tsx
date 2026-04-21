@@ -2,306 +2,553 @@
 
 import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, Plus, Pencil, Trash2, X, FileText } from 'lucide-react'
+import { 
+  Upload, 
+  Link2, 
+  FileText, 
+  Trash2, 
+  Check, 
+  X, 
+  Loader2,
+  Sparkles,
+  Plus,
+  Edit2,
+  AlertCircle,
+} from 'lucide-react'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
 import { PageErrorBoundary } from '@/components/feedback/PageErrorBoundary'
+import { useSettings } from '@/hooks/useSettings'
+import { isGoogleDocsUrl } from '@/lib/google-docs'
 
-interface Rule {
+interface Heuristic {
   id: string
   category: CategoryType
   text: string
   weight: number
   active: boolean
+  reasoning?: string
 }
 
-const INITIAL_RULES: Rule[] = [
-  {
-    id: '1',
-    category: 'Brand',
-    text: 'All articles must open with a verified statistic',
-    weight: 9,
-    active: true,
-  },
-  {
-    id: '2',
-    category: 'Blacklist',
-    text: 'Never mention LegalZoom, Incfile, or ZenBusiness',
-    weight: 10,
-    active: true,
-  },
-  {
-    id: '3',
-    category: 'SEO',
-    text: 'H2 headings must be phrased as questions for PAA',
-    weight: 8,
-    active: true,
-  },
-  {
-    id: '4',
-    category: 'Brand',
-    text: 'CTAs must use active voice imperative verbs',
-    weight: 7,
-    active: true,
-  },
-  {
-    id: '5',
-    category: 'Agency',
-    text: 'Content must cite at least 2 authoritative sources',
-    weight: 6,
-    active: true,
-  },
-  {
-    id: '6',
-    category: 'Client',
-    text: 'Nevada-specific content must reference NRS statutes',
-    weight: 8,
-    active: true,
-  },
-]
+type IngestStep = 'input' | 'processing' | 'review' | 'complete'
 
 export default function GuidelinesPage() {
-  const [isModalOpen, setIsModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('All')
+  const [step, setStep] = useState<IngestStep>('input')
+  const [inputMethod, setInputMethod] = useState<'upload' | 'url' | 'paste'>('url')
+  const [inputValue, setInputValue] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [extractedHeuristics, setExtractedHeuristics] = useState<Heuristic[]>([])
+  const [savedHeuristics, setSavedHeuristics] = useState<Heuristic[]>([])
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [error, setError] = useState('')
+  const [activeFilter, setActiveFilter] = useState<string>('All')
+  const { settings } = useSettings()
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05,
-      },
-    },
+  // Handle file upload
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const uploadedFile = e.target.files?.[0]
+    if (uploadedFile) {
+      setFile(uploadedFile)
+      setInputMethod('upload')
+    }
   }
 
-  const itemVariants = {
-    hidden: { opacity: 0, y: 10 },
-    show: {
-      opacity: 1,
-      y: 0,
-      transition: {
-        type: 'spring',
-        stiffness: 300,
-        damping: 30,
-      },
-    },
+  // Process the input and extract heuristics
+  const handleIngest = async () => {
+    if (!settings.apiKey) {
+      setError('API key not configured. Please set it in Settings.')
+      return
+    }
+
+    setIsProcessing(true)
+    setError('')
+    setStep('processing')
+
+    try {
+      let content = ''
+      let source = ''
+
+      // Get content based on input method
+      if (inputMethod === 'paste') {
+        content = inputValue
+        source = 'paste'
+      } else if (inputMethod === 'url') {
+        if (!inputValue.trim()) {
+          throw new Error('Please enter a URL')
+        }
+
+        // Check if it's a Google Docs URL
+        if (isGoogleDocsUrl(inputValue)) {
+          const response = await fetch('/api/content/fetch-gdoc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: inputValue }),
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            throw new Error(errorData.error || 'Failed to fetch Google Docs')
+          }
+
+          const data = await response.json()
+          content = data.content
+          source = 'gdoc'
+        } else {
+          // Regular URL - use existing parse endpoint
+          const response = await fetch('/api/content/parse', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: inputValue }),
+          })
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch URL content')
+          }
+
+          const data = await response.json()
+          content = data.content
+          source = 'url'
+        }
+      } else if (inputMethod === 'upload' && file) {
+        // Handle file upload
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch('/api/content/parse', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to parse file')
+        }
+
+        const data = await response.json()
+        content = data.content
+        source = 'docx'
+      }
+
+      // Extract heuristics using AI
+      const extractResponse = await fetch('/api/guidelines/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          source,
+          apiKey: settings.apiKey,
+        }),
+      })
+
+      if (!extractResponse.ok) {
+        const errorData = await extractResponse.json()
+        throw new Error(errorData.error || 'Failed to extract heuristics')
+      }
+
+      const { heuristics } = await extractResponse.json()
+      setExtractedHeuristics(heuristics)
+      setStep('review')
+    } catch (err: any) {
+      console.error('Ingest error:', err)
+      setError(err.message || 'Failed to process guidelines')
+      setStep('input')
+    } finally {
+      setIsProcessing(false)
+    }
   }
+
+  // Save heuristics to database
+  const handleSaveHeuristics = async () => {
+    setIsProcessing(true)
+    try {
+      const response = await fetch('/api/guidelines/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ heuristics: extractedHeuristics }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to save heuristics')
+      }
+
+      setSavedHeuristics([...savedHeuristics, ...extractedHeuristics])
+      setExtractedHeuristics([])
+      setStep('complete')
+      
+      // Reset after 2 seconds
+      setTimeout(() => {
+        setStep('input')
+        setInputValue('')
+        setFile(null)
+      }, 2000)
+    } catch (err: any) {
+      setError(err.message || 'Failed to save heuristics')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  // Update heuristic
+  const updateHeuristic = (id: string, updates: Partial<Heuristic>) => {
+    setExtractedHeuristics(prev =>
+      prev.map(h => h.id === id ? { ...h, ...updates } : h)
+    )
+  }
+
+  // Delete heuristic
+  const deleteHeuristic = (id: string) => {
+    setExtractedHeuristics(prev => prev.filter(h => h.id !== id))
+  }
+
+  // Filter heuristics
+  const filteredHeuristics = savedHeuristics.filter(h => 
+    activeFilter === 'All' || h.category === activeFilter
+  )
 
   return (
     <PageErrorBoundary>
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="show"
-        className="p-10 max-w-6xl mx-auto"
-      >
-        {/* Upload Section */}
-        <motion.div variants={itemVariants} className="glass-card p-8 mb-10">
-          <h2 className="text-2xl font-display text-heading mb-6">
-            Ingest New Guidelines
-          </h2>
+      <div className="p-10 max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="mb-10">
+          <h1 className="text-4xl font-display text-heading mb-3">Guidelines</h1>
+          <p className="text-muted">
+            Ingest client guidelines and brand standards to extract scoring heuristics
+          </p>
+        </div>
 
-          <div className="relative rounded-card p-[1px] overflow-hidden mb-6 group cursor-pointer">
-            <div className="absolute inset-0 dashed-border-animated opacity-50 group-hover:opacity-100 transition-opacity" />
-            <div className="relative bg-background/80 backdrop-blur-sm rounded-card p-10 flex flex-col items-center justify-center text-center m-[1px]">
-              <div className="w-14 h-14 bg-surface border border-border rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <Upload className="w-6 h-6 text-muted group-hover:text-accent transition-colors" />
-              </div>
-              <p className="text-heading font-medium mb-1 text-lg">
-                Drop brand guidelines here
-              </p>
-              <p className="text-sm text-muted">Supports PDF, DOCX, TXT</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-muted font-medium uppercase tracking-wider">
-              OR
-            </span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-
-          <textarea
-            placeholder="Paste a brand directive or rule..."
-            className="w-full bg-surface border border-border rounded-input p-4 text-sm text-body focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 min-h-[120px] mb-6 resize-none transition-all"
-          />
-
-          <div className="flex justify-end">
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-input text-sm font-medium transition-all hover:shadow-glow-accent-strong"
-            >
-              Analyze & Extract Rules
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Heuristic Store */}
-        <motion.div variants={itemVariants} className="glass-card overflow-hidden">
-          <div className="p-6 border-b border-border flex items-center justify-between bg-surface">
-            <div>
-              <h2 className="text-xl font-display text-heading">
-                Heuristic Store — NCH Inc.
+        {/* Ingest Section */}
+        {step === 'input' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-8 mb-10"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <Sparkles className="w-6 h-6 text-accent" />
+              <h2 className="text-2xl font-display text-heading">
+                Ingest New Guidelines
               </h2>
-              <p className="text-sm text-muted mt-1">
-                Manage scoring rules and weights
-              </p>
             </div>
-            <button className="bg-surface border border-border hover:bg-surface-hover text-heading px-4 py-2 rounded-input text-sm font-medium flex items-center gap-2 transition-colors">
-              <Plus className="w-4 h-4" />
-              Add Rule
-            </button>
-          </div>
 
-          <div className="px-6 py-4 border-b border-border flex gap-2 overflow-x-auto">
-            {['All', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client'].map((tab) => (
+            {/* Input Method Tabs */}
+            <div className="flex gap-2 mb-6">
               <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  activeTab === tab
-                    ? 'bg-surface-hover text-heading border border-border'
-                    : 'text-muted hover:text-body border border-transparent'
+                onClick={() => setInputMethod('url')}
+                className={`flex-1 py-3 px-4 rounded-input text-sm font-medium transition-all ${
+                  inputMethod === 'url'
+                    ? 'bg-accent text-white shadow-glow-accent'
+                    : 'bg-surface border border-border text-muted hover:text-heading'
                 }`}
               >
-                {tab}
+                <Link2 className="w-4 h-4 inline mr-2" />
+                URL or Google Docs
               </button>
-            ))}
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <motion.tbody
-                variants={containerVariants}
-                className="divide-y divide-border"
+              <button
+                onClick={() => setInputMethod('upload')}
+                className={`flex-1 py-3 px-4 rounded-input text-sm font-medium transition-all ${
+                  inputMethod === 'upload'
+                    ? 'bg-accent text-white shadow-glow-accent'
+                    : 'bg-surface border border-border text-muted hover:text-heading'
+                }`}
               >
-                {INITIAL_RULES.map((rule) => (
-                  <motion.tr
-                    variants={itemVariants}
-                    key={rule.id}
-                    className={`group hover:bg-surface-hover transition-colors relative ${
-                      !rule.active ? 'opacity-50' : ''
+                <Upload className="w-4 h-4 inline mr-2" />
+                Upload File
+              </button>
+              <button
+                onClick={() => setInputMethod('paste')}
+                className={`flex-1 py-3 px-4 rounded-input text-sm font-medium transition-all ${
+                  inputMethod === 'paste'
+                    ? 'bg-accent text-white shadow-glow-accent'
+                    : 'bg-surface border border-border text-muted hover:text-heading'
+                }`}
+              >
+                <FileText className="w-4 h-4 inline mr-2" />
+                Paste Text
+              </button>
+            </div>
+
+            {/* Input Area */}
+            {inputMethod === 'url' && (
+              <div className="mb-4">
+                <label className="text-sm text-muted mb-2 block">
+                  Enter URL or Google Docs link
+                </label>
+                <input
+                  type="text"
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="https://docs.google.com/document/d/... or https://example.com/guidelines"
+                  className="w-full bg-surface border border-border rounded-input px-4 py-3 text-body focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50"
+                />
+              </div>
+            )}
+
+            {inputMethod === 'upload' && (
+              <div className="mb-4">
+                <label className="text-sm text-muted mb-2 block">
+                  Upload DOCX file
+                </label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".docx,.doc"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <label
+                    htmlFor="file-upload"
+                    className="flex items-center justify-center w-full bg-surface border-2 border-dashed border-border rounded-input px-4 py-8 cursor-pointer hover:border-accent/50 transition-colors"
+                  >
+                    {file ? (
+                      <div className="text-center">
+                        <FileText className="w-8 h-8 text-accent mx-auto mb-2" />
+                        <p className="text-sm text-heading font-medium">{file.name}</p>
+                        <p className="text-xs text-muted mt-1">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-center">
+                        <Upload className="w-8 h-8 text-muted mx-auto mb-2" />
+                        <p className="text-sm text-heading font-medium">
+                          Click to upload or drag and drop
+                        </p>
+                        <p className="text-xs text-muted mt-1">DOCX files only</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {inputMethod === 'paste' && (
+              <div className="mb-4">
+                <label className="text-sm text-muted mb-2 block">
+                  Paste guidelines text
+                </label>
+                <textarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  placeholder="Paste your brand guidelines, content standards, or style guide here..."
+                  className="w-full bg-surface border border-border rounded-input px-4 py-3 text-body focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 min-h-[200px] resize-none"
+                />
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-4 bg-danger/10 border border-danger/20 rounded-input px-4 py-3 flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-red-400">{error}</p>
+              </div>
+            )}
+
+            {/* Action Button */}
+            <button
+              onClick={handleIngest}
+              disabled={isProcessing || (!inputValue.trim() && !file)}
+              className="w-full bg-accent hover:bg-accent/90 text-white py-3 rounded-input font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Extract Heuristics
+                </>
+              )}
+            </button>
+          </motion.div>
+        )}
+
+        {/* Processing State */}
+        {step === 'processing' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass-card p-12 text-center"
+          >
+            <Loader2 className="w-12 h-12 text-accent animate-spin mx-auto mb-4" />
+            <h3 className="text-xl font-display text-heading mb-2">
+              Analyzing Guidelines...
+            </h3>
+            <p className="text-muted">
+              AI is extracting actionable heuristics from your document
+            </p>
+          </motion.div>
+        )}
+
+        {/* Review State */}
+        {step === 'review' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-8"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-2xl font-display text-heading mb-1">
+                  Review Extracted Heuristics
+                </h2>
+                <p className="text-sm text-muted">
+                  {extractedHeuristics.length} heuristics found. Edit, remove, or approve them.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStep('input')}
+                  className="px-4 py-2 text-sm font-medium text-muted hover:text-heading transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveHeuristics}
+                  disabled={extractedHeuristics.length === 0 || isProcessing}
+                  className="bg-accent hover:bg-accent/90 text-white px-6 py-2 rounded-input text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Save All ({extractedHeuristics.length})
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {extractedHeuristics.map((heuristic) => (
+                <div
+                  key={heuristic.id}
+                  className="glass-card p-4 border border-border hover:border-accent/30 transition-colors"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CategoryBadge category={heuristic.category} variant="solid" />
+                        <span className="text-xs text-muted">
+                          Weight: {heuristic.weight}/10
+                        </span>
+                      </div>
+                      <p className="text-sm text-heading mb-2">{heuristic.text}</p>
+                      {heuristic.reasoning && (
+                        <p className="text-xs text-muted italic">
+                          Reasoning: {heuristic.reasoning}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => deleteHeuristic(heuristic.id)}
+                      className="p-2 text-muted hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Complete State */}
+        {step === 'complete' && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="glass-card p-12 text-center"
+          >
+            <div className="w-16 h-16 bg-success/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check className="w-8 h-8 text-success" />
+            </div>
+            <h3 className="text-xl font-display text-heading mb-2">
+              Heuristics Saved!
+            </h3>
+            <p className="text-muted">
+              Your guidelines have been processed and saved to the heuristic store
+            </p>
+          </motion.div>
+        )}
+
+        {/* Saved Heuristics List */}
+        {savedHeuristics.length > 0 && step === 'input' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="glass-card p-8"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-display text-heading">
+                Heuristic Store
+                <span className="ml-3 text-sm font-mono text-muted">
+                  {savedHeuristics.length} rules
+                </span>
+              </h2>
+              <div className="flex gap-2">
+                {['All', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client'].map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setActiveFilter(filter)}
+                    className={`px-3 py-1.5 rounded-input text-xs font-medium transition-all ${
+                      activeFilter === filter
+                        ? 'bg-accent text-white shadow-glow-accent'
+                        : 'bg-surface border border-border text-muted hover:text-heading'
                     }`}
                   >
-                    <td className="px-6 py-5 w-[100px] pl-8">
-                      <CategoryBadge category={rule.category} variant="outline" />
-                    </td>
-                    <td className="px-6 py-5 text-sm text-heading font-medium">
-                      {rule.text}
-                    </td>
-                    <td className="px-6 py-5 w-[100px]">
-                      <div className="bg-surface border border-border rounded px-2 py-1 text-xs font-mono text-center inline-block text-muted tabular-nums">
-                        W: {rule.weight}
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 w-[80px]">
-                      <div
-                        className={`w-8 h-4 rounded-full relative cursor-pointer transition-colors ${
-                          rule.active ? 'bg-accent shadow-glow-accent' : 'bg-border'
-                        }`}
-                      >
-                        <div
-                          className={`absolute top-0.5 left-0.5 bg-white w-3 h-3 rounded-full transition-transform ${
-                            rule.active ? 'translate-x-4' : 'translate-x-0'
-                          }`}
-                        />
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 w-[100px] text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-1.5 text-muted hover:text-heading transition-colors rounded hover:bg-surface-hover">
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button className="p-1.5 text-muted hover:text-danger transition-colors rounded hover:bg-surface-hover">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </motion.tr>
+                    {filter}
+                  </button>
                 ))}
-              </motion.tbody>
-            </table>
-          </div>
-        </motion.div>
+              </div>
+            </div>
 
-        {/* Ingestion Modal */}
-        <AnimatePresence>
-          {isModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 backdrop-blur-sm"
-                style={{ background: 'var(--color-modal-backdrop)' }}
-                onClick={() => setIsModalOpen(false)}
-              />
-
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                animate={{
-                  opacity: 1,
-                  scale: 1,
-                  y: 0,
-                  transition: {
-                    type: 'spring',
-                    stiffness: 300,
-                    damping: 30,
-                  },
-                }}
-                exit={{
-                  opacity: 0,
-                  scale: 0.95,
-                  y: 20,
-                }}
-                className="relative glass-card w-full max-w-[720px] shadow-2xl flex flex-col max-h-[85vh] bg-surface"
-              >
-                <div className="p-6 border-b border-border flex items-start justify-between shrink-0">
-                  <div>
-                    <h2 className="text-2xl font-display text-heading">
-                      Review Extracted Heuristics
-                    </h2>
-                    <p className="text-sm text-muted mt-2 flex items-center gap-2">
-                      <FileText className="w-4 h-4" />
-                      Claude extracted 18 rules from &apos;NCH Brand Guidelines v3.pdf&apos;.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setIsModalOpen(false)}
-                    className="p-2 text-muted hover:text-heading hover:bg-surface-hover rounded-full transition-colors"
-                  >
-                    <X className="w-5 h-5" />
+            <div className="space-y-2">
+              {filteredHeuristics.map((heuristic) => (
+                <div
+                  key={heuristic.id}
+                  className="glass-card p-4 flex items-center gap-4"
+                >
+                  <CategoryBadge category={heuristic.category} variant="solid" />
+                  <p className="flex-1 text-sm text-heading">{heuristic.text}</p>
+                  <span className="text-xs text-muted font-mono">
+                    {heuristic.weight}/10
+                  </span>
+                  <button className="p-2 text-muted hover:text-accent transition-colors">
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button className="p-2 text-muted hover:text-red-400 transition-colors">
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                  <p className="text-sm text-muted mb-4">Extracted rules would appear here...</p>
-                </div>
-
-                <div className="p-6 border-t border-border bg-surface flex items-center justify-between shrink-0 rounded-b-card">
-                  <span className="text-sm text-muted font-medium">
-                    18 heuristics extracted
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setIsModalOpen(false)}
-                      className="px-4 py-2 text-sm font-medium text-muted hover:text-heading transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => setIsModalOpen(false)}
-                      className="bg-accent hover:bg-accent/90 text-white px-6 py-2 rounded-input text-sm font-medium transition-all hover:shadow-glow-accent-strong"
-                    >
-                      Save 18 Heuristics
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
+              ))}
             </div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+          </motion.div>
+        )}
+
+        {/* Empty State */}
+        {savedHeuristics.length === 0 && step === 'input' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="glass-card p-12 text-center"
+          >
+            <div className="w-16 h-16 bg-surface border border-border rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <FileText className="w-8 h-8 text-muted" />
+            </div>
+            <h3 className="text-lg font-display text-heading mb-2">
+              No Heuristics Yet
+            </h3>
+            <p className="text-sm text-muted">
+              Ingest your first guideline document to start building your heuristic store
+            </p>
+          </motion.div>
+        )}
+      </div>
     </PageErrorBoundary>
   )
 }

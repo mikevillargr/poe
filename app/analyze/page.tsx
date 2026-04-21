@@ -61,44 +61,8 @@ interface BatchItem {
   errorMsg?: string
 }
 
-const SUGGESTIONS: Suggestion[] = [
-  {
-    id: '1',
-    category: 'SEO',
-    severity: 'high',
-    title: 'H2 missing question format for PAA capture',
-    original: 'What is a Registered Agent?',
-    suggested: 'What Does a Registered Agent Do in Nevada?',
-    accepted: null,
-  },
-  {
-    id: '2',
-    category: 'Brand',
-    severity: 'medium',
-    title: 'Opening lacks a stat-led hook per brand guidelines',
-    original: 'Starting a business in Nevada is an exciting venture',
-    suggested: 'With over 90,000 new LLCs formed in Nevada last year alone, starting a business',
-    accepted: null,
-  },
-  {
-    id: '3',
-    category: 'Blacklist',
-    severity: 'high',
-    title: 'Blacklisted competitor mentioned: LegalZoom',
-    original: 'services like LegalZoom or Rocket Lawyer',
-    suggested: 'professional registered agent services',
-    accepted: null,
-  },
-  {
-    id: '4',
-    category: 'Agency',
-    severity: 'low',
-    title: 'Missing authoritative source citation',
-    original: 'Nevada law requires all LLCs to maintain this designation',
-    suggested: 'According to Nevada Revised Statutes Chapter 86, all LLCs must maintain this designation',
-    accepted: null,
-  },
-]
+// Suggestions will be loaded from actual scoring results
+const SUGGESTIONS: Suggestion[] = []
 
 const DIMENSIONS = [
   { category: 'Brand', score: 72, status: 'fail' },
