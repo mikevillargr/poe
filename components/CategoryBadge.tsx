@@ -1,0 +1,80 @@
+'use client'
+
+import React from 'react'
+
+export type CategoryType = 'Brand' | 'SEO' | 'Blacklist' | 'Agency' | 'Client'
+
+interface CategoryBadgeProps {
+  category: CategoryType
+  className?: string
+  variant?: 'outline' | 'solid'
+}
+
+export function CategoryBadge({
+  category,
+  className = '',
+  variant = 'outline',
+}: CategoryBadgeProps) {
+  const colorMap: Record<
+    CategoryType,
+    {
+      solid: string
+      outlineDark: string
+      outlineLight: string
+    }
+  > = {
+    Brand: {
+      solid: 'bg-badge-brand text-white',
+      outlineDark: 'border-badge-brand text-badge-brand',
+      outlineLight: 'border-badge-brand text-[#C23808]',
+    },
+    SEO: {
+      solid: 'bg-badge-seo text-white',
+      outlineDark: 'border-badge-seo text-blue-400',
+      outlineLight: 'border-badge-seo text-[#1E40AF]',
+    },
+    Blacklist: {
+      solid: 'bg-badge-blacklist text-white',
+      outlineDark: 'border-badge-blacklist text-red-400',
+      outlineLight: 'border-badge-blacklist text-[#991B1B]',
+    },
+    Agency: {
+      solid: 'bg-badge-agency text-white',
+      outlineDark: 'border-badge-agency text-green-400',
+      outlineLight: 'border-badge-agency text-[#166534]',
+    },
+    Client: {
+      solid: 'bg-badge-client text-white',
+      outlineDark: 'border-badge-client text-purple-400',
+      outlineLight: 'border-badge-client text-[#6B21A8]',
+    },
+  }
+
+  const baseStyle =
+    'inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full'
+  const variantStyle =
+    variant === 'solid'
+      ? colorMap[category].solid
+      : `border bg-transparent badge-outline-${category.toLowerCase()}`
+
+  return (
+    <>
+      <style>{`
+        .badge-outline-brand { ${colorMap.Brand.outlineDark} }
+        .badge-outline-seo { ${colorMap.SEO.outlineDark} }
+        .badge-outline-blacklist { ${colorMap.Blacklist.outlineDark} }
+        .badge-outline-agency { ${colorMap.Agency.outlineDark} }
+        .badge-outline-client { ${colorMap.Client.outlineDark} }
+
+        [data-theme='light'] .badge-outline-brand { ${colorMap.Brand.outlineLight} }
+        [data-theme='light'] .badge-outline-seo { ${colorMap.SEO.outlineLight} }
+        [data-theme='light'] .badge-outline-blacklist { ${colorMap.Blacklist.outlineLight} }
+        [data-theme='light'] .badge-outline-agency { ${colorMap.Agency.outlineLight} }
+        [data-theme='light'] .badge-outline-client { ${colorMap.Client.outlineLight} }
+      `}</style>
+      <span className={`${baseStyle} ${variantStyle} ${className}`}>
+        {category}
+      </span>
+    </>
+  )
+}

@@ -1,0 +1,153 @@
+/* @import url() FONT IMPORTS MUST ALWAYS BE AT THE VERY TOP OF THIS FILE, ABOVE THE TAILWIND IMPORTS — DO NOT DELETE THIS COMMENT */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,600&display=swap');
+
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+/* Theme CSS Variables - Dark Mode (Default) */
+:root {
+  --color-background: #0A0A0F;
+  --color-surface: #111118;
+  --color-surface-hover: #1A1A2E;
+  --color-sidebar: #0D0D14;
+  --color-border: #1E1E2E;
+  --color-heading: #F1F5F9;
+  --color-body: #CBD5E1;
+  --color-muted: #64748B;
+  --color-card-bg: rgba(255, 255, 255, 0.03);
+  --color-card-border: rgba(255, 255, 255, 0.06);
+  --color-input-bg: #0A0A0F;
+  --color-input-border: rgba(255, 255, 255, 0.1);
+  --color-table-hover: rgba(255, 255, 255, 0.02);
+  --color-editor-bg: #0C0C12;
+  --color-modal-backdrop: rgba(0, 0, 0, 0.8);
+  --color-gauge-bg: rgba(255, 255, 255, 0.05);
+  --color-dashed-border: rgba(255, 255, 255, 0.1);
+}
+
+/* Theme CSS Variables - Light Mode */
+[data-theme='light'] {
+  --color-background: #FAFAF8;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F1F5F9;
+  --color-sidebar: #0D0D14;
+  --color-border: #E2E8F0;
+  --color-heading: #111111;
+  --color-body: #4A4A4A;
+  --color-muted: #94A3B8;
+  --color-card-bg: #FFFFFF;
+  --color-card-border: #E5E5E5;
+  --color-input-bg: #FFFFFF;
+  --color-input-border: #D1D5DB;
+  --color-table-hover: #F9FAFB;
+  --color-editor-bg: #F5F5F0;
+  --color-modal-backdrop: rgba(0, 0, 0, 0.5);
+  --color-gauge-bg: #E5E5E5;
+  --color-dashed-border: rgba(0, 0, 0, 0.15);
+}
+
+body {
+  @apply bg-background text-body font-sans antialiased relative;
+}
+
+/* Subtle noise texture overlay - dark mode only */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+[data-theme='light'] body::before {
+  display: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply text-heading font-semibold;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Focus ring */
+*:focus-visible {
+  @apply outline-none ring-2 ring-accent/50;
+  box-shadow: 0 0 12px rgba(232, 69, 10, 0.15);
+}
+
+[data-theme='light'] *:focus-visible {
+  box-shadow: 0 0 8px rgba(232, 69, 10, 0.1);
+}
+
+/* Glassmorphic card utility */
+.glass-card {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+}
+
+:root .glass-card {
+  backdrop-filter: blur(24px);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 4px 24px rgba(0,0,0,0.3);
+}
+
+[data-theme='light'] .glass-card {
+  backdrop-filter: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+}
+
+/* Animated dashed border for drop zones */
+.dashed-border-animated {
+  background-image:
+    linear-gradient(90deg, var(--color-dashed-border) 50%, transparent 50%),
+    linear-gradient(90deg, var(--color-dashed-border) 50%, transparent 50%),
+    linear-gradient(0deg, var(--color-dashed-border) 50%, transparent 50%),
+    linear-gradient(0deg, var(--color-dashed-border) 50%, transparent 50%);
+  background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+  background-size: 16px 2px, 16px 2px, 2px 16px, 2px 16px;
+  background-position: left top, right bottom, left bottom, right top;
+  animation: border-dance 1s infinite linear;
+}
+
+@keyframes border-dance {
+  0% {
+    background-position: left top, right bottom, left bottom, right top;
+  }
+  100% {
+    background-position: left 16px top, right 16px bottom, left bottom 16px, right top 16px;
+  }
+}
