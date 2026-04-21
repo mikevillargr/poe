@@ -14,6 +14,39 @@ const scoreRequestSchema = z.object({
   apiKey: z.string().min(1),
 })
 
+// GET handler to return heuristics (for filter generation)
+export async function GET() {
+  try {
+    let allHeuristics: any[] = []
+    
+    if (db) {
+      try {
+        const rows = await db.select().from(heuristics)
+        allHeuristics = rows.map((h: any) => ({
+          id: h.id,
+          category: h.category,
+          text: h.rule,
+          weight: h.weight,
+        }))
+      } catch (dbError) {
+        console.warn('Failed to load heuristics from database')
+      }
+    }
+
+    if (allHeuristics.length === 0) {
+      allHeuristics = getInMemoryHeuristics()
+    }
+
+    return NextResponse.json({ heuristics: allHeuristics })
+  } catch (error: any) {
+    console.error('GET /api/score error:', error)
+    return NextResponse.json(
+      { error: 'Failed to load heuristics' },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
