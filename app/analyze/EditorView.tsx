@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Check, X, Sparkles, Clock } from 'lucide-react'
+import { Check, X, Sparkles, Clock, Loader2 } from 'lucide-react'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { CategoryBadge, CategoryType } from '@/components/CategoryBadge'
 import { ScoreGauge } from '@/components/ScoreGauge'
 import { SuggestionRecomposition } from '@/components/SuggestionRecomposition'
 import { useSuggestionStore } from '@/stores/useSuggestionStore'
 import { useVersionStore } from '@/stores/useVersionStore'
+import { useSettings } from '@/hooks/useSettings'
 
 interface DocumentTab {
   id: string
@@ -43,6 +44,8 @@ export function EditorView({
   onShowVersionHistory,
 }: EditorViewProps) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [isAnalyzingBase, setIsAnalyzingBase] = useState(false)
+  const [baseSuggestions, setBaseSuggestions] = useState<any[]>([])
   
   // Zustand stores
   const {
@@ -56,9 +59,11 @@ export function EditorView({
     getPendingSuggestions,
     getAcceptedSuggestions,
     getDismissedSuggestions,
+    setSuggestions,
   } = useSuggestionStore()
   
   const { addVersion } = useVersionStore()
+  const { settings } = useSettings()
 
   // Plain content
   const plainContent = `
@@ -75,11 +80,65 @@ export function EditorView({
     <p>The Articles of Organization must be filed with the Nevada Secretary of State to officially form your LLC. Nevada law requires all LLCs to maintain this designation throughout the existence of your business entity.</p>
   `
 
+  // Analyze base content for grammar/readability
+  const analyzeBaseContent = async (content: string) => {
+    if (!settings.apiKey || !content.trim() || content.length < 100) return
+    
+    setIsAnalyzingBase(true)
+    try {
+      const response = await fetch('/api/content/analyze-base', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          apiKey: settings.apiKey,
+        }),
+      })
+
+      if (!response.ok) {
+        console.error('Base analysis failed')
+        return
+      }
+
+      const { suggestions: baseSuggs } = await response.json()
+      setBaseSuggestions(baseSuggs || [])
+      
+      // Add base suggestions to the store with special status
+      const formattedSuggestions = baseSuggs.map((s: any) => ({
+        ...s,
+        status: 'pending' as const,
+        category: 'Quality' as any,
+      }))
+      
+      // Merge with existing suggestions
+      setSuggestions(formattedSuggestions)
+    } catch (error) {
+      console.error('Base analysis error:', error)
+    } finally {
+      setIsAnalyzingBase(false)
+    }
+  }
+
+  // Run base analysis when content changes (debounced)
+  useEffect(() => {
+    if (!editorRef.current) return
+    
+    const timer = setTimeout(() => {
+      const content = editorRef.current?.getText() || ''
+      if (content.length > 100) {
+        analyzeBaseContent(content)
+      }
+    }, 3000) // Wait 3 seconds after typing stops
+    
+    return () => clearTimeout(timer)
+  }, [editorRef.current?.getText()])
+
   // Filter suggestions based on active filter
   const filteredSuggestions = Array.from(suggestions.values()).filter(s => {
     if (activeFilter === 'All') return s.status === 'pending'
     if (activeFilter === 'Accepted') return s.status === 'accepted'
     if (activeFilter === 'Dismissed') return s.status === 'dismissed'
+    if (activeFilter === 'Quality') return s.category === 'Quality' && s.status === 'pending'
     return s.category === activeFilter && s.status === 'pending'
   })
 
@@ -214,7 +273,7 @@ export function EditorView({
           </div>
 
           <div className="flex gap-2 flex-wrap">
-            {['All', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client', 'Accepted', 'Dismissed'].map((filter) => (
+            {['All', 'Quality', 'Brand', 'SEO', 'Blacklist', 'Agency', 'Client', 'Accepted', 'Dismissed'].map((filter) => (
               <button
                 key={filter}
                 onClick={() => onFilterChange(filter)}
@@ -225,6 +284,9 @@ export function EditorView({
                 }`}
               >
                 {filter}
+                {filter === 'Quality' && isAnalyzingBase && (
+                  <Loader2 className="w-3 h-3 inline ml-1 animate-spin" />
+                )}
               </button>
             ))}
           </div>

@@ -2,7 +2,7 @@
 
 import React from 'react'
 
-export type CategoryType = 'Brand' | 'SEO' | 'Blacklist' | 'Agency' | 'Client'
+export type CategoryType = 'Brand' | 'SEO' | 'Blacklist' | 'Agency' | 'Client' | 'Quality'
 
 interface CategoryBadgeProps {
   category: CategoryType
@@ -48,6 +48,11 @@ export function CategoryBadge({
       outlineDark: 'border-badge-client text-purple-400',
       outlineLight: 'border-badge-client text-[#6B21A8]',
     },
+    Quality: {
+      solid: 'bg-yellow-600 text-white',
+      outlineDark: 'border-yellow-500 text-yellow-400',
+      outlineLight: 'border-yellow-600 text-yellow-700',
+    },
   }
 
   const baseStyle =
@@ -65,12 +70,14 @@ export function CategoryBadge({
         .badge-outline-blacklist { ${colorMap.Blacklist.outlineDark} }
         .badge-outline-agency { ${colorMap.Agency.outlineDark} }
         .badge-outline-client { ${colorMap.Client.outlineDark} }
+        .badge-outline-quality { ${colorMap.Quality.outlineDark} }
 
         [data-theme='light'] .badge-outline-brand { ${colorMap.Brand.outlineLight} }
         [data-theme='light'] .badge-outline-seo { ${colorMap.SEO.outlineLight} }
         [data-theme='light'] .badge-outline-blacklist { ${colorMap.Blacklist.outlineLight} }
         [data-theme='light'] .badge-outline-agency { ${colorMap.Agency.outlineLight} }
         [data-theme='light'] .badge-outline-client { ${colorMap.Client.outlineLight} }
+        [data-theme='light'] .badge-outline-quality { ${colorMap.Quality.outlineLight} }
       `}</style>
       <span className={`${baseStyle} ${variantStyle} ${className}`}>
         {category}
