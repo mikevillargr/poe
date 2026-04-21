@@ -37,6 +37,7 @@ export default function GuidelinesPage() {
   const [inputValue, setInputValue] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [extractedHeuristics, setExtractedHeuristics] = useState<Heuristic[]>([])
+  const [discoveredDimensions, setDiscoveredDimensions] = useState<any[]>([])
   const [savedHeuristics, setSavedHeuristics] = useState<Heuristic[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState('')
@@ -143,8 +144,9 @@ export default function GuidelinesPage() {
         throw new Error(errorData.error || 'Failed to extract heuristics')
       }
 
-      const { heuristics } = await extractResponse.json()
+      const { heuristics, dimensions } = await extractResponse.json()
       setExtractedHeuristics(heuristics)
+      setDiscoveredDimensions(dimensions || [])
       setStep('review')
     } catch (err: any) {
       console.error('Ingest error:', err)
@@ -422,6 +424,29 @@ export default function GuidelinesPage() {
                 </button>
               </div>
             </div>
+
+            {/* Discovered Dimensions */}
+            {discoveredDimensions.length > 0 && (
+              <div className="mb-6 p-4 bg-accent/5 border border-accent/20 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="w-4 h-4 text-accent" />
+                  <h3 className="text-sm font-medium text-heading">
+                    Discovered Dimensions ({discoveredDimensions.length})
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {discoveredDimensions.map((dim: any, idx: number) => (
+                    <div key={idx} className="bg-surface/50 rounded-input p-3 border border-border">
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full bg-badge-${dim.color || 'client'}`} />
+                        <span className="text-sm font-medium text-heading">{dim.name}</span>
+                      </div>
+                      <p className="text-xs text-muted">{dim.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               {extractedHeuristics.map((heuristic) => (

@@ -13,47 +13,78 @@ interface ExtractedHeuristic {
 
 const EXTRACTION_PROMPT = `You are an expert at analyzing brand guidelines, content standards, and style guides to extract actionable scoring heuristics.
 
-Analyze the provided document and extract specific, measurable rules that can be used to score content quality. For each rule you identify:
+Your task is to:
+1. **Identify the key dimensions/categories** that matter for this specific document
+2. **Group related rules** under those dimensions
+3. **Extract specific, measurable rules** that can be used to score content
 
-1. **Category**: Classify into one of these categories:
-   - Brand: Brand voice, tone, messaging guidelines
-   - SEO: Search optimization, keyword usage, heading structure
-   - Blacklist: Prohibited terms, competitors to avoid, banned phrases
-   - Agency: Quality standards, citation requirements, fact-checking
-   - Client: Client-specific requirements, industry regulations
+IMPORTANT: Don't force rules into predefined categories. Instead, infer what dimensions are actually present in the document. Common dimensions include:
+- Brand (voice, tone, messaging)
+- SEO (optimization, keywords, structure)
+- Blacklist (prohibited terms, competitors)
+- Agency (quality standards, citations)
+- Client (client-specific requirements)
+- Legal (compliance, regulations)
+- Accessibility (readability, inclusivity)
+- Technical (formatting, structure)
+- Style (grammar, punctuation, formatting)
 
-2. **Text**: Write a clear, actionable rule (1-2 sentences max)
+But you should identify dimensions based on what's actually in the document. If the document focuses heavily on legal compliance, create a "Legal" dimension. If it emphasizes data-driven content, create a "Data & Statistics" dimension.
+
+For each rule you extract:
+
+1. **Category**: The dimension this rule belongs to (infer from document, don't force into predefined list)
+2. **Text**: Clear, actionable rule (1-2 sentences max)
    - Be specific and measurable
    - Use imperative language ("Must", "Should", "Never")
    - Focus on what can be checked in content
-
-3. **Weight**: Assign importance (1-10)
+3. **Weight**: Importance (1-10)
    - 10: Critical, must-have requirements
    - 7-9: Important guidelines
    - 4-6: Moderate importance
    - 1-3: Nice-to-have suggestions
+4. **Reasoning**: Brief explanation of why this rule matters
+5. **Dimension**: The broader dimension/category this belongs to (can be custom)
 
-4. **Reasoning**: Brief explanation of why this rule matters (optional)
-
-Return ONLY a valid JSON array of heuristics. No markdown, no explanation, just the JSON array.
+Return a JSON object with two parts:
+1. "dimensions": Array of discovered dimensions with descriptions
+2. "heuristics": Array of extracted rules
 
 Example output format:
-[
-  {
-    "category": "Brand",
-    "text": "All articles must open with a verified statistic or data point",
-    "weight": 9,
-    "reasoning": "Establishes credibility and hooks readers immediately"
-  },
-  {
-    "category": "Blacklist",
-    "text": "Never mention competitors LegalZoom, Incfile, or ZenBusiness by name",
-    "weight": 10,
-    "reasoning": "Client policy to avoid promoting competitors"
-  }
-]
+{
+  "dimensions": [
+    {
+      "name": "Brand Voice",
+      "description": "Guidelines for maintaining consistent brand tone and messaging",
+      "color": "brand"
+    },
+    {
+      "name": "Legal Compliance",
+      "description": "Requirements for legal disclaimers and regulatory compliance",
+      "color": "client"
+    }
+  ],
+  "heuristics": [
+    {
+      "category": "Brand Voice",
+      "text": "All articles must open with a verified statistic or data point",
+      "weight": 9,
+      "reasoning": "Establishes credibility and hooks readers immediately",
+      "dimension": "Brand Voice"
+    },
+    {
+      "category": "Legal Compliance",
+      "text": "Include disclaimer about state-specific requirements in all LLC content",
+      "weight": 10,
+      "reasoning": "Legal requirement to avoid liability",
+      "dimension": "Legal Compliance"
+    }
+  ]
+}
 
-Now analyze this document and extract heuristics:`
+For the "color" field in dimensions, map to one of: brand, seo, blacklist, agency, client (choose the closest match for UI purposes).
+
+Now analyze this document and extract dimensions and heuristics:`
 
 export async function POST(request: NextRequest) {
   try {
@@ -106,24 +137,64 @@ export async function POST(request: NextRequest) {
       jsonText = match ? match[1] : responseText
     }
 
-    let extractedRules: any[]
+    let extractedData: any
     try {
-      extractedRules = JSON.parse(jsonText)
+      extractedData = JSON.parse(jsonText)
     } catch (parseError) {
       console.error('Failed to parse AI response:', jsonText)
       throw new Error('AI returned invalid JSON. Please try again.')
     }
 
+    // Handle both old format (array) and new format (object with dimensions + heuristics)
+    let dimensions = []
+    let extractedRules = []
+    
+    if (Array.isArray(extractedData)) {
+      // Old format - just an array of rules
+      extractedRules = extractedData
+    } else if (extractedData.dimensions && extractedData.heuristics) {
+      // New format - object with dimensions and heuristics
+      dimensions = extractedData.dimensions || []
+      extractedRules = extractedData.heuristics || []
+    } else {
+      throw new Error('Unexpected response format from AI')
+    }
+
+    // Map category names to standard CategoryType (for database compatibility)
+    const categoryMap: Record<string, CategoryType> = {
+      'brand': 'Brand',
+      'seo': 'SEO',
+      'blacklist': 'Blacklist',
+      'agency': 'Agency',
+      'client': 'Client',
+    }
+
+    const mapToStandardCategory = (category: string): CategoryType => {
+      const lower = category.toLowerCase()
+      // Try exact match first
+      if (categoryMap[lower]) return categoryMap[lower]
+      
+      // Try partial match
+      if (lower.includes('brand') || lower.includes('voice') || lower.includes('tone')) return 'Brand'
+      if (lower.includes('seo') || lower.includes('search') || lower.includes('keyword')) return 'SEO'
+      if (lower.includes('blacklist') || lower.includes('prohibit') || lower.includes('avoid')) return 'Blacklist'
+      if (lower.includes('agency') || lower.includes('quality') || lower.includes('standard')) return 'Agency'
+      if (lower.includes('client') || lower.includes('legal') || lower.includes('compliance')) return 'Client'
+      
+      // Default to Client for custom categories
+      return 'Client'
+    }
+
     // Validate and format heuristics
     const heuristics: ExtractedHeuristic[] = extractedRules
-      .filter(rule => rule.category && rule.text && rule.weight)
-      .map((rule, index) => ({
+      .filter((rule: any) => rule.category && rule.text && rule.weight)
+      .map((rule: any, index: number) => ({
         id: `heuristic-${Date.now()}-${index}`,
-        category: rule.category as CategoryType,
+        category: mapToStandardCategory(rule.category),
         text: rule.text,
         weight: Math.min(10, Math.max(1, parseInt(rule.weight) || 5)),
         active: true,
-        reasoning: rule.reasoning,
+        reasoning: rule.reasoning || rule.dimension ? `${rule.dimension ? `[${rule.dimension}] ` : ''}${rule.reasoning || ''}`.trim() : undefined,
       }))
 
     if (heuristics.length === 0) {
@@ -135,6 +206,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       heuristics,
+      dimensions, // Include discovered dimensions in response
       count: heuristics.length,
       source,
     })
