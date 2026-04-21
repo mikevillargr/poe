@@ -168,58 +168,66 @@ export function RichTextEditor({
     }
   }, [editor, editorRef])
 
-  // Apply/remove decorations when active suggestion changes
+  // Apply/remove decorations  // Highlight active suggestion
   useEffect(() => {
-    if (!editor || !editor.view) return
-    // Avoid re-running if nothing changed
+    if (!editor || !editor.view || !editor.isEditable) return
     if (prevSuggestionRef.current === activeSuggestionId) return
-    prevSuggestionRef.current = activeSuggestionId
+    
+    // Small delay to ensure editor is fully ready after content changes
+    const timer = setTimeout(() => {
+      if (!editor || !editor.view) return
+      
+      prevSuggestionRef.current = activeSuggestionId
 
-    const { state } = editor.view
-    const { doc, tr } = state
+      const { state } = editor.view
+      const { doc, tr } = state
 
-    if (!activeSuggestionId || !suggestions) {
-      // Clear all decorations
-      tr.setMeta(highlightPluginKey, DecorationSet.empty)
-      editor.view.dispatch(tr)
-      return
-    }
-
-    const suggestion = suggestions.find(s => s.id === activeSuggestionId)
-    if (!suggestion) {
-      tr.setMeta(highlightPluginKey, DecorationSet.empty)
-      editor.view.dispatch(tr)
-      return
-    }
-
-    // Find positions of the original text in the document
-    const positions = findTextPositions(doc, suggestion.original)
-
-    if (positions.length === 0) {
-      tr.setMeta(highlightPluginKey, DecorationSet.empty)
-      editor.view.dispatch(tr)
-      return
-    }
-
-    // Create inline decorations at each position
-    const decorations = positions.map(({ from, to }) =>
-      Decoration.inline(from, to, {
-        class: 'suggestion-highlight',
-        'data-suggestion-id': suggestion.id,
-      })
-    )
-
-    const decoSet = DecorationSet.create(doc, decorations)
-    tr.setMeta(highlightPluginKey, decoSet)
-    editor.view.dispatch(tr)
-
-    // Scroll to first match
-    setTimeout(() => {
-      const el = editor.view.dom.querySelector('.suggestion-highlight')
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (!activeSuggestionId || !suggestions) {
+        // Clear all decorations
+        tr.setMeta(highlightPluginKey, DecorationSet.empty)
+        editor.view.dispatch(tr)
+        return
       }
-    }, 50)
+
+      const suggestion = suggestions.find(s => s.id === activeSuggestionId)
+      if (!suggestion || !suggestion.original) {
+        tr.setMeta(highlightPluginKey, DecorationSet.empty)
+        editor.view.dispatch(tr)
+        return
+      }
+
+      // Find positions of the original text in the document
+      const positions = findTextPositions(doc, suggestion.original)
+
+      if (positions.length === 0) {
+        console.warn('No matches found for:', suggestion.original)
+        tr.setMeta(highlightPluginKey, DecorationSet.empty)
+        editor.view.dispatch(tr)
+        return
+      }
+
+      // Create inline decorations at each position
+      const decorations = positions.map(({ from, to }) =>
+        Decoration.inline(from, to, {
+          class: 'suggestion-highlight',
+          'data-suggestion-id': suggestion.id,
+        })
+      )
+
+      const decoSet = DecorationSet.create(doc, decorations)
+      tr.setMeta(highlightPluginKey, decoSet)
+      editor.view.dispatch(tr)
+
+      // Scroll to first match
+      setTimeout(() => {
+        const el = editor.view.dom.querySelector('.suggestion-highlight')
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 50)
+    }, 10)
+    
+    return () => clearTimeout(timer)
   }, [activeSuggestionId, editor, suggestions])
 
   // Auto-save with debouncing
