@@ -104,6 +104,29 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
         content = item.ref
       }
 
+      // Create document first
+      let documentId: string | undefined
+      try {
+        const docResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/documents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: item.title || item.ref,
+            content,
+            source: item.type,
+            sourceRef: item.ref,
+          }),
+        })
+        
+        if (docResponse.ok) {
+          const { document } = await docResponse.json()
+          documentId = document.id
+          console.log(`Created document ${documentId} for ${item.ref}`)
+        }
+      } catch (docError) {
+        console.error('Failed to create document:', docError)
+      }
+
       // Score the content
       const scoreResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3001'}/api/score`, {
         method: 'POST',
@@ -112,6 +135,7 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
           content,
           source: item.type,
           sourceRef: item.ref,
+          documentId,
           apiKey,
         }),
       })
@@ -120,7 +144,8 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
       if (scoreResponse.ok) {
         const scoreData = await scoreResponse.json()
         result = {
-          id: `result-${Date.now()}-${batchJob.completed}`,
+          id: documentId || `result-${Date.now()}-${batchJob.completed}`,
+          documentId,
           title: item.title || item.ref,
           type: item.type,
           ref: item.ref,
@@ -132,7 +157,8 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
         batchJob.completed++
       } else {
         result = {
-          id: `result-${Date.now()}-${batchJob.failed}`,
+          id: documentId || `result-${Date.now()}-${batchJob.failed}`,
+          documentId,
           title: item.title || item.ref,
           type: item.type,
           ref: item.ref,
@@ -149,6 +175,7 @@ async function processBatchItems(batchJobId: string, items: any[], apiKey: strin
       batchJob.failed++
       batchJob.results.push({
         id: `result-${Date.now()}-${batchJob.failed}`,
+        documentId: undefined,
         title: item.title || item.ref,
         type: item.type,
         ref: item.ref,
