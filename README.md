@@ -2,32 +2,64 @@
 
 > AI-powered content scoring for brand compliance, SEO readiness, and topical safety.
 
-**MagicPatterns:** https://www.magicpatterns.com/c/2qmur5ajbx9funtxgnk3nr
-**Preview:** https://project-stellar-canyon-836.magicpatterns.app
+**Version:** v1.0.0 (Production Ready)  
+**Repository:** https://github.com/mikevillargr/poe
 
-## Quick Start
+## ✨ Features
+
+- 🔐 **Authentication** - Simple login (admin/admin)
+- 📝 **Analyze & Optimize** - AI-powered content analysis
+- 📊 **Batch CSV Upload** - Process multiple URLs at once
+- 📄 **DOCX Support** - Upload and analyze Word documents
+- 🌐 **URL Fetching** - Smart content extraction from web pages
+- 🤖 **AI Scoring** - Powered by Anthropic Claude
+- 💡 **Suggestion Highlighting** - Click to highlight text in editor
+- 📑 **Tab Management** - Work on multiple documents
+- 📋 **Guidelines** - Manage scoring criteria
+- ⚙️ **Settings** - Configure API keys and preferences
+- 📥 **Export** - Download scored content as DOCX
+- 🕐 **Version History** - Track document changes
+
+## Quick Start (Local Development)
 
 ```bash
 # Install dependencies
 npm install
 
-# Set up database (automated)
-./scripts/db-init.sh
+# Set up database
 npm run db:push
-npm run db:seed
 
-# Add your Anthropic API key to .env.local
+# Add your Anthropic API key to .env
 # ANTHROPIC_API_KEY=sk-ant-api03-...
 
 # Start development server
 npm run dev
 ```
 
-Visit http://localhost:3001 and login with `admin` / `admin123`
+Visit http://localhost:3001 and login with:
+- **Username:** admin
+- **Password:** admin
 
-📚 **Full Documentation:**
-- [Quick Start Guide](./docs/QUICK_START.md)
-- [Database Setup](./docs/DATABASE_SETUP.md)
+## 🚀 VPS Deployment
+
+### Automated Deployment
+
+```bash
+# One-command deployment
+./deploy.sh <vps-ip> <vps-user>
+
+# Example
+./deploy.sh 192.168.1.100 ubuntu
+```
+
+### Manual Deployment
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for complete step-by-step guide.
+
+📚 **Documentation:**
+- [Deployment Guide](./DEPLOYMENT.md) - Complete VPS setup
+- [Quick Start Guide](./docs/QUICK_START.md) - Local development
+- [Database Setup](./docs/DATABASE_SETUP.md) - Database configuration
 
 ---
 
