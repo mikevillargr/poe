@@ -42,3 +42,6 @@ next-env.d.ts
 
 # uploads
 uploads/
+
+# local heuristics store
+.heuristics-store.json
