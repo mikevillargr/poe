@@ -86,11 +86,9 @@ export function EditorView({
       .catch((err) => console.warn('Google Drive init failed:', err))
   }, [])
 
-  // Restore suggestions from initial data
+  // Restore suggestions from initial data (or clear if none)
   useEffect(() => {
-    if (initialSuggestions && initialSuggestions.length > 0) {
-      setSuggestions(initialSuggestions)
-    }
+    setSuggestions(initialSuggestions || [])
   }, [initialSuggestions])
   
   // Zustand stores
