@@ -22,15 +22,18 @@ export function ScoreGauge({
   let glowClass = 'drop-shadow-[0_0_8px_rgba(39,103,73,0.6)]'
   let bgGlowClass = 'from-success/10'
 
-  if (score < 70) {
+  if (score < 50) {
+    // Red for scores below 50
     colorClass = 'text-danger'
     glowClass = 'drop-shadow-[0_0_8px_rgba(155,44,44,0.6)]'
     bgGlowClass = 'from-danger/10'
-  } else if (score < 90) {
+  } else if (score < 70) {
+    // Yellow for scores 50-69
     colorClass = 'text-warning'
     glowClass = 'drop-shadow-[0_0_8px_rgba(146,64,14,0.6)]'
     bgGlowClass = 'from-warning/10'
   }
+  // Green for scores 70+
 
   return (
     <div
