@@ -187,7 +187,10 @@ export default function GuidelinesPage() {
 
   // Save heuristics to database
   const handleSaveHeuristics = async () => {
+    console.log('Saving heuristics:', extractedHeuristics)
     setIsProcessing(true)
+    setError('') // Clear any previous errors
+    
     try {
       const response = await fetch('/api/guidelines/save', {
         method: 'POST',
@@ -195,14 +198,22 @@ export default function GuidelinesPage() {
         body: JSON.stringify({ heuristics: extractedHeuristics }),
       })
 
+      console.log('Save response status:', response.status)
+      
       if (!response.ok) {
-        throw new Error('Failed to save heuristics')
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Save failed:', errorData)
+        throw new Error(errorData.error || `Failed to save heuristics (${response.status})`)
       }
+
+      const saveData = await response.json()
+      console.log('Save successful:', saveData)
 
       // Reload heuristics from database to get the saved ones with IDs
       const listResponse = await fetch('/api/guidelines/list')
       if (listResponse.ok) {
         const { heuristics } = await listResponse.json()
+        console.log('Loaded heuristics:', heuristics)
         setSavedHeuristics(heuristics || [])
       }
 
@@ -216,7 +227,9 @@ export default function GuidelinesPage() {
         setFile(null)
       }, 2000)
     } catch (err: any) {
+      console.error('Save error:', err)
       setError(err.message || 'Failed to save heuristics')
+      setStep('review') // Stay on review page to show error
     } finally {
       setIsProcessing(false)
     }
@@ -434,7 +447,10 @@ export default function GuidelinesPage() {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setStep('input')}
+                  onClick={() => {
+                    setStep('input')
+                    setError('')
+                  }}
                   className="px-4 py-2 text-sm font-medium text-muted hover:text-heading transition-colors"
                 >
                   Cancel
@@ -442,7 +458,7 @@ export default function GuidelinesPage() {
                 <button
                   onClick={handleSaveHeuristics}
                   disabled={extractedHeuristics.length === 0 || isProcessing}
-                  className="bg-accent hover:bg-accent/90 text-white px-6 py-2 rounded-input text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="bg-accent hover:bg-accent/90 text-white px-6 py-2 rounded-input text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isProcessing ? (
                     <>
@@ -458,6 +474,17 @@ export default function GuidelinesPage() {
                 </button>
               </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-6 bg-danger/10 border border-danger/20 rounded-input px-4 py-3 flex items-start gap-2">
+                <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm text-red-400 font-medium">Save Failed</p>
+                  <p className="text-xs text-red-400/80 mt-1">{error}</p>
+                </div>
+              </div>
+            )}
 
             {/* Discovered Dimensions */}
             {discoveredDimensions.length > 0 && (
