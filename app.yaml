@@ -1,0 +1,15 @@
+id: poe
+name: Poe
+description: Growth Rocket's AI content grading and scoring app (Next.js + Claude + pgvector)
+repo: github.com/mikevillargr/poe
+server: hostinger-vps
+# Live copy. A stale second copy exists at /opt/poe (v0.1.1), which is where
+# .github/workflows/deploy.yml points. See HANDOFF.md.
+path: /var/www/poe
+domains: []                     # none; served directly at http://76.13.191.149:3001 (no TLS)
+services: [app, db]
+depends_on: []
+# Real deploys are manual on the server (git pull + docker-compose up -d --build).
+# deploy.yml (tag push) targets /opt/poe and has never succeeded.
+deploy: { trigger: manual }
+status: production              # TODO(verify): is Poe in active use at Growth Rocket, or staging?

@@ -1,3 +1,4 @@
+> Agents: start with HANDOFF.md, then AGENTS.md (how to work here). This file is the project brief.
 # Poe — Content Grading & Scoring App
 ## Claude Code Project Guide
 
