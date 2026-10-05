@@ -6,6 +6,7 @@ import { Clock, Highlighter, Loader2, RotateCcw, Save, Sparkles, Square, X, PenL
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { countWords } from '@/lib/articles/text'
 import { cleanGeneratedHtml } from '@/lib/pipeline/html'
+import { RunProgress } from './RunProgress'
 import { StreamingPreview } from './StreamingPreview'
 import { hasDraft, hasResearch, type ModelsInUse, type WorkspaceArticle } from './types'
 
@@ -48,6 +49,7 @@ export function DraftTab({
   editorKey,
   editorRef,
   streaming,
+  remote,
   streamText,
   activeSuggestionId,
   onClearSuggestion,
@@ -66,6 +68,8 @@ export function DraftTab({
   editorKey: string
   editorRef: MutableRefObject<Editor | null>
   streaming: boolean
+  /** Generating on the server but not streamed to this page (we returned to it). */
+  remote: boolean
   streamText: string
   activeSuggestionId: string | null
   onClearSuggestion: () => void
@@ -89,7 +93,7 @@ export function DraftTab({
       <div className="flex flex-col h-full">
         <div className="border-b border-border bg-surface/95 px-4 py-2 flex items-center gap-3 text-sm">
           <Loader2 className="w-4 h-4 text-accent animate-spin" />
-          <span className="text-heading">{streamText ? 'Writing the draft…' : 'Starting generation…'}</span>
+          <span className="text-heading">{streamText ? 'Writing the draft…' : 'Generating the draft…'}</span>
           <span className="text-xs text-muted font-mono">{models.generation}</span>
           <div className="flex-1" />
           <button
@@ -100,15 +104,31 @@ export function DraftTab({
             <Square className="w-3 h-3" /> Stop
           </button>
         </div>
+        <div className="px-4 py-3 border-b border-border bg-surface/60">
+          <RunProgress
+            kind="generation"
+            startedAt={article.generationStartedAt}
+            activity={streamText.length}
+            status={remote ? 'Running in the background' : streamText ? `Writing · ${nf.format(words)} words so far` : 'Waiting for the first words'}
+            model={models.generation}
+          />
+        </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[var(--color-editor-bg)]">
-          <StreamingPreview html={streamText} />
+          {remote ? (
+            <p className="p-8 text-sm text-muted text-center">
+              The draft is being written on the server. You can leave this page; it will be saved when it finishes.
+              {hasDraft(article) ? ' Your current draft stays in place until then.' : ''}
+            </p>
+          ) : (
+            <StreamingPreview html={streamText} />
+          )}
         </div>
         <div className="h-10 border-t border-border bg-surface flex items-center justify-between px-4 shrink-0 text-xs text-muted font-mono">
           <span className="tabular-nums">
             {nf.format(words)}
             {article.targetWordCount ? ` / ${nf.format(article.targetWordCount)}` : ''} words
           </span>
-          <span>Read-only while generating · saved when it finishes</span>
+          <span>Saved when it finishes, even if you leave</span>
         </div>
       </div>
     )

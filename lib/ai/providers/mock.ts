@@ -13,6 +13,10 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     })
   })
 
+// Dev-only: AI_MOCK_DELAY_MS slows the mock (per chunk, and before the first search) so you can
+// disconnect or stop mid-run.
+const MOCK_DELAY_MS = () => Number(process.env.AI_MOCK_DELAY_MS) || 0
+
 function lastUserText(p: GenerateParams) {
   return [...p.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 }
@@ -61,7 +65,7 @@ function mockArticle(prompt: string): string {
 
 async function* chunked(text: string, signal?: AbortSignal): AsyncGenerator<AIStreamEvent> {
   for (const piece of text.match(/[\s\S]{1,24}/g) ?? []) {
-    await sleep(15, signal)
+    await sleep(15 + MOCK_DELAY_MS(), signal)
     yield { type: 'delta', text: piece }
   }
 }
@@ -89,6 +93,7 @@ export function createMockProvider(id: ProviderId): AIProvider {
         { id: '1', url: 'https://example.com/guide', title: 'Example guide', snippet: 'Mock snippet one.' },
         { id: '2', url: 'https://example.org/stats', title: 'Example statistics', snippet: 'Mock snippet two.' },
       ]
+      await sleep(MOCK_DELAY_MS(), params.signal)
       yield { type: 'search', query: lastUserText(params).slice(0, 60) }
       await sleep(50, params.signal)
       for (const c of citations) yield { type: 'citation', citation: c }

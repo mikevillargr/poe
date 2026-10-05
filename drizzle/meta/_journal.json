@@ -29,6 +29,13 @@
       "when": 1791177386652,
       "tag": "0003_drop_credentials",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791209835300,
+      "tag": "0004_run_persist",
+      "breakpoints": true
     }
   ]
 }

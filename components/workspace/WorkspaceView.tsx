@@ -150,10 +150,14 @@ export function WorkspaceView({
     researchPatch.schedule(edit)
   }
 
+  // Timestamp of when a live stream last toasted/handled an outcome, so the polling path doesn't repeat it.
+  const handledLocally = useRef({ research: 0, generation: 0 })
+
   // ── research stream ───────────────────────────────────────────────────────────────────────
   const onResearchEvent = useLatest((ev: AIStreamEvent) => {
     if (ev.type === 'done') setResearchSaving(true)
     if (ev.type === 'saved') {
+      handledLocally.current.research = Date.now()
       setResearchSaving(false)
       refetch()
         .then((a) => toast.success('Research ready', `${a.research?.citations.length ?? 0} sources · ${a.research?.queries.length ?? 0} searches`))
@@ -161,7 +165,11 @@ export function WorkspaceView({
     }
     if (ev.type === 'error') {
       setResearchSaving(false)
-      toast.error('Research failed', ev.message)
+      if (ev.code === 'CONFLICT') toast.info('Already running', ev.message)
+      else {
+        handledLocally.current.research = Date.now()
+        toast.error('Research failed', ev.message)
+      }
       refetch().catch(() => {})
     }
   })
@@ -170,6 +178,7 @@ export function WorkspaceView({
   // ── generation stream ─────────────────────────────────────────────────────────────────────
   const onGenerateEvent = useLatest((ev: AIStreamEvent) => {
     if (ev.type === 'saved') {
+      handledLocally.current.generation = Date.now()
       refetch()
         .then((a) => {
           setLiveHtml(a.draftHtml ?? '')
@@ -185,37 +194,100 @@ export function WorkspaceView({
         })
         .catch(() => {})
     }
-    if (ev.type === 'error') toast.error('Generation failed', ev.message)
+    if (ev.type === 'error') {
+      if (ev.code === 'CONFLICT') toast.info('Already running', ev.message)
+      else {
+        handledLocally.current.generation = Date.now()
+        toast.error('Generation failed', ev.message)
+      }
+      refetch().catch(() => {})
+    }
   })
   const generation = useAIStream({ onEvent: (ev) => onGenerateEvent.current(ev) })
 
   const researching = research.status === 'streaming'
   const generating = generation.status === 'streaming'
-  const streaming = researching || generating
+  // The server is the source of truth: a run can be going without a stream attached to this page
+  // (we left and came back, or the connection dropped).
+  const researchRemote = article.researchStatus === 'running' && !researching && !researchSaving
+  const generationRemote = article.generationStatus === 'running' && !generating
+  const researchActive = researching || researchSaving || researchRemote
+  const generationActive = generating || generationRemote
+  const streaming = researchActive || generationActive
 
-  // Aborted runs persist nothing; reload so researchStatus / versions reflect the server.
+  // Streams that ended without a result (stopped elsewhere, dropped connection): re-sync with the server.
   useEffect(() => {
-    if (research.status === 'aborted' || generation.status === 'aborted') {
-      setResearchSaving(false)
+    if (research.status === 'aborted' || generation.status === 'aborted') setResearchSaving(false)
+    for (const s of [research, generation]) {
+      if (s.status === 'error' && s.error?.code === 'NETWORK_ERROR') {
+        toast.info('Connection lost', 'The run keeps going on the server. We’ll show it when it finishes.')
+      }
+    }
+    if (['aborted', 'done', 'error'].includes(research.status) || ['aborted', 'done', 'error'].includes(generation.status)) {
       refetch().catch(() => {})
-      toast.info('Stopped', 'Nothing was saved from that run.')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [research.status, generation.status])
 
-  // Leaving the page cancels a running step (the stream is tied to this request).
+  // Poll while the server reports a run we have no live stream for; pick up the result when it ends.
   useEffect(() => {
-    if (!streaming) return
+    if (!researchRemote && !generationRemote) return
+    const t = setInterval(() => void refetch().catch(() => {}), 4000)
+    return () => clearInterval(t)
+  }, [researchRemote, generationRemote, refetch])
+
+  const prevStatus = useRef({ research: initialArticle.researchStatus, generation: initialArticle.generationStatus })
+  useEffect(() => {
+    const prev = prevStatus.current
+    prevStatus.current = { research: article.researchStatus, generation: article.generationStatus }
+    if (prev.research === 'running' && article.researchStatus !== 'running') {
+      if (Date.now() - handledLocally.current.research < 15000) handledLocally.current.research = 0
+      else if (article.researchStatus === 'ready') {
+        toast.success('Research ready', `${article.research?.citations.length ?? 0} sources · ${article.research?.queries.length ?? 0} searches`)
+      } else if (article.researchStatus === 'error') {
+        toast.error('Research didn’t finish', 'It failed or was interrupted. You can run it again.')
+      }
+    }
+    if (prev.generation === 'running' && article.generationStatus !== 'running') {
+      if (Date.now() - handledLocally.current.generation < 15000) handledLocally.current.generation = 0
+      else if (article.generationStatus === 'ready') {
+        setLiveHtml(article.draftHtml ?? '')
+        setEditorGen((g) => g + 1)
+        toast.success('Draft ready', `${nf.format(article.wordCount ?? 0)} words`)
+        if (versionsOpen) void loadVersions()
+      } else if (article.generationStatus === 'error') {
+        toast.error('Generation didn’t finish', 'It failed or was interrupted. You can run it again.')
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [article.researchStatus, article.generationStatus])
+
+  // Runs continue on the server when you leave, so only unsaved editor changes warrant a warning.
+  useEffect(() => {
     const warn = (e: BeforeUnloadEvent) => {
+      if (!draftDirty.current) return
       e.preventDefault()
       e.returnValue = ''
     }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
-  }, [streaming])
+  }, [])
+
+  /** Explicit Stop: the only way to cancel. Cancels server-side, then detaches this page's stream. */
+  async function stopRun(kind: 'research' | 'generation') {
+    try {
+      await apiFetch(`${base}/${kind === 'research' ? 'research' : 'generate'}`, { method: 'DELETE', errorTitle: 'Couldn’t stop the run' })
+    } catch {
+      return
+    }
+    ;(kind === 'research' ? research : generation).abort()
+    setResearchSaving(false)
+    refetch().catch(() => {})
+    toast.info('Stopped', 'Nothing was saved from that run.')
+  }
 
   async function runResearch() {
-    if (streaming) return
+    if (researchActive || generationActive) return
     setTab('research')
     try {
       await flushAll()
@@ -226,7 +298,7 @@ export function WorkspaceView({
   }
 
   async function runGenerate(useResearch = true) {
-    if (streaming) return
+    if (researchActive || generationActive) return
     setConfirm(null)
     try {
       await flushAll()
@@ -450,15 +522,16 @@ export function WorkspaceView({
                 article={article}
                 models={models}
                 stream={{
-                  active: researching || researchSaving,
+                  active: researchActive,
+                  remote: researchRemote,
                   searches: research.searches,
                   citations: research.citations,
                   text: research.text,
                   saving: researchSaving,
                 }}
-                generating={generating}
+                generating={generationActive}
                 onRun={runResearch}
-                onStop={research.abort}
+                onStop={() => void stopRun('research')}
                 onEdit={editResearch}
                 onGenerate={(useResearch) => requestGenerate(useResearch)}
               />
@@ -470,7 +543,8 @@ export function WorkspaceView({
                 models={models}
                 editorKey={`${article.id}:${editorGen}`}
                 editorRef={editorRef}
-                streaming={generating}
+                streaming={generationActive}
+                remote={generationRemote}
                 streamText={generation.text}
                 activeSuggestionId={activeSuggestionId}
                 onClearSuggestion={() => {
@@ -490,7 +564,7 @@ export function WorkspaceView({
                 }}
                 onRegenerate={() => requestGenerate(true)}
                 onGenerate={() => requestGenerate(true)}
-                onStop={generation.abort}
+                onStop={() => void stopRun('generation')}
               />
             </div>
           )}

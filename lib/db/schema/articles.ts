@@ -65,6 +65,10 @@ export const articles = pgTable(
     research: jsonb('research').$type<ArticleResearch>(),
     researchStatus: researchStatus('research_status').notNull().default('idle'),
     researchModel: text('research_model'),
+    researchStartedAt: timestamp('research_started_at'),
+    // Same enum as research_status (idle|running|ready|error).
+    generationStatus: researchStatus('generation_status').notNull().default('idle'),
+    generationStartedAt: timestamp('generation_started_at'),
 
     draftHtml: text('draft_html'),
     draftModel: text('draft_model'),

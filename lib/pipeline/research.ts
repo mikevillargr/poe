@@ -121,21 +121,6 @@ export function parseResearchOutput(
   }
 }
 
-type ResearchState = 'idle' | 'running' | 'ready' | 'error'
-
-/** researchStatus/researchModel aren't in the frozen article patch, so the pipeline writes them directly. */
-export async function setResearchState(
-  tenantId: string,
-  articleId: string,
-  state: ResearchState,
-  extra: { researchModel?: string } = {},
-) {
-  await db
-    .update(articles)
-    .set({ researchStatus: state, ...extra, updatedAt: new Date() })
-    .where(and(eq(articles.id, articleId), eq(articles.tenantId, tenantId)))
-}
-
 /** Normalizes stored research (fixtures, older rows) to the workspace shape. */
 export function readResearch(raw: unknown): WorkspaceResearch | null {
   if (!raw || typeof raw !== 'object') return null
