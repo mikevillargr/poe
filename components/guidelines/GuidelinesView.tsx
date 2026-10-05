@@ -10,6 +10,7 @@ import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import { GuidelineSection } from './GuidelineSection'
+import { GuidelineRow } from './GuidelineRow'
 import { GuidelineForm, type GuidelineFormValues } from './GuidelineForm'
 import { ImportFromDocumentModal } from './ImportFromDocumentModal'
 
@@ -51,11 +52,18 @@ export function GuidelinesView({
     for (const c of GUIDELINE_CATEGORIES) map.set(c, [])
     for (const g of guidelines) {
       const list = map.get(g.category as GuidelineCategory)
-      if (list) list.push(g) // unknown (custom) categories are not rendered in v1 (DR-006 sub-decision 1)
+      if (list) list.push(g)
     }
     for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder)
     return map
   }, [guidelines])
+
+  // Rules whose category isn't canonical (e.g. ingested before the canonical set). They are shown
+  // so they're never hidden; editing one asks for a canonical category.
+  const uncategorized = useMemo(
+    () => guidelines.filter((g) => !(GUIDELINE_CATEGORIES as readonly string[]).includes(g.category)),
+    [guidelines],
+  )
 
   function closeForms() {
     setEditingId(null)
@@ -228,6 +236,36 @@ export function GuidelinesView({
           </motion.div>
         ))}
       </div>
+
+      {uncategorized.length > 0 && (
+        <motion.section variants={itemVariants} className="glass-card overflow-hidden mt-6">
+          <div className="px-5 py-4">
+            <h2 className="text-sm font-medium text-heading">Needs a category</h2>
+            <p className="text-xs text-muted mt-1">
+              <span className="font-mono tabular-nums">{uncategorized.length}</span> rules use a category that isn’t one of the standard ones. They still apply when generating. Edit a rule to give it a category.
+            </p>
+          </div>
+          <ul className="divide-y divide-border border-t border-border">
+            {uncategorized.map((g) => (
+              <GuidelineRow
+                key={g.id}
+                guideline={g}
+                editing={editingId === g.id}
+                saving={saving}
+                showSource={scope.kind === 'client'}
+                onToggleActive={toggleActive}
+                onEdit={(x) => {
+                  closeForms()
+                  setEditingId(x.id)
+                }}
+                onDelete={setDeleting}
+                onSaveForm={(values) => saveGuideline(values, g)}
+                onCancelForm={closeForms}
+              />
+            ))}
+          </ul>
+        </motion.section>
+      )}
 
       {scope.kind === 'client' && (
         <ImportFromDocumentModal

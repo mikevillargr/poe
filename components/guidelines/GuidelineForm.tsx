@@ -34,7 +34,9 @@ export function GuidelineForm({
   onCancel: () => void
 }) {
   const [category, setCategory] = useState<GuidelineCategory>(
-    (initial?.category as GuidelineCategory) ?? defaultCategory,
+    initial && (GUIDELINE_CATEGORIES as readonly string[]).includes(initial.category)
+      ? (initial.category as GuidelineCategory)
+      : defaultCategory,
   )
   const [title, setTitle] = useState(initial?.title ?? '')
   const [rule, setRule] = useState(initial?.rule ?? '')
