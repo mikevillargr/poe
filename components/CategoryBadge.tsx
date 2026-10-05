@@ -51,6 +51,21 @@ export function CategoryBadge({
       outlineDark: 'border-yellow-500 text-yellow-400',
       outlineLight: 'border-yellow-600 text-yellow-700',
     },
+    'Structure': {
+      solid: 'bg-badge-structure text-white',
+      outlineDark: 'border-badge-structure text-slate-400',
+      outlineLight: 'border-badge-structure text-[#334155]',
+    },
+    'Readability': {
+      solid: 'bg-badge-readability text-white',
+      outlineDark: 'border-badge-readability text-teal-400',
+      outlineLight: 'border-badge-readability text-[#0F766E]',
+    },
+    'Sourcing': {
+      solid: 'bg-badge-sourcing text-white',
+      outlineDark: 'border-badge-sourcing text-violet-400',
+      outlineLight: 'border-badge-sourcing text-[#6D28D9]',
+    },
   }
 
   // Fallback for unknown/dynamic categories
@@ -78,6 +93,9 @@ export function CategoryBadge({
         .badge-outline-agency { ${colorMap.Agency.outlineDark} }
         .badge-outline-client { ${colorMap.Client.outlineDark} }
         .badge-outline-quality { ${colorMap.Quality.outlineDark} }
+        .badge-outline-structure { ${colorMap.Structure.outlineDark} }
+        .badge-outline-readability { ${colorMap.Readability.outlineDark} }
+        .badge-outline-sourcing { ${colorMap.Sourcing.outlineDark} }
 
         [data-theme='light'] .badge-outline-brand { ${colorMap.Brand.outlineLight} }
         [data-theme='light'] .badge-outline-seo { ${colorMap.SEO.outlineLight} }
@@ -85,6 +103,9 @@ export function CategoryBadge({
         [data-theme='light'] .badge-outline-agency { ${colorMap.Agency.outlineLight} }
         [data-theme='light'] .badge-outline-client { ${colorMap.Client.outlineLight} }
         [data-theme='light'] .badge-outline-quality { ${colorMap.Quality.outlineLight} }
+        [data-theme='light'] .badge-outline-structure { ${colorMap.Structure.outlineLight} }
+        [data-theme='light'] .badge-outline-readability { ${colorMap.Readability.outlineLight} }
+        [data-theme='light'] .badge-outline-sourcing { ${colorMap.Sourcing.outlineLight} }
       `}</style>
       <span className={`${baseStyle} ${variantStyle} ${className}`}>
         {category}

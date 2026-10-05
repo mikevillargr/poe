@@ -6,6 +6,7 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq, inArray, like } from 'drizzle-orm'
 import pg from 'pg'
 import * as schema from '../../lib/db/schema'
+import { UNIVERSAL_TEMPLATE } from '../../lib/guidelines/universal-template'
 import { requireDatabaseUrl, redact } from './env'
 
 const {
@@ -23,28 +24,8 @@ const FIXTURE_EMAIL_DOMAIN = 'fixture.poe.test' // never a real Google domain, s
 const DAY = 86_400_000
 
 // ---------------------------------------------------------------------------------------------
-// Universal template (starter draft; WS-guidelines replaces it with the researched set, DR-006)
+// Universal template: the researched set lives in lib/guidelines/universal-template.ts (DR-006).
 // ---------------------------------------------------------------------------------------------
-const UNIVERSAL: Array<{ category: string; title: string; rule: string; weight: number }> = [
-  { category: 'seo', title: 'Primary keyword placement', rule: 'Use the primary keyword in the H1, within the first 100 words, and in at least one H2.', weight: 9 },
-  { category: 'seo', title: 'Secondary keywords', rule: 'Work every secondary keyword in naturally at least once; never force an exact-match phrase into a sentence where it reads awkwardly.', weight: 8 },
-  { category: 'seo', title: 'No keyword stuffing', rule: 'Keep primary keyword density under 2%. Prefer close variants and synonyms over repetition.', weight: 8 },
-  { category: 'seo', title: 'Meta description', rule: 'Provide a 140–160 character meta description that includes the primary keyword and a clear benefit.', weight: 6 },
-  { category: 'seo', title: 'Answer first (AIO)', rule: 'Answer the core question in the first two sentences so the article can be quoted by AI overviews and featured snippets.', weight: 7 },
-  { category: 'structure', title: 'Scannable headings', rule: 'Break the article into H2 sections every 200–300 words, with H3s for sub-points. Headings describe the section, not tease it.', weight: 7 },
-  { category: 'structure', title: 'Short paragraphs', rule: 'Keep paragraphs to 2–4 sentences. One idea per paragraph.', weight: 6 },
-  { category: 'structure', title: 'Hit the target length', rule: 'Land within ±10% of the target word count. Cut filler before cutting substance.', weight: 7 },
-  { category: 'readability', title: 'Plain language', rule: 'Write at roughly an 8th–9th grade reading level. Prefer short, concrete words over abstract ones.', weight: 6 },
-  { category: 'readability', title: 'Active voice', rule: 'Use active voice by default. Passive voice only when the actor is unknown or irrelevant.', weight: 5 },
-  { category: 'sourcing', title: 'Cite claims', rule: 'Every statistic or factual claim needs a credible, linked source published within the last three years where possible.', weight: 8 },
-  { category: 'sourcing', title: 'No invented specifics', rule: 'Never invent statistics, quotes, studies, customer names or prices. If a fact can’t be sourced, remove it.', weight: 10 },
-  { category: 'brand', title: 'Speak to the reader', rule: 'Address the reader as “you”. Keep the client’s voice consistent with their brand guidelines.', weight: 6 },
-  { category: 'blacklist', title: 'Overused AI vocabulary', rule: 'Avoid: delve, tapestry, testament, pivotal, seamless, leverage (as a verb), robust, realm, landscape (figurative), navigate (figurative), unlock, elevate, embark, bustling, vibrant.', weight: 9 },
-  { category: 'blacklist', title: 'Stock openers and closers', rule: 'Avoid: “In today’s fast-paced world”, “In the ever-evolving landscape of”, “It’s important to note that”, “Let’s dive in”, “In conclusion”, “At the end of the day”.', weight: 9 },
-  { category: 'blacklist', title: 'Formulaic constructions', rule: 'Avoid “It’s not just X — it’s Y”, reflexive rule-of-three lists, and opening sections with rhetorical questions.', weight: 8 },
-  { category: 'blacklist', title: 'Formatting tells', rule: 'Don’t overuse em dashes, bold every other phrase, put emoji in headings, or turn prose into bullet lists with bolded labels.', weight: 7 },
-  { category: 'blacklist', title: 'Hedging and filler', rule: 'Cut hedges and filler: “it’s worth noting”, “arguably”, “generally speaking”, “when it comes to”, “a wide range of”.', weight: 7 },
-]
 
 // ---------------------------------------------------------------------------------------------
 // Clients and their content calendars
@@ -257,7 +238,14 @@ async function main() {
       if (!existingUniversal.length) {
         template = await tx
           .insert(universalGuidelines)
-          .values(UNIVERSAL.map((g, i) => ({ ...g, sortOrder: (i + 1) * 1024, createdBy: admin?.id ?? null })))
+          .values(
+            UNIVERSAL_TEMPLATE.map((g, i) => ({
+              ...g,
+              active: g.active ?? true,
+              sortOrder: (i + 1) * 1024,
+              createdBy: admin?.id ?? null,
+            })),
+          )
           .returning()
         console.log(`Universal template: ${template.length} rules.`)
       } else {

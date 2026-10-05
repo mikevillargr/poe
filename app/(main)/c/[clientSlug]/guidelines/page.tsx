@@ -1,12 +1,23 @@
-import { Placeholder } from '@/components/shell/Placeholder'
+import { notFound } from 'next/navigation'
+import { getClientBySlug } from '@/lib/tenancy'
+import { listGuidelines } from '@/lib/guidelines/repo'
+import { toGuidelineDTO } from '@/lib/guidelines/schemas'
+import { GuidelinesView } from '@/components/guidelines/GuidelinesView'
 
-// OWNED BY WS guidelines (DR-006): manual-first categorized guidelines; document ingestion secondary.
-export default function GuidelinesPage() {
+export const dynamic = 'force-dynamic'
+
+// Per-client guidelines (WS guidelines, DR-006): manual-first categorized rules; document
+// ingestion is a secondary action inside the view.
+export default async function GuidelinesPage({ params }: { params: Promise<{ clientSlug: string }> }) {
+  const { clientSlug } = await params
+  const client = await getClientBySlug(clientSlug)
+  if (!client) notFound()
+
+  const rows = await listGuidelines(client.id)
   return (
-    <Placeholder
-      title="Guidelines"
-      workstream="guidelines"
-      description="Add and manage this client's categorized guidelines. Importing from documents will be a secondary option."
+    <GuidelinesView
+      scope={{ kind: 'client', clientId: client.id, clientName: client.name, clientSlug }}
+      initialGuidelines={rows.map(toGuidelineDTO)}
     />
   )
 }
