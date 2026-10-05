@@ -4,6 +4,7 @@ import { AppProviders } from '@/components/AppProviders'
 import { Sidebar } from '@/components/shell/Sidebar'
 import { requirePageUser } from '@/lib/auth/guards'
 import { listClients } from '@/lib/tenancy'
+import { pendingCount } from '@/lib/admin/users'
 
 // FROZEN after foundation: change only via INITIATIVE §7.
 export const metadata: Metadata = {
@@ -13,7 +14,8 @@ export const metadata: Metadata = {
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const user = await requirePageUser()
-  const clients = await listClients()
+  const isSuperAdmin = user.role === 'super_admin'
+  const [clients, pending] = await Promise.all([listClients(), isSuperAdmin ? pendingCount() : Promise.resolve(0)])
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -21,8 +23,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <AppProviders>
           <div className="flex h-screen bg-background text-body font-sans overflow-hidden">
             <Sidebar
-              user={{ name: user.name, email: user.email, image: user.image, isSuperAdmin: user.role === 'super_admin' }}
+              user={{ name: user.name, email: user.email, image: user.image, isSuperAdmin }}
               clients={clients}
+              badges={{ users: pending }}
             />
             <div className="flex-1 ml-[240px] overflow-y-auto custom-scrollbar relative">{children}</div>
           </div>

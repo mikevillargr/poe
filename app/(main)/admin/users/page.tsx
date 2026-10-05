@@ -1,6 +1,11 @@
-import { Placeholder } from '@/components/shell/Placeholder'
+import { requirePageUser } from '@/lib/auth/guards'
+import { listUsers } from '@/lib/admin/users'
+import { UsersView } from '@/components/admin/UsersView'
 
-// OWNED BY WS settings-admin (DR-008): approve, disable and promote users.
-export default function UsersPage() {
-  return <Placeholder title="Users" workstream="settings-admin" description="Approve pending sign-ups and manage access." />
+export const dynamic = 'force-dynamic'
+
+// Users (WS settings-admin, DR-008). Super-admin gate is in ../layout.tsx.
+export default async function UsersPage() {
+  const me = await requirePageUser({ admin: true })
+  return <UsersView initialUsers={await listUsers()} currentUserId={me.id} />
 }
