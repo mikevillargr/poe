@@ -17,7 +17,7 @@ export interface ShellUser {
   isSuperAdmin: boolean
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+function NavLink({ item, pathname, badge }: { item: NavItem; pathname: string; badge?: number }) {
   const isActive = item.match(pathname)
   return (
     <Link
@@ -33,6 +33,14 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
         className={`w-4 h-4 transition-colors ${isActive ? 'text-accent drop-shadow-[0_0_4px_rgba(232,69,10,0.3)]' : 'group-hover:text-[#CBD5E1]'}`}
       />
       {item.label}
+      {badge ? (
+        <span
+          className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-accent text-white text-[11px] font-mono font-bold tabular-nums flex items-center justify-center shadow-glow-accent"
+          aria-label={`${badge} waiting`}
+        >
+          {badge}
+        </span>
+      ) : null}
     </Link>
   )
 }
@@ -47,7 +55,16 @@ function initials(name: string) {
 }
 
 // Visual language unchanged from the original Sidebar; the sidebar is dark in both themes.
-export function Sidebar({ user, clients }: { user: ShellUser; clients: ClientSummary[] }) {
+export function Sidebar({
+  user,
+  clients,
+  badges = {},
+}: {
+  user: ShellUser
+  clients: ClientSummary[]
+  /** Count badges keyed by nav item key, e.g. { users: 2 } for pending sign-ups. */
+  badges?: Partial<Record<string, number>>
+}) {
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const activeSlug = /^\/c\/([^/]+)/.exec(pathname)?.[1] ?? null
@@ -70,7 +87,7 @@ export function Sidebar({ user, clients }: { user: ShellUser; clients: ClientSum
           <>
             <div className="mt-6 mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#64748B]/70">Admin</div>
             {ADMIN_NAV.map((item) => (
-              <NavLink key={item.key} item={item} pathname={pathname} />
+              <NavLink key={item.key} item={item} pathname={pathname} badge={badges[item.key]} />
             ))}
           </>
         )}
