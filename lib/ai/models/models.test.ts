@@ -57,9 +57,10 @@ test('merge: curated order first, live labels and context windows win, duplicate
     merged.map((m) => [m.id, m.label, m.contextWindow]),
     [
       ['claude-sonnet-5-5', 'Claude Sonnet 5.5 (live)', 999],
-      ['claude-haiku-4-5-20251001', 'Claude Haiku 4.5', 200000],
-      ['claude-haiku-4-5', 'Claude Haiku 4.5', 200000],
       ['claude-opus-4-8', 'Claude Opus 4.8', 1_000_000],
+      // Haiku 4.5 is flagged deprecated (retiring), so its base and snapshot sort last.
+      ['claude-haiku-4-5', 'Claude Haiku 4.5', 200000],
+      ['claude-haiku-4-5-20251001', 'Claude Haiku 4.5', 200000],
     ],
   )
   assert.ok(merged.every((m) => m.source === 'live' && m.provider === 'anthropic'))

@@ -164,11 +164,11 @@ test('listModels: live merged with curated, cached, curated fallback', async () 
       ['claude-fable-5-1', 'live', true],
       ['claude-opus-5-5', 'live', true],
       ['claude-sonnet-5-5', 'live', true],
-      ['claude-haiku-4-5-20251001', 'live', true],
       ['claude-opus-4-8', 'live', true],
+      ['claude-haiku-4-5-20251001', 'live', true], // deprecated (retiring) → sorts last
     ],
   )
-  assert.equal(models[3].contextWindow, 200000)
+  assert.equal(models[4].contextWindow, 200000) // Haiku 4.5, sorted last as deprecated
   await p.listModels()
   assert.equal(requests.length, 1, 'second call served from the 1h cache')
 
