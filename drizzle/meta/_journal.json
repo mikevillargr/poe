@@ -36,6 +36,13 @@
       "when": 1791209835300,
       "tag": "0004_run_persist",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791211501918,
+      "tag": "0005_remap_nch_guideline_categories",
+      "breakpoints": true
     }
   ]
 }
