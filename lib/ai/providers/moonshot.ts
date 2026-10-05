@@ -25,10 +25,10 @@ import { mapProviderError, reasoningFloor, throwIfAborted, type CredentialsLoade
 
 // Moonshot (Kimi) adapter: OpenAI-compatible Chat Completions via the `openai` SDK + baseURL.
 // Research runs a tool loop. Two search back ends:
-// - 'builtin' (default): Kimi's `$web_search` builtin_function; the server searches and we echo
-//   the arguments back. Moonshot retires it on 2026-10-20.
-// - 'rest' (MOONSHOT_WEB_SEARCH=rest): a normal function tool that we execute with
+// - 'rest' (default, Mike 2026-10-05): a normal function tool that we execute with
 //   POST {baseUrl}/tools/search, Moonshot's documented replacement. Also gives real titles/snippets.
+// - 'builtin' (MOONSHOT_WEB_SEARCH=builtin): Kimi's `$web_search` builtin_function; the server
+//   searches and we echo the arguments back. Moonshot retires it on 2026-10-20.
 
 const DEFAULT_MAX_TOKENS = 16000
 // Same default as DEFAULT_BASE_URLS in lib/ai/secrets.ts (not imported: that module pulls in the DB).
@@ -37,7 +37,7 @@ const FALLBACK_BASE_URL = 'https://api.moonshot.ai/v1'
 export type MoonshotSearchMode = 'builtin' | 'rest'
 
 export function moonshotSearchMode(): MoonshotSearchMode {
-  return process.env.MOONSHOT_WEB_SEARCH === 'rest' ? 'rest' : 'builtin'
+  return process.env.MOONSHOT_WEB_SEARCH === 'builtin' ? 'builtin' : 'rest'
 }
 
 export function createMoonshotProvider(loadCredentials: CredentialsLoader, opts: ProviderOptions & { searchMode?: MoonshotSearchMode } = {}): AIProvider {

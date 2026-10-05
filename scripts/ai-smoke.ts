@@ -6,7 +6,7 @@
 //
 // Without --provider it runs all three. A provider whose key isn't set prints "skipped: no key".
 // Env: ANTHROPIC_API_KEY, OPENAI_API_KEY, MOONSHOT_API_KEY (+ optional MOONSHOT_BASE_URL,
-// MOONSHOT_WEB_SEARCH=rest). Exit code 1 if any step that ran failed.
+// MOONSHOT_WEB_SEARCH=builtin for the legacy $web_search tool). Exit code 1 if any step that ran failed.
 import { createAnthropicProvider } from '@/lib/ai/providers/anthropic'
 import { createOpenAIProvider } from '@/lib/ai/providers/openai'
 import { createMoonshotProvider } from '@/lib/ai/providers/moonshot'

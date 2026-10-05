@@ -64,7 +64,7 @@ export function mergeModels(provider: ProviderId, live: LiveModel[]): ModelInfo[
     seen.add(m.id)
     const c = findCurated(provider, m.id)
     const curatedIndex = c ? curated.indexOf(c) : -1
-    const deprecated = isDeprecated(provider, m.id)
+    const deprecated = isDeprecated(provider, m.id) || !!c?.deprecated
     const info: ModelInfo = {
       provider,
       id: m.id,

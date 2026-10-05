@@ -16,7 +16,8 @@ export const CURATED_MODELS: Record<ProviderId, Curated[]> = {
     { id: 'claude-fable-5-1', label: 'Claude Fable 5.1', contextWindow: 1_000_000, supportsWebSearch: true },
     { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', contextWindow: 1_000_000, supportsWebSearch: true },
     { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', contextWindow: 1_000_000, supportsWebSearch: true },
-    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', contextWindow: 200_000, supportsWebSearch: true },
+    // Anthropic: retires not sooner than 2026-10-15. Shown as deprecated so it isn't picked as a role default.
+    { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', contextWindow: 200_000, supportsWebSearch: true, deprecated: true },
   ],
   // Source: developers.openai.com/api/docs/models (flagship list) and the per-model pages
   // (…/models/gpt-6-astra, …/gpt-6.1-sol, …/gpt-6-luna: 1,050,000 context, Responses API supported,
