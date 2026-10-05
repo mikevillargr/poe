@@ -286,8 +286,13 @@ and redeploying another app. Instead (from v1.2.1):
 - Modern browsers already try https first for a bare hostname typed in the address bar.
 - The Caddyfile is a single-file bind mount that goes stale when the checkout replaces the file (and `caddy reload` then sees "config is unchanged"), so the deploy compares the container's copy with the checkout and restarts Caddy when they differ.
 
-A literal `http://poe.vill.ar` request still lands on AlwaysSunny until that app (or a future shared edge proxy for ports 80/443)
-adds a `return 301 https://poe.vill.ar$request_uri;` server block for `poe.vill.ar`.
+**The 301 itself (done 2026-10-05, Mike's request).** A `server { listen 80; server_name poe.vill.ar; return 301 https://poe.vill.ar$request_uri; }`
+block was appended to AlwaysSunny's `/opt/alwayssunny/frontend/nginx.conf`, **after** its catch-all server so every other hostname behaves as
+before, and applied to the running `alwayssunny-frontend` container with `docker cp` + `nginx -t` + `nginx -s reload` (no rebuild, no restart).
+Backups are in `/var/backups/poe/alwayssunny/`. Things to know:
+- The edit is **uncommitted in AlwaysSunny's repo** (a modified `frontend/nginx.conf`); it is in the source, so their next image rebuild keeps it.
+  If they discard the working tree or rebuild from another checkout, the redirect disappears (the HSTS header above still covers return visitors).
+- To undo: restore the backup file over `nginx.conf` and `docker cp` it back, then `nginx -s reload`.
 
 ---
 
