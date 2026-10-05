@@ -11,8 +11,23 @@ const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || ''
 let gapiInited = false
 let gisInited = false
 let tokenClient: any = null
+let initPromise: Promise<void> | null = null
 
+/** False when the public Google client ID / API key aren't set, so export can say why. */
+export const isGoogleDriveConfigured = () => !!CLIENT_ID && !!API_KEY
+
+/** Loads gapi + GIS once per page; later calls reuse the same promise. */
 export const initGoogleDrive = (): Promise<void> => {
+  if (!initPromise) {
+    initPromise = loadGoogleDrive().catch((err) => {
+      initPromise = null
+      throw err
+    })
+  }
+  return initPromise
+}
+
+const loadGoogleDrive = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
       reject('Not in browser environment')
@@ -36,6 +51,7 @@ export const initGoogleDrive = (): Promise<void> => {
         }
       })
     }
+    script.onerror = () => reject(new Error('Could not load the Google API script.'))
     document.body.appendChild(script)
 
     // Load GIS script
@@ -50,6 +66,7 @@ export const initGoogleDrive = (): Promise<void> => {
       gisInited = true
       maybeResolve()
     }
+    gisScript.onerror = () => reject(new Error('Could not load Google sign-in.'))
     document.body.appendChild(gisScript)
 
     function maybeResolve() {
