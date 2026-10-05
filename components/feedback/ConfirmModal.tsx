@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trash2, AlertTriangle, X } from 'lucide-react'
 
@@ -12,6 +12,8 @@ interface ConfirmModalProps {
   confirmVariant: 'danger' | 'warning'
   onConfirm: () => void
   onCancel: () => void
+  /** Extra safeguard for irreversible actions: the confirm button stays disabled until this is typed. */
+  requireText?: string
 }
 
 export function ConfirmModal({
@@ -22,7 +24,14 @@ export function ConfirmModal({
   confirmVariant,
   onConfirm,
   onCancel,
+  requireText,
 }: ConfirmModalProps) {
+  const [typed, setTyped] = useState('')
+  useEffect(() => {
+    if (!isOpen) setTyped('')
+  }, [isOpen])
+  const locked = !!requireText && typed.trim().toLowerCase() !== requireText.toLowerCase()
+
   const variants = {
     danger: {
       bg: 'bg-danger hover:bg-danger/90',
@@ -91,6 +100,20 @@ export function ConfirmModal({
             {/* Body */}
             <div className="p-6">
               <p className="text-muted">{message}</p>
+              {requireText && (
+                <label className="block mt-4 text-sm text-body">
+                  Type <span className="font-mono font-medium text-heading">{requireText}</span> to confirm
+                  <input
+                    autoFocus
+                    value={typed}
+                    onChange={(e) => setTyped(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !locked && onConfirm()}
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="mt-2 w-full rounded-input border border-border bg-background px-3 py-2 text-sm text-heading focus:outline-none focus:ring-2 focus:ring-danger/40"
+                  />
+                </label>
+              )}
             </div>
 
             {/* Footer */}
@@ -103,7 +126,8 @@ export function ConfirmModal({
               </button>
               <button
                 onClick={onConfirm}
-                className={`${variants[confirmVariant].bg} ${variants[confirmVariant].text} px-6 py-2 rounded-input text-sm font-medium transition-all`}
+                disabled={locked}
+                className={`${variants[confirmVariant].bg} ${variants[confirmVariant].text} px-6 py-2 rounded-input text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
               >
                 {confirmLabel}
               </button>

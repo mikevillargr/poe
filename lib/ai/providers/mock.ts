@@ -47,10 +47,27 @@ function mockOptimize(prompt: string): string {
   })
 }
 
+// Ai-edit (inline) and revise stand-ins. Deterministic and derived from the prompt.
+function mockRewrite(prompt: string): string {
+  const sel = /<selection>\n([\s\S]*?)\n<\/selection>/.exec(prompt)?.[1] ?? 'Rewritten text'
+  return `${sel} (mock rewrite)`
+}
+
+function mockRevision(prompt: string): string {
+  const draft = /<draft>\n([\s\S]*?)\n<\/draft>/.exec(prompt)?.[1] ?? ''
+  const feedback = /<feedback>\n([\s\S]*?)\n<\/feedback>/.exec(prompt)?.[1]?.trim() ?? ''
+  return `${draft}\n<p>Mock revision applied: ${feedback.replace(/[<>]/g, '').slice(0, 120)}</p>`
+}
+
 function mockArticle(prompt: string): string {
   if (prompt.includes('Check this article draft against the guidelines')) return mockOptimize(prompt)
   if (prompt.includes('Reply with ONLY the rewritten passage')) {
     return `${/Current suggested replacement: "([^"]*)"/.exec(prompt)?.[1] ?? 'Rewritten passage'} (rewritten)`
+  }
+  if (prompt.includes('<feedback>') && prompt.includes('<draft>')) return mockRevision(prompt)
+  if (prompt.includes('Return ONLY the replacement for the selection')) return mockRewrite(prompt)
+  if (prompt.includes('Return ONLY the new content, as an HTML fragment')) {
+    return '<p>Mock inserted paragraph that fits the surrounding context.</p><p>Mock second inserted paragraph.</p>'
   }
   const title = /title:\s*(.+)/i.exec(prompt)?.[1]?.trim() ?? 'Mock article'
   return [

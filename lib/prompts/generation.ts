@@ -17,7 +17,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   blacklist: 'Blacklist: words, phrases and patterns that make text sound AI-written. Never use them',
 }
 
-function guidelinesSection(groups: GuidelineGroup[]): string {
+export function guidelinesSection(groups: GuidelineGroup[]): string {
   if (!groups.length) return ''
   const parts = groups.map((g) => {
     const label = CATEGORY_LABELS[g.category] ?? g.category.charAt(0).toUpperCase() + g.category.slice(1)
@@ -27,7 +27,7 @@ function guidelinesSection(groups: GuidelineGroup[]): string {
   return `\n\n## Client guidelines (mandatory)\nThese come from the client and the agency. Follow every one. Where a guideline conflicts with the general rules above, the guideline wins, except that you must never invent facts.\n\n<guidelines>\n${fence(parts.join('\n\n'))}\n</guidelines>`
 }
 
-function systemPrompt(clientName: string, groups: GuidelineGroup[]): string {
+export function systemPrompt(clientName: string, groups: GuidelineGroup[]): string {
   return `You are an expert SEO content writer at a content agency, writing for the client "${clientName}". You write complete, publish-ready articles that rank and read like a knowledgeable human wrote them.
 
 ## Output format
@@ -54,7 +54,7 @@ function systemPrompt(clientName: string, groups: GuidelineGroup[]): string {
 - Plain, specific, confident language. No filler intros, no throat-clearing, no generic conclusions.${guidelinesSection(groups)}`
 }
 
-function researchSection(research: WorkspaceResearch): { text: string; sources: number } {
+export function researchSection(research: WorkspaceResearch): { text: string; sources: number } {
   const included = research.citations.filter((c) => !c.excluded)
   const parts: string[] = []
   if (research.summary?.trim()) parts.push('<summary>', fence(research.summary.trim()), '</summary>')

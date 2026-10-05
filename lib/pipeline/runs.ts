@@ -79,7 +79,7 @@ export function getRun(kind: RunKind, articleId: string): Run | undefined {
 /** Claims the single run slot for this article+kind (synchronously, so two requests can't both win). */
 export function reserveRun(kind: RunKind, articleId: string): Run {
   if (registry.has(keyOf(kind, articleId))) {
-    throw Errors.conflict(kind === 'research' ? 'Research is already running for this article.' : 'A draft is already being generated for this article.')
+    throw Errors.conflict(kind === 'research' ? 'Research is already running for this article.' : 'A draft is already being generated or revised for this article.')
   }
   const run = new Run(kind, articleId)
   registry.set(keyOf(kind, articleId), run)

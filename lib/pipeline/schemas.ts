@@ -31,6 +31,11 @@ export const generateBodySchema = z.object({
   useResearch: z.boolean().optional(),
 })
 
+/** POST …/revise body. */
+export const reviseBodySchema = z.object({
+  feedback: z.string().trim().min(1, 'Tell Poe what to change.').max(4000),
+})
+
 /** POST …/versions body. */
 export const createVersionSchema = z.object({
   label: z.string().trim().max(120).optional(),

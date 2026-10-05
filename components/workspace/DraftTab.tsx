@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, type MutableRefObject } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import type { Editor } from '@tiptap/react'
-import { Clock, Highlighter, Loader2, RotateCcw, Save, Sparkles, Square, X, PenLine } from 'lucide-react'
+import { Clock, Highlighter, Loader2, MoreHorizontal, RotateCcw, Save, Sparkles, Square, X, PenLine } from 'lucide-react'
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { countWords } from '@/lib/articles/text'
 import { cleanGeneratedHtml } from '@/lib/pipeline/html'
 import { RunProgress } from './RunProgress'
+import { RevisePanel } from './RevisePanel'
 import { StreamingPreview } from './StreamingPreview'
 import { hasDraft, hasResearch, type ModelsInUse, type WorkspaceArticle } from './types'
 
@@ -42,7 +44,54 @@ function ToolButton({
 }
 
 // DR-005 Draft tab: streaming preview during generation, then the Poe editor with autosave,
-// actual/target words, keyword highlight, Save version, Versions and Regenerate.
+// actual/target words, keyword highlight, Save version, Versions and (DR-009) Revise with feedback;
+// plain regenerate lives in the ⋯ menu as "Start over".
+
+/** Revise needs a draft, and a status where editing is still expected. */
+export function reviseDisabledReason(status: WorkspaceArticle['status']): string | null {
+  if (status === 'done') return 'Move back to In Review to revise'
+  if (status === 'queued') return 'Move the article to Draft to revise'
+  return null
+}
+
+function MoreMenu({ onStartOver }: { onStartOver: () => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+  return (
+    <div className="relative" ref={ref} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+      <ToolButton onClick={() => setOpen((o) => !o)} title="More draft actions" active={open}>
+        <MoreHorizontal className="w-3.5 h-3.5" />
+        <span className="sr-only">More draft actions</span>
+      </ToolButton>
+      {open && (
+        <div role="menu" aria-label="More draft actions" className="absolute right-0 top-full mt-1 z-30 w-64 glass-card shadow-xl p-1" style={{ background: 'var(--color-card-bg)' }}>
+          <button
+            type="button"
+            role="menuitem"
+            autoFocus
+            onClick={() => {
+              setOpen(false)
+              onStartOver()
+            }}
+            className="w-full text-left px-3 py-2 rounded text-xs text-heading hover:bg-surface-hover flex items-start gap-2"
+          >
+            <RotateCcw className="w-3.5 h-3.5 mt-0.5 text-muted shrink-0" />
+            <span>
+              Start over…
+              <span className="block text-muted">Regenerate from the brief. The current draft is saved as a version first.</span>
+            </span>
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
 export function DraftTab({
   article,
   models,
@@ -61,6 +110,13 @@ export function DraftTab({
   onRegenerate,
   onGenerate,
   onStop,
+  revising,
+  reviseOpen,
+  onReviseOpenChange,
+  feedback,
+  onFeedback,
+  onRevise,
+  aiEditUrl,
 }: {
   article: WorkspaceArticle
   models: ModelsInUse
@@ -81,8 +137,18 @@ export function DraftTab({
   onRegenerate: () => void
   onGenerate: () => void
   onStop: () => void
+  /** The running generation is a revision (known only on the page that started it). */
+  revising: boolean
+  reviseOpen: boolean
+  onReviseOpenChange: (open: boolean) => void
+  feedback: string
+  onFeedback: (v: string) => void
+  onRevise: () => void
+  aiEditUrl: string
 }) {
+  const reviseBtn = useRef<HTMLButtonElement>(null)
   const [highlightKeywords, setHighlightKeywords] = useState(false)
+  const reviseHint = reviseDisabledReason(article.status)
   const keywords = [article.primaryKeyword, ...article.keywords].filter(
     (k, i, all): k is string => !!k && all.findIndex((x) => x?.toLowerCase() === k.toLowerCase()) === i,
   )
@@ -93,7 +159,7 @@ export function DraftTab({
       <div className="flex flex-col h-full">
         <div className="border-b border-border bg-surface/95 px-4 py-2 flex items-center gap-3 text-sm">
           <Loader2 className="w-4 h-4 text-accent animate-spin" />
-          <span className="text-heading">{streamText ? 'Writing the draft…' : 'Generating the draft…'}</span>
+          <span className="text-heading">{revising ? (streamText ? 'Writing the revision…' : 'Revising the draft…') : streamText ? 'Writing the draft…' : 'Generating the draft…'}</span>
           <span className="text-xs text-muted font-mono">{models.generation}</span>
           <div className="flex-1" />
           <button
@@ -128,7 +194,7 @@ export function DraftTab({
             {nf.format(words)}
             {article.targetWordCount ? ` / ${nf.format(article.targetWordCount)}` : ''} words
           </span>
-          <span>Saved when it finishes, even if you leave</span>
+          <span>{revising ? 'The revision is saved when it finishes, even if you leave' : 'Saved when it finishes, even if you leave'}</span>
         </div>
       </div>
     )
@@ -189,6 +255,24 @@ export function DraftTab({
         targetWords={article.targetWordCount}
         keywords={keywords}
         highlightKeywords={highlightKeywords}
+        aiEditUrl={aiEditUrl}
+        aboveContent={
+          <AnimatePresence initial={false}>
+            {reviseOpen && (
+              <RevisePanel
+                id="revise-panel"
+                feedback={feedback}
+                onFeedback={onFeedback}
+                model={models.generation}
+                onRun={onRevise}
+                onClose={() => {
+                  onReviseOpenChange(false)
+                  setTimeout(() => reviseBtn.current?.focus(), 0)
+                }}
+              />
+            )}
+          </AnimatePresence>
+        }
         toolbarExtra={
           <div className="flex items-center gap-0.5 mr-1">
             <ToolButton
@@ -205,9 +289,19 @@ export function DraftTab({
             <ToolButton onClick={onOpenVersions} title="Version history">
               <Clock className="w-3.5 h-3.5" /> Versions
             </ToolButton>
-            <ToolButton onClick={onRegenerate} title="Regenerate the draft (the current draft is saved as a version first)">
-              <RotateCcw className="w-3.5 h-3.5" /> Regenerate
-            </ToolButton>
+            <button
+              ref={reviseBtn}
+              type="button"
+              onClick={() => onReviseOpenChange(!reviseOpen)}
+              disabled={!!reviseHint}
+              title={reviseHint ?? 'Revise the draft with feedback (the current draft is saved as a version first)'}
+              aria-expanded={reviseOpen}
+              aria-controls="revise-panel"
+              className="px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 transition-colors text-accent hover:bg-accent/10 disabled:opacity-50 disabled:hover:bg-transparent"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Revise
+            </button>
+            <MoreMenu onStartOver={onRegenerate} />
           </div>
         }
       />

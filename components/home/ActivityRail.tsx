@@ -14,6 +14,8 @@ function describe(e: ArticleEventDTO): string {
       return 'researched'
     case 'generated':
       return 'generated a draft of'
+    case 'revised':
+      return 'revised the draft of'
     case 'status_changed':
       return 'moved'
     default:
