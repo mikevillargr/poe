@@ -1,7 +1,8 @@
+import { withRoute } from '@/lib/auth/guards'
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchGoogleDocsContent, isGoogleDocsUrl } from '@/lib/google-docs'
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const { url } = await request.json()
 
@@ -35,3 +36,6 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+// Requires an active session.
+export const POST = withRoute(({ req }) => handlePOST(req))

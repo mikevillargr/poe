@@ -1,73 +1,63 @@
 import NextAuth from 'next-auth'
-import CredentialsProvider from 'next-auth/providers/credentials'
+import { eq } from 'drizzle-orm'
+import { authConfig } from './auth.config'
+import { isAllowedGoogleIdentity, isSuperAdminEmail } from '@/lib/auth/policy'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [
-    CredentialsProvider({
-      credentials: {
-        username: { label: 'Username', type: 'text' },
-        password: { label: 'Password', type: 'password' },
-      },
-      async authorize(credentials) {
-        // Dynamic import to avoid build-time database access
+  ...authConfig,
+  callbacks: {
+    // Only verified @growth-rocket.com Google accounts get a session. Everyone else starts pending
+    // until a super admin approves them; SUPER_ADMIN_EMAIL is bootstrapped as an active super admin.
+    async signIn({ account, profile }) {
+      if (account?.provider !== 'google' || !isAllowedGoogleIdentity(profile)) {
+        return false // → AccessDenied
+      }
+      const { db } = await import('@/lib/db')
+      const { users } = await import('@/lib/db/schema')
+      const email = profile!.email!.toLowerCase()
+      const superAdmin = isSuperAdminEmail(email)
+
+      await db
+        .insert(users)
+        .values({
+          email,
+          name: profile!.name ?? email,
+          image: (profile!.picture as string | undefined) ?? null,
+          googleSub: account.providerAccountId,
+          role: superAdmin ? 'super_admin' : 'member',
+          status: superAdmin ? 'active' : 'pending',
+          lastLoginAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: users.email,
+          set: {
+            name: profile!.name ?? email,
+            image: (profile!.picture as string | undefined) ?? null,
+            googleSub: account.providerAccountId,
+            lastLoginAt: new Date(),
+            ...(superAdmin ? { role: 'super_admin' as const, status: 'active' as const } : {}),
+          },
+        })
+      return true
+    },
+
+    async jwt({ token, account, profile }) {
+      if (account && profile?.email) {
         const { db } = await import('@/lib/db')
         const { users } = await import('@/lib/db/schema')
-        const { eq } = await import('drizzle-orm')
-        const bcrypt = await import('bcryptjs')
-
-        if (!credentials?.username || !credentials?.password) {
-          return null
-        }
-
-        const userRecords = await db
-          .select()
+        const [row] = await db
+          .select({ id: users.id })
           .from(users)
-          .where(eq(users.username, credentials.username as string))
+          .where(eq(users.email, profile.email.toLowerCase()))
           .limit(1)
-
-        const user = userRecords[0]
-
-        if (!user) {
-          return null
-        }
-
-        const isValid = await bcrypt.compare(
-          credentials.password as string,
-          user.passwordHash
-        )
-
-        if (!isValid) {
-          return null
-        }
-
-        return {
-          id: user.id,
-          name: user.name,
-          username: user.username,
-        }
-      },
-    }),
-  ],
-  session: {
-    strategy: 'jwt',
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id
-        token.username = user.username
+        if (row) token.uid = row.id
       }
       return token
     },
+
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string
-        session.user.username = token.username as string
-      }
+      if (token.uid) session.user.id = token.uid
       return session
     },
-  },
-  pages: {
-    signIn: '/login',
   },
 })

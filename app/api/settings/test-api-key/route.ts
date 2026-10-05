@@ -1,7 +1,8 @@
+import { withRoute } from '@/lib/auth/guards'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const { apiKey } = await request.json()
 
@@ -98,3 +99,6 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+// Requires an active session (super admin).
+export const POST = withRoute(({ req }) => handlePOST(req), { admin: true })
