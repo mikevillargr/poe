@@ -1,38 +1,105 @@
-version: '3.9'
+# Poe production stack (hostinger-vps, /var/www/poe). See docs/deploy/CUTOVER.md.
+#
+#   docker compose build app migrate                      # GIT_SHA=$(git rev-parse HEAD) in env
+#   docker compose run --rm migrate                       # apply drizzle/ migrations
+#   docker compose up -d --remove-orphans                 # app + db + caddy
+#
+# All secrets come from ./.env (never committed; see .env.example "Production" section).
+# The project name is pinned to `poe` so the existing data volume `poe_pgdata` is reused.
+# For a local production-mode smoke test without TLS use docker-compose.local.yml.
+# Validate: POSTGRES_USER=x POSTGRES_PASSWORD=x docker compose config -q
+
+name: poe
+
+x-poe-labels: &poe-labels
+  command.app: poe
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: runner
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_GOOGLE_API_KEY: ${NEXT_PUBLIC_GOOGLE_API_KEY:-}
+    image: poe-app:latest
     restart: unless-stopped
+    # Required on the server (deploy.yml checks it); optional only so `docker compose config` works
+    # on a checkout without .env.
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - DATABASE_URL=postgresql://poeuser:poe_secure_password_2026@db:5432/poe
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-sk-ant-api03-placeholder}
-      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3001}
-      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-http://localhost:3001}
-      - NODE_ENV=development
-      - PORT=3001
+      NODE_ENV: production
+      PORT: "3001"
+      HOSTNAME: 0.0.0.0
+      UPLOADS_DIR: /app/uploads
+    # Loopback only: the public entry point is Caddy on :443. Kept for on-host health checks.
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - ./uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
+    labels: *poe-labels
 
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    # POSTGRES_* only take effect when the volume is first initialised. On the existing
+    # volume they must match the role/database that already exists (see CUTOVER.md).
     environment:
-      - POSTGRES_DB=poe
-      - POSTGRES_USER=poeuser
-      - POSTGRES_PASSWORD=poe_secure_password_2026
+      POSTGRES_DB: ${POSTGRES_DB:-poe}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # No published port. Use `docker compose exec db psql -U "$POSTGRES_USER" -d poe` on the host.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U poeuser -d poe"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    labels: *poe-labels
+
+  # One-off: `docker compose run --rm migrate` (or `... migrate npx tsx scripts/db/mark-baseline.ts`).
+  migrate:
+    build:
+      context: .
+      target: tools
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    image: poe-tools:latest
+    profiles: ["tools"]
+    restart: "no"
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      db:
+        condition: service_healthy
+    labels: *poe-labels
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      POE_DOMAIN: ${POE_DOMAIN:-poe.vill.ar}
+    # :80 belongs to another app on this host; TLS-ALPN-01 issues certificates over :443 only.
+    ports:
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    labels: *poe-labels
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

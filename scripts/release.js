@@ -7,6 +7,22 @@ const path = require('path')
 // Get version type from args or prompt
 const versionType = process.argv[2] || 'patch'
 
+// Releases are cut from a clean, up-to-date main (tag push triggers the VPS deploy)
+const branch = execSync('git branch --show-current').toString().trim()
+if (branch !== 'main') {
+  console.error(`\n❌ Releases must be cut from main (currently on "${branch}"). Merge your branch first.\n`)
+  process.exit(1)
+}
+if (execSync('git status --porcelain').toString().trim()) {
+  console.error('\n❌ Working tree is not clean. Commit or stash changes first.\n')
+  process.exit(1)
+}
+execSync('git fetch origin main', { stdio: 'inherit' })
+if (execSync('git rev-parse HEAD').toString() !== execSync('git rev-parse origin/main').toString()) {
+  console.error('\n❌ Local main is not in sync with origin/main. Pull or push first.\n')
+  process.exit(1)
+}
+
 // Read package.json
 const packagePath = path.join(__dirname, '..', 'package.json')
 const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'))

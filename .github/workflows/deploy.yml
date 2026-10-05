@@ -1,9 +1,17 @@
 name: Deploy to VPS
 
+# Tag push (vX.Y.Z, cut by `npm run release:*` from main) -> production at /var/www/poe.
+# The first production cutover is manual (docs/deploy/CUTOVER.md); this workflow refuses to run
+# until the server's .env is in the production format.
+
 on:
   push:
     tags:
       - 'v*.*.*'
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -15,13 +23,52 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          # `script_stop` was removed from ssh-action v1.2+; `set -euo pipefail` below does the same.
+          command_timeout: 30m
           script: |
-            cd /opt/poe
-            git fetch --tags
-            git checkout ${{ github.ref_name }}
-            docker compose build
-            docker compose up -d --remove-orphans
-            docker image prune -f
+            set -euo pipefail
+            TAG='${{ github.ref_name }}'
+            cd /var/www/poe
 
-      - name: Notify deployment
-        run: echo "Deployed version ${{ github.ref_name }} to VPS"
+            # Guard: the server must have been cut over (production .env) first.
+            for v in POSTGRES_USER POSTGRES_PASSWORD DATABASE_URL AUTH_SECRET AUTH_URL AUTH_GOOGLE_ID; do
+              grep -q "^${v}=" .env || { echo "::error::.env is missing ${v}; run docs/deploy/CUTOVER.md first" >&2; exit 1; }
+            done
+
+            # Fast-forward main to the tag (fails loudly if the checkout has diverged).
+            git fetch --tags origin
+            git checkout main
+            git merge --ff-only "refs/tags/${TAG}"
+            export GIT_SHA="$(git rev-parse HEAD)"
+            echo "Deploying ${TAG} (${GIT_SHA})"
+
+            # Keep the running image for rollback (docs/deploy/CUTOVER.md "Rollback").
+            if docker image inspect poe-app:latest >/dev/null 2>&1; then
+              docker tag poe-app:latest poe-app:previous
+            fi
+
+            docker compose build app migrate
+
+            # Pre-migration backup (migrations are forward-only; this dump is the rollback path).
+            mkdir -p /var/backups/poe && chmod 700 /var/backups/poe
+            DUMP="/var/backups/poe/predeploy-${TAG}-$(date +%Y%m%d-%H%M%S).dump"
+            docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > "${DUMP}"
+            echo "Backup: ${DUMP} ($(du -h "${DUMP}" | cut -f1))"
+
+            # Migrations run before the new app starts; on failure the old containers keep serving.
+            docker compose run --rm migrate
+            docker compose up -d --remove-orphans
+
+            # Health: app on loopback, then the public HTTPS edge (resolved locally, no hairpin).
+            for i in $(seq 1 30); do
+              if curl -fsS -o /dev/null http://127.0.0.1:3001/api/health \
+                && curl -fsS -o /dev/null --resolve poe.vill.ar:443:127.0.0.1 https://poe.vill.ar/api/health; then
+                echo "Poe ${TAG} is healthy"
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "::error::Poe ${TAG} did not become healthy within 150s" >&2
+            docker compose ps >&2
+            docker compose logs --tail 80 app caddy >&2
+            exit 1

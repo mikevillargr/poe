@@ -249,6 +249,11 @@ Wrap each page with a React error boundary that catches unexpected crashes:
 
 ## GitHub Repository
 
+> **Superseded (2026-10-05, WS-infra):** the deploy, Docker, nginx and VPS snippets in this section are the
+> old intended design. The source of truth is the repo's `Dockerfile`, `docker-compose.yml`,
+> `docker/Caddyfile`, `.github/workflows/deploy.yml` and the runbook `docs/deploy/CUTOVER.md`
+> (production: https://poe.vill.ar, `/var/www/poe`, Caddy on :443, no nginx).
+
 ### Repo structure
 ```
 github.com/mikevillargr/poe
@@ -300,7 +305,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/poe
+            cd /var/www/poe
             git fetch --tags
             git checkout ${{ github.ref_name }}
             docker compose build
@@ -318,6 +323,11 @@ VPS_SSH_KEY       # Private key for passwordless SSH
 ---
 
 ## Docker
+
+> **Superseded (2026-10-05, WS-infra):** the deploy, Docker, nginx and VPS snippets in this section are the
+> old intended design. The source of truth is the repo's `Dockerfile`, `docker-compose.yml`,
+> `docker/Caddyfile`, `.github/workflows/deploy.yml` and the runbook `docs/deploy/CUTOVER.md`
+> (production: https://poe.vill.ar, `/var/www/poe`, Caddy on :443, no nginx).
 
 ### `Dockerfile`
 ```dockerfile
@@ -428,6 +438,11 @@ server {
 
 ## VPS Setup (one-time)
 
+> **Superseded (2026-10-05, WS-infra):** the deploy, Docker, nginx and VPS snippets in this section are the
+> old intended design. The source of truth is the repo's `Dockerfile`, `docker-compose.yml`,
+> `docker/Caddyfile`, `.github/workflows/deploy.yml` and the runbook `docs/deploy/CUTOVER.md`
+> (production: https://poe.vill.ar, `/var/www/poe`, Caddy on :443, no nginx).
+
 On the Hostinger VPS (Ubuntu 22.04):
 
 ```bash
@@ -436,8 +451,8 @@ curl -fsSL https://get.docker.com | sh
 usermod -aG docker $USER
 
 # Create app directory
-mkdir -p /opt/poe
-cd /opt/poe
+mkdir -p /var/www/poe
+cd /var/www/poe
 
 # Create .env file with production values
 nano .env

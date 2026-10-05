@@ -1,0 +1,17 @@
+id: poe
+name: Poe
+description: Growth Rocket's AI-powered Content Hub (Next.js + Postgres/pgvector + OpenAI/Kimi/Claude)
+repo: github.com/mikevillargr/poe
+server: hostinger-vps
+# Live copy. /opt/poe is a stale v0.1.1 copy; keep until Mike decides.
+path: /var/www/poe
+domains: [poe.vill.ar]          # TLS by the stack's own Caddy on :443 (port 80 belongs to AlwaysSunny)
+services: [app, db, caddy]      # plus one-off `migrate` (compose profile "tools")
+ports:
+  - "443/tcp+udp -> caddy"
+  - "127.0.0.1:3001 -> app"     # loopback only
+depends_on: []
+# Tag push vX.Y.Z (npm run release:*) -> .github/workflows/deploy.yml. First cutover: docs/deploy/CUTOVER.md
+deploy: { trigger: tag }
+labels: { command.app: poe }
+status: production
