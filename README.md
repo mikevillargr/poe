@@ -114,60 +114,22 @@ Visit **http://localhost:3001** and login with:
 - **Username:** `admin`
 - **Password:** `admin`
 
-### Docker Deployment (Production)
+### Production-mode smoke test (Docker, local)
 
-```bash
-# 1. Build and start containers
-docker-compose up -d --build
-
-# 2. Check logs
-docker-compose logs -f app
-
-# 3. Access at http://localhost:3001
-```
+See the header of `docker-compose.local.yml` (isolated project, no TLS, app on 127.0.0.1).
 
 ---
 
-## 🌐 VPS Deployment
+## 🌐 Production Deployment
 
-### Prerequisites
-- Ubuntu 20.04+ VPS
-- Docker & Docker Compose installed
-- Port 3001 open
+Production is https://poe.vill.ar on `hostinger-vps` (`/var/www/poe`): the `app`, `db` and `caddy`
+services in `docker-compose.yml`, with secrets in the server's `.env` (see `.env.example`, "PRODUCTION").
 
-### Deployment Steps
-
-```bash
-# 1. SSH into VPS
-ssh root@your-vps-ip
-
-# 2. Clone repository
-cd /var/www
-git clone https://github.com/mikevillargr/poe.git
-cd poe
-
-# 3. Create .env file
-nano .env
-# Add:
-# ANTHROPIC_API_KEY=your-key
-# DATABASE_URL=postgresql://poeuser:poepass@db:5432/poe
-
-# 4. Deploy with Docker
-docker-compose up -d --build
-
-# 5. Verify deployment
-docker-compose ps
-docker-compose logs app
-```
-
-### Update Deployment
-
-```bash
-cd /var/www/poe
-git pull origin main
-docker-compose down
-docker-compose up -d --build
-```
+- **First cutover / rollback:** `docs/deploy/CUTOVER.md`
+- **Releases:** `npm run release:patch|minor|major` from a clean `main` pushes a `vX.Y.Z` tag;
+  `.github/workflows/deploy.yml` then backs up the DB, builds, runs migrations
+  (`docker compose run --rm migrate`), restarts and health-checks.
+- Don't run `docker-compose up -d --build` by hand on the server; it skips the backup and migrations.
 
 ---
 
