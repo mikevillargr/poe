@@ -300,7 +300,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/poe
+            cd /var/www/poe
             git fetch --tags
             git checkout ${{ github.ref_name }}
             docker compose build
@@ -436,8 +436,8 @@ curl -fsSL https://get.docker.com | sh
 usermod -aG docker $USER
 
 # Create app directory
-mkdir -p /opt/poe
-cd /opt/poe
+mkdir -p /var/www/poe
+cd /var/www/poe
 
 # Create .env file with production values
 nano .env

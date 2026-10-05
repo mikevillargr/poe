@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*.*.*'
 
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -15,13 +19,20 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
           script: |
-            cd /opt/poe
-            git fetch --tags
-            git checkout ${{ github.ref_name }}
-            docker compose build
-            docker compose up -d --remove-orphans
-            docker image prune -f
-
-      - name: Notify deployment
-        run: echo "Deployed version ${{ github.ref_name }} to VPS"
+            cd /var/www/poe
+            git fetch --tags origin
+            git checkout main
+            git merge --ff-only ${{ github.ref_name }}
+            docker compose up -d --build --remove-orphans
+            for i in $(seq 1 30); do
+              if curl -fs -o /dev/null http://localhost:3001/login; then
+                echo "Poe is up (${{ github.ref_name }})"
+                exit 0
+              fi
+              sleep 4
+            done
+            echo "Poe did not come up within 120s" >&2
+            docker compose logs --tail 50 app >&2
+            exit 1
