@@ -14,6 +14,9 @@ export interface WorkspaceArticle {
   research: WorkspaceResearch | null
   researchStatus: 'idle' | 'running' | 'ready' | 'error'
   researchModel: string | null
+  researchStartedAt: string | null
+  generationStatus: 'idle' | 'running' | 'ready' | 'error'
+  generationStartedAt: string | null
   draftHtml: string | null
   draftModel: string | null
   wordCount: number | null
@@ -65,6 +68,9 @@ export function toWorkspaceArticle(raw: Raw): WorkspaceArticle {
       : null,
     researchStatus: r.researchStatus,
     researchModel: r.researchModel ?? null,
+    researchStartedAt: r.researchStartedAt ?? null,
+    generationStatus: r.generationStatus ?? 'idle',
+    generationStartedAt: r.generationStartedAt ?? null,
     draftHtml: r.draftHtml ?? null,
     draftModel: r.draftModel ?? null,
     wordCount: r.wordCount ?? null,

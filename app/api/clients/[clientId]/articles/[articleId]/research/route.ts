@@ -1,11 +1,11 @@
 import { withRoute, json } from '@/lib/auth/guards'
 import { requireClient } from '@/lib/tenancy'
 import { getArticle } from '@/lib/articles/repo'
-import { Errors } from '@/lib/api/errors'
 import { researchForRole, modelRef } from '@/lib/ai/roles'
 import { toSSEResponse } from '@/lib/ai/sse'
 import { buildResearchPrompt } from '@/lib/prompts/research'
-import { parseResearchOutput, readResearch, setResearchState, writeResearch } from '@/lib/pipeline/research'
+import { parseResearchOutput, readResearch, writeResearch } from '@/lib/pipeline/research'
+import { drive, reserveRun, setRunState, stopRun } from '@/lib/pipeline/runs'
 import { logArticleEvent, tapStream, toApiError } from '@/lib/pipeline/stream'
 import { researchEditSchema } from '@/lib/pipeline/schemas'
 
@@ -15,57 +15,61 @@ export const maxDuration = 300
 
 type P = { clientId: string; articleId: string }
 
-const STALE_RUN_MS = 10 * 60 * 1000
-
 // POST → text/event-stream of AIStreamEvent: search / citation / delta … done, then
 // { type: 'saved', articleId } once research is persisted (researchStatus = 'ready').
-// On error: an { type: 'error' } event and researchStatus = 'error'. If the client disconnects
-// first, nothing is persisted and researchStatus goes back to what it was.
+// The run is detached from this request (lib/pipeline/runs.ts): if the client disconnects, the
+// research still finishes and is saved; this stream is just a live view. 409 if one is already running.
+// On error: an { type: 'error' } event and researchStatus = 'error'. Only DELETE (Stop) cancels.
 export const POST = withRoute<P>(async ({ req, params, user }) => {
   const client = await requireClient(params.clientId, { write: true })
   const article = await getArticle(client.id, params.articleId)
-  if (article.researchStatus === 'running' && Date.now() - article.updatedAt.getTime() < STALE_RUN_MS) {
-    throw Errors.conflict('Research is already running for this article.')
-  }
-  const previousState = article.research ? 'ready' : 'idle'
-
-  const prompt = buildResearchPrompt(article)
-  let started: Awaited<ReturnType<typeof researchForRole>>
+  const run = reserveRun('research', article.id)
   try {
-    started = await researchForRole(
-      { system: prompt.system, messages: prompt.messages, maxTokens: prompt.maxTokens, maxSearches: prompt.maxSearches, signal: req.signal },
-      { tenantId: client.id, articleId: article.id, userId: user.id },
-    )
-  } catch (err) {
-    throw toApiError(err)
-  }
-  const model = modelRef(started.resolved)
-  await setResearchState(client.id, article.id, 'running')
+    const previousState = article.research ? 'ready' : 'idle'
+    const prompt = buildResearchPrompt(article)
+    let started: Awaited<ReturnType<typeof researchForRole>>
+    try {
+      started = await researchForRole(
+        { system: prompt.system, messages: prompt.messages, maxTokens: prompt.maxTokens, maxSearches: prompt.maxSearches, signal: run.ac.signal },
+        { tenantId: client.id, articleId: article.id, userId: user.id },
+      )
+    } catch (err) {
+      throw toApiError(err)
+    }
+    const model = modelRef(started.resolved)
+    await setRunState('research', client.id, article.id, 'running')
 
-  const { events, tap } = tapStream(started.events, {
-    onFailed: () => setResearchState(client.id, article.id, 'error'),
-    onIncomplete: () => setResearchState(client.id, article.id, previousState),
-  })
+    const { events, tap } = tapStream(started.events, {
+      onFailed: () => setRunState('research', client.id, article.id, 'error'),
+      onIncomplete: () => setRunState('research', client.id, article.id, previousState),
+    })
 
-  return toSSEResponse(events, {
-    signal: req.signal,
-    onDone: async (done) => {
-      try {
+    drive(run, events, {
+      onPersistError: () => setRunState('research', client.id, article.id, 'error'),
+      onDone: async (done) => {
         const research = parseResearchOutput(done.text, done.citations?.length ? done.citations : tap.citations, tap.queries)
         await writeResearch(client.id, article.id, research, user.id)
-        await setResearchState(client.id, article.id, 'ready', { researchModel: model })
+        await setRunState('research', client.id, article.id, 'ready', { researchModel: model })
         await logArticleEvent(client.id, article.id, 'researched', user.id, {
           model,
           citations: research.citations.length,
           queries: research.queries.length,
         })
         return [{ type: 'saved', articleId: article.id }]
-      } catch (err) {
-        await setResearchState(client.id, article.id, 'error').catch(() => {})
-        throw err
-      }
-    },
-  })
+      },
+    })
+  } catch (err) {
+    run.release()
+    throw err
+  }
+  return toSSEResponse(run.subscribe(req.signal), { signal: req.signal })
+})
+
+// DELETE → { stopped }. The explicit Stop: cancels the model call, saves nothing, resets the status.
+export const DELETE = withRoute<P>(async ({ params }) => {
+  const client = await requireClient(params.clientId, { write: true })
+  await getArticle(client.id, params.articleId)
+  return json(await stopRun('research', client.id, params.articleId))
 })
 
 // PATCH { summary?, outlineHtml?, excludedCitationIds? } → { research }. Edits the persisted

@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import { requirePageUser } from '@/lib/auth/guards'
 import { getClientBySlug } from '@/lib/tenancy'
-import { getArticle } from '@/lib/articles/repo'
+import { getArticleReconciled } from '@/lib/pipeline/runs'
 import { ApiError } from '@/lib/api/errors'
 import { modelRef, resolveRole } from '@/lib/ai/roles'
 import { WorkspaceView } from '@/components/workspace/WorkspaceView'
@@ -33,7 +33,7 @@ export default async function ArticleWorkspacePage({
 
   let row
   try {
-    row = await getArticle(client.id, articleId)
+    row = await getArticleReconciled(client.id, articleId)
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound()
     throw err
