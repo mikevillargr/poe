@@ -81,12 +81,11 @@ const SuggestionHighlightExtension = Extension.create({
 })
 
 // Find all positions of a search string within the ProseMirror document
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function findTextPositions(doc: any, searchText: string): Array<{ from: number; to: number }> {
   const results: Array<{ from: number; to: number }> = []
   const search = searchText.toLowerCase()
 
-  doc.descendants((node: any, pos: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  doc.descendants((node: any, pos: number) => {
     if (!node.isText) return
     const text: string = node.text || ''
     const lower = text.toLowerCase()

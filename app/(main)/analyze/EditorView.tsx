@@ -884,7 +884,7 @@ export function EditorView({
             </div>
           ) : (
             <p className="text-sm text-muted text-center py-8">
-              Click "Score Content" to see dimension breakdown
+              Click &ldquo;Score Content&rdquo; to see dimension breakdown
             </p>
           )}
         </div>
@@ -909,7 +909,7 @@ export function EditorView({
             >
               <h3 className="text-lg font-display text-heading mb-2">Delete Document?</h3>
               <p className="text-sm text-muted mb-6">
-                This will permanently delete "{tab?.title}" and all associated data including scores and suggestions. This action cannot be undone.
+                This will permanently delete &ldquo;{tab?.title}&rdquo; and all associated data including scores and suggestions. This action cannot be undone.
               </p>
               <div className="flex gap-3 justify-end">
                 <button

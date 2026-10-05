@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Building2, X, Loader2 } from 'lucide-react'
 import { slugify } from '@/lib/clients/schemas'
+import { apiFetch, ApiFetchError } from '@/lib/api/fetch'
 
 interface Props {
   isOpen: boolean
@@ -48,22 +49,17 @@ export function AddClientModal({ isOpen, onClose, onCreated }: Props) {
     setSubmitting(true)
     setErrors({})
     try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), slug, website: website.trim() || undefined }),
-      })
-      const body = await res.json()
-      if (!res.ok) {
-        const fieldErrors = body?.details?.fieldErrors as Record<string, string[]> | undefined
-        if (fieldErrors) setErrors(Object.fromEntries(Object.entries(fieldErrors).map(([k, v]) => [k, v[0]])))
-        else if (body?.code === 'CONFLICT') setErrors({ slug: body.error })
-        else setErrors({ form: body?.error ?? 'Could not create the client.' })
-        return
-      }
+      const body = await apiFetch<{ client: { id: string; name: string; slug: string }; copiedGuidelines: number }>(
+        '/api/clients',
+        { method: 'POST', body: { name: name.trim(), slug, website: website.trim() || undefined }, silent: true },
+      )
       onCreated(body.client, body.copiedGuidelines)
-    } catch {
-      setErrors({ form: 'Could not reach the server. Try again.' })
+    } catch (err) {
+      // Inline errors in the form instead of a toast.
+      if (err instanceof ApiFetchError && err.details?.fieldErrors) {
+        setErrors(Object.fromEntries(Object.entries(err.details.fieldErrors).map(([k, v]) => [k, v[0]])))
+      } else if (err instanceof ApiFetchError && err.code === 'CONFLICT') setErrors({ slug: err.message })
+      else setErrors({ form: err instanceof Error ? err.message : 'Could not create the client.' })
     } finally {
       setSubmitting(false)
     }

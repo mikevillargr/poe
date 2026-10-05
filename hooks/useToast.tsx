@@ -12,7 +12,11 @@ export interface Toast {
   severity: ToastSeverity
   title: string
   message?: string
+  /** Override the default auto-dismiss time in ms; 0 = manual dismiss only. */
+  dismissAfter?: number
 }
+
+const AUTO_DISMISS_MS: Record<ToastSeverity, number> = { info: 4000, success: 4000, warning: 8000, error: 0 }
 
 interface ToastStore {
   toasts: Toast[]
@@ -24,24 +28,15 @@ export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   addToast: (toast) => {
     const id = Math.random().toString(36).substring(2, 9)
-    console.log('[ToastStore] Adding toast:', { id, ...toast })
+    set((state) => ({ toasts: [{ ...toast, id }, ...state.toasts].slice(0, 5) }))
 
-    set((state) => {
-      const newToasts = [{ ...toast, id }, ...state.toasts].slice(0, 5)
-      console.log('[ToastStore] Current toasts:', newToasts)
-      return { toasts: newToasts }
-    })
-
-    // Auto-dismiss after 4 seconds
-    setTimeout(() => {
-      console.log('[ToastStore] Auto-dismissing toast:', id)
-      set((state) => ({
-        toasts: state.toasts.filter((t) => t.id !== id),
-      }))
-    }, 4000)
+    // CLAUDE.md "Error Handling System": info/success 4s, warning 8s, errors stay until dismissed.
+    const ms = toast.dismissAfter ?? AUTO_DISMISS_MS[toast.severity]
+    if (ms) {
+      setTimeout(() => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })), ms)
+    }
   },
   removeToast: (id) => {
-    console.log('[ToastStore] Removing toast:', id)
     set((state) => ({
       toasts: state.toasts.filter((t) => t.id !== id),
     }))
@@ -54,19 +49,15 @@ export function useToast() {
   return {
     toast: {
       success: (title: string, message?: string) => {
-        console.log('[useToast] Calling success toast:', title)
         addToast({ severity: 'success', title, message })
       },
       error: (title: string, message?: string) => {
-        console.log('[useToast] Calling error toast:', title)
         addToast({ severity: 'error', title, message })
       },
       warning: (title: string, message?: string) => {
-        console.log('[useToast] Calling warning toast:', title)
         addToast({ severity: 'warning', title, message })
       },
       info: (title: string, message?: string) => {
-        console.log('[useToast] Calling info toast:', title)
         addToast({ severity: 'info', title, message })
       },
     },
@@ -133,12 +124,7 @@ export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: () => voi
 export function ToastContainer() {
   const { toasts, removeToast } = useToastStore()
 
-  console.log('[ToastContainer] Rendering, toasts count:', toasts.length)
-
-  if (toasts.length === 0) {
-    console.log('[ToastContainer] No toasts to display')
-    return null
-  }
+  if (toasts.length === 0) return null
 
   return (
     <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] flex flex-col gap-3 w-fit max-w-full pointer-events-none">

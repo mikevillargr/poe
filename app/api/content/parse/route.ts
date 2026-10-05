@@ -1,9 +1,10 @@
+import { withRoute } from '@/lib/auth/guards'
 import { NextRequest, NextResponse } from 'next/server'
 import mammoth from 'mammoth'
 import { Readability } from '@mozilla/readability'
 import { JSDOM } from 'jsdom'
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
     const contentType = request.headers.get('content-type') || ''
 
@@ -100,3 +101,6 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+// Requires an active session.
+export const POST = withRoute(({ req }) => handlePOST(req))
