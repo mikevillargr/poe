@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { articles, heuristics, tenants, universalGuidelines } from '@/lib/db/schema'
@@ -28,10 +29,11 @@ export async function listClients(): Promise<ClientSummary[]> {
   return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }))
 }
 
-export async function getClientBySlug(slug: string): Promise<Client | null> {
+/** Cached per request, so layouts and pages can both call it. */
+export const getClientBySlug = cache(async (slug: string): Promise<Client | null> => {
   const [row] = await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1)
   return row ?? null
-}
+})
 
 /** Resolve a client for an API route. Archived clients are read-only. */
 export async function requireClient(clientId: string, opts: { write?: boolean } = {}): Promise<Client> {
