@@ -6,11 +6,11 @@ export const SuggestionMark = Mark.create({
   attrs: {
     suggestionId: {
       default: null,
-      parseHTML: element => (element as HTMLElement).getAttribute('data-suggestion-id'),
+      parseHTML: (element: HTMLElement) => element.getAttribute('data-suggestion-id'),
     },
     severity: {
       default: 'medium',
-      parseHTML: element => (element as HTMLElement).getAttribute('data-severity') || 'medium',
+      parseHTML: (element: HTMLElement) => element.getAttribute('data-severity') || 'medium',
     },
   },
 

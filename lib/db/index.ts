@@ -1,20 +1,17 @@
 import { drizzle } from 'drizzle-orm/node-postgres'
 import pg from 'pg'
+import * as schema from './schema'
 
-const { Pool } = pg
-
-let db: ReturnType<typeof drizzle> | null = null
-
-if (process.env.DATABASE_URL) {
-  try {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-    db = drizzle(pool)
-    console.log('Database connected:', process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@'))
-  } catch (error) {
-    console.error('Database connection failed:', error)
-  }
-} else {
-  console.warn('DATABASE_URL not set — using file-based fallback storage')
+// The pool connects lazily, so importing this at build time is safe; queries fail loudly at runtime
+// if DATABASE_URL is missing. There is no file-based fallback any more.
+if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'test') {
+  console.warn('DATABASE_URL is not set; database queries will fail.')
 }
 
-export { db }
+const globalForDb = globalThis as unknown as { poePool?: pg.Pool }
+
+const pool = globalForDb.poePool ?? new pg.Pool({ connectionString: process.env.DATABASE_URL })
+if (process.env.NODE_ENV !== 'production') globalForDb.poePool = pool
+
+export const db = drizzle(pool, { schema })
+export type Db = typeof db
