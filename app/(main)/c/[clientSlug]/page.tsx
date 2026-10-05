@@ -1,12 +1,31 @@
-import { Placeholder } from '@/components/shell/Placeholder'
+import { notFound } from 'next/navigation'
+import { inArray } from 'drizzle-orm'
+import { db } from '@/lib/db'
+import { users } from '@/lib/db/schema'
+import { getClientBySlug } from '@/lib/tenancy'
+import { listArticles, recentEvents } from '@/lib/articles/repo'
+import { HomeView } from '@/components/home/HomeView'
 
-// OWNED BY WS client-home (DR-003): status summary, ordered article queue, New Article, activity.
-export default function ClientHomePage() {
+export const dynamic = 'force-dynamic'
+
+// Client Home (WS client-home, DR-003).
+export default async function ClientHomePage({ params }: { params: Promise<{ clientSlug: string }> }) {
+  const { clientSlug } = await params
+  const client = await getClientBySlug(clientSlug)
+  if (!client) notFound()
+
+  const [articles, events] = await Promise.all([listArticles(client.id), recentEvents(client.id, 12)])
+  const assigneeIds = [...new Set(articles.map((a) => a.assigneeId).filter(Boolean))] as string[]
+  const people = assigneeIds.length
+    ? await db.select({ id: users.id, name: users.name, image: users.image }).from(users).where(inArray(users.id, assigneeIds))
+    : []
+
   return (
-    <Placeholder
-      title="Home"
-      workstream="client-home"
-      description="The client home: article status summary, the ordered content queue, New Article and recent activity."
+    <HomeView
+      client={{ id: client.id, name: client.name, slug: client.slug, website: client.website }}
+      initialArticles={articles}
+      events={events}
+      people={people}
     />
   )
 }
