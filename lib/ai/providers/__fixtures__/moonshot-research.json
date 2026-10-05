@@ -1,0 +1,37 @@
+{
+  "_source": "Shape derived from platform.kimi.ai/docs/guide/use-web-search (builtin $web_search loop), …/docs/guide/use-kimi-k2-thinking-model (reasoning_content), …/docs/api/chat (stream chunks, usage on the last chunk) and …/docs/api/tools-search. The $web_search argument payload is opaque in the docs; the one below is illustrative. Not a recorded API response.",
+  "builtinToolTurn": [
+    { "data": { "id": "cmpl-1", "object": "chat.completion.chunk", "created": 1, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "role": "assistant", "reasoning_content": "I should search " }, "finish_reason": null } ] } },
+    { "data": { "id": "cmpl-1", "object": "chat.completion.chunk", "created": 1, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "reasoning_content": "for current CRM pricing." }, "finish_reason": null } ] } },
+    { "data": { "id": "cmpl-1", "object": "chat.completion.chunk", "created": 1, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "tool_calls": [ { "index": 0, "id": "call_ws_1", "type": "builtin_function", "function": { "name": "$web_search", "arguments": "{\"search_result\":{\"search_id\":\"s-123\"}," } } ] }, "finish_reason": null } ] } },
+    { "data": { "id": "cmpl-1", "object": "chat.completion.chunk", "created": 1, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "tool_calls": [ { "index": 0, "function": { "arguments": "\"usage\":{\"total_tokens\":5120}}" } } ] }, "finish_reason": "tool_calls" } ] } },
+    { "data": { "id": "cmpl-1", "object": "chat.completion.chunk", "created": 1, "model": "kimi-k3", "choices": [], "usage": { "prompt_tokens": 400, "completion_tokens": 30, "total_tokens": 430 } } }
+  ],
+  "answerTurn": [
+    { "data": { "id": "cmpl-2", "object": "chat.completion.chunk", "created": 2, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "role": "assistant", "reasoning_content": "Now write the brief." }, "finish_reason": null } ] } },
+    { "data": { "id": "cmpl-2", "object": "chat.completion.chunk", "created": 2, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "content": "<summary>\nStartups pick a CRM on price first [1]. The market grew 14% [2].\n</summary>\n" }, "finish_reason": null } ] } },
+    { "data": { "id": "cmpl-2", "object": "chat.completion.chunk", "created": 2, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "content": "<outline>\n<h2>What startups need from a CRM</h2>\n</outline>\n<sources>\n[1] CRM Guide 2026 — https://www.example.com/crm-guide\n" }, "finish_reason": null } ] } },
+    { "data": { "id": "cmpl-2", "object": "chat.completion.chunk", "created": 2, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "content": "[2] CRM Market Report — https://stats.example.org/report.\n[3] CRM Guide 2026 (dup) — https://www.example.com/crm-guide/\n</sources>" }, "finish_reason": "stop" } ] } },
+    { "data": { "id": "cmpl-2", "object": "chat.completion.chunk", "created": 2, "model": "kimi-k3", "choices": [], "usage": { "prompt_tokens": 6000, "completion_tokens": 300, "total_tokens": 6300 } } }
+  ],
+  "restToolTurn": [
+    { "data": { "id": "cmpl-3", "object": "chat.completion.chunk", "created": 3, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "role": "assistant", "reasoning_content": "Search first." }, "finish_reason": null } ] } },
+    { "data": { "id": "cmpl-3", "object": "chat.completion.chunk", "created": 3, "model": "kimi-k3", "choices": [ { "index": 0, "delta": { "tool_calls": [ { "index": 0, "id": "call_rest_1", "type": "function", "function": { "name": "web_search", "arguments": "{\"query\": \"best crm for startups 2026\"}" } } ] }, "finish_reason": "tool_calls" } ] } },
+    { "data": { "id": "cmpl-3", "object": "chat.completion.chunk", "created": 3, "model": "kimi-k3", "choices": [], "usage": { "prompt_tokens": 300, "completion_tokens": 20, "total_tokens": 320 } } }
+  ],
+  "searchResponse": {
+    "search_results": [
+      { "authority": "high", "date": "2026-09-01", "icon": "", "mime": "text/html", "site_name": "Example", "snippet": "Most startups weigh price before features.", "text": "", "title": "CRM Guide 2026", "url": "https://www.example.com/crm-guide" },
+      { "authority": "medium", "date": "2026-02-10", "icon": "", "mime": "text/html", "site_name": "Example Stats", "snippet": "The SMB CRM market grew 14% in 2025.", "text": "", "title": "CRM Market Report", "url": "https://stats.example.org/report" }
+    ]
+  },
+  "modelsPage": {
+    "object": "list",
+    "data": [
+      { "id": "kimi-k3", "object": "model", "created": 1, "owned_by": "moonshot", "context_length": 1000000 },
+      { "id": "kimi-k2.7-code", "object": "model", "created": 1, "owned_by": "moonshot", "context_length": 262144 },
+      { "id": "kimi-k2.6", "object": "model", "created": 1, "owned_by": "moonshot", "context_length": 262144 },
+      { "id": "moonshot-v1-8k", "object": "model", "created": 1, "owned_by": "moonshot" }
+    ]
+  }
+}
