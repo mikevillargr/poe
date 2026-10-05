@@ -17,3 +17,5 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - name: Unit tests
+        run: npx tsx --conditions=react-server --test $(git ls-files 'lib/**/*.test.ts')

@@ -1,8 +1,11 @@
 # Poe production stack (hostinger-vps, /var/www/poe). See docs/deploy/CUTOVER.md.
 #
-#   docker compose build app migrate                      # GIT_SHA=$(git rev-parse HEAD) in env
-#   docker compose run --rm migrate                       # apply drizzle/ migrations
+# Images are built by GitHub Actions and pulled from ghcr.io (deploy.yml writes POE_APP_IMAGE,
+# POE_TOOLS_IMAGE and POE_TAG into .env). Without those vars, compose falls back to local builds.
+#   docker compose --profile tools pull app migrate       # fetch the release images
+#   docker compose --profile tools run --rm migrate       # apply drizzle/ migrations
 #   docker compose up -d --remove-orphans                 # app + db + caddy
+#   (local build fallback: GIT_SHA=$(git rev-parse HEAD) docker compose build app migrate)
 #
 # All secrets come from ./.env (never committed; see .env.example "Production" section).
 # The project name is pinned to `poe` so the existing data volume `poe_pgdata` is reused.
@@ -23,7 +26,7 @@ services:
         GIT_SHA: ${GIT_SHA:-unknown}
         NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
         NEXT_PUBLIC_GOOGLE_API_KEY: ${NEXT_PUBLIC_GOOGLE_API_KEY:-}
-    image: poe-app:latest
+    image: ${POE_APP_IMAGE:-poe-app}:${POE_TAG:-latest}
     restart: unless-stopped
     # Required on the server (deploy.yml checks it); optional only so `docker compose config` works
     # on a checkout without .env.
@@ -71,7 +74,7 @@ services:
       target: tools
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
-    image: poe-tools:latest
+    image: ${POE_TOOLS_IMAGE:-poe-tools}:${POE_TAG:-latest}
     profiles: ["tools"]
     restart: "no"
     env_file:
