@@ -24,6 +24,9 @@ wrong or unsafe** for the current system; do not follow them.
   version store. Keys are now server-side (Settings, encrypted in the database).
 - Old code is on `main` at tag **v1.0.0** (`git show v1.0.0:<path>`).
 
-## Retired data (not yet dropped)
-`content_documents`, `score_jobs`, `edit_suggestions`, `batch_jobs`, `batch_job_items` remain in the database, read-only. The three NCH
-documents were copied into `articles` by migration 0002. Dropping the old tables needs Mike's explicit double confirmation.
+## Retired data (dropped by migration 0005)
+`content_documents`, `score_jobs`, `edit_suggestions`, `batch_jobs`, `batch_job_items` and `articles.legacy_document_id` were dropped
+by `drizzle/0005_drop_legacy_scoring.sql` (Mike approved, 2026-10-05). At approval, production held 3 documents, 12 score jobs and no
+suggestions or batches. The three NCH documents had been copied into `articles` by migration 0002. A named dump of the five tables is
+in `/var/backups/poe/` on the VPS. Treat the tables as removed, not as a target to restore.
+`scripts/db/mark-baseline.ts` is a one-time tool and refuses to run against the post-0005 schema by design.

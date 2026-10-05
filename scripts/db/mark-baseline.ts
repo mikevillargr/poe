@@ -6,6 +6,8 @@ import { readMigrationFiles } from 'drizzle-orm/migrator'
 import pg from 'pg'
 import { requireDatabaseUrl, redact } from './env'
 
+// One-time tool, already run on production (2026-10-05). Since migration 0005 the scoring tables are gone,
+// so on a database migrated past 0004 this refuses by design (it is only for databases created with `db:push`).
 const BASELINE_TABLES = ['tenants', 'users', 'heuristics', 'guidelines', 'content_documents', 'score_jobs']
 
 async function main() {

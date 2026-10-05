@@ -13,7 +13,6 @@ import {
 import { articleStatus, researchStatus, articleVersionKind } from './enums'
 import { tenants } from './clients'
 import { users } from './auth'
-import { contentDocuments } from './legacy'
 
 export interface ResearchCitation {
   id: string
@@ -77,9 +76,6 @@ export const articles = pgTable(
 
     assigneeId: uuid('assignee_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     importBatchId: uuid('import_batch_id').references(() => importBatches.id, { onDelete: 'set null' }),
-    legacyDocumentId: uuid('legacy_document_id')
-      .unique()
-      .references(() => contentDocuments.id, { onDelete: 'set null' }),
     createdBy: uuid('created_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     updatedBy: uuid('updated_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').notNull().defaultNow(),

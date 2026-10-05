@@ -83,8 +83,8 @@ docker/ Dockerfile docker-compose.yml   production stack (Caddy on 443)
   `app/(main)/layout.tsx`.
 - Schema changes: edit `lib/db/schema/*`, `npm run db:generate` (hand-write a `--custom` migration for renames), commit the
   migration. Production applies migrations automatically on deploy.
-- `lib/db/schema/legacy.ts` (`content_documents`, `score_jobs`, `edit_suggestions`, `batch_*`) is retired data kept read-only.
-  Dropping it needs explicit approval.
+- The scoring-era tables (`content_documents`, `score_jobs`, `edit_suggestions`, `batch_*`) were dropped by migration 0005.
+  Don't re-add them; see `docs/archive/README.md`.
 
 ---
 
