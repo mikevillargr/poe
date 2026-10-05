@@ -1,36 +1,101 @@
-# Poe — Content Grading & Scoring App
+# Poe — AI-powered Content Hub
 ## Claude Code Project Guide
 
-> **UI source of truth:** https://www.magicpatterns.com/c/2qmur5ajbx9funtxgnk3nr
-> **Preview:** https://project-stellar-canyon-836.magicpatterns.app
-> All routing, layout, and component architecture reflects the built frontend.
+**Poe** is Growth Rocket's internal, multi-client content hub. The content team takes an article from a
+client-approved content calendar through **research**, **AI generation** and **human-in-the-loop editing**, with
+the **SEO keywords handed down by the SEO team at the centre** of every draft. It replaced the original
+scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
+
+- **Production:** https://poe.vill.ar (Hostinger VPS, Docker Compose: Caddy TLS + app + Postgres).
+- **Repo:** https://github.com/mikevillargr/poe
+- **Stack:** Next.js 15 (App Router) · TypeScript (strict) · Tailwind + framer-motion · TipTap · Drizzle ORM on
+  PostgreSQL (pgvector image) · Auth.js (NextAuth v5 beta, Google only) · zod · zustand · SheetJS (vendored).
+- **AI:** provider-agnostic layer in `lib/ai` for **Anthropic (Claude), OpenAI and Moonshot (Kimi)**. Two model
+  *roles* are configured by a super admin in Settings: **generation** (writes drafts, runs the guideline check) and
+  **research** (live web search). Keys are encrypted server-side and never reach the browser.
 
 ---
 
-## Project Overview
+## How it works
 
-**Poe** is a multi-tenant AI-powered content grading and scoring web app for Growth Rocket. It scores content against brand guidelines, topical blacklists, SEO/AIO criteria, and custom agency/client rules.
+1. **Clients.** Every client is a separate data space (guidelines, queue, articles). All approved staff see all clients;
+   anyone can add one from the sidebar switcher, and it starts with a **copy** of the agency Universal guidelines.
+2. **Import** (`/c/[client]/import`). Upload a CSV/XLSX/XLS content calendar with `title`, `brief`, `keywords`,
+   `wordcount` (target words). Column matching, per-row validation and duplicate detection happen before rows are
+   appended to the client's ordered queue. No dates: the queue order is the calendar.
+3. **Client Home** (`/c/[client]`). Status cards (Queued · Draft · In Review · Done), the ordered queue (drag to
+   reorder), activity feed, **New Article**.
+4. **Article Workspace** (`/c/[client]/articles/[id]`). Brief + keywords (left) · **Research | Draft** tabs (centre) ·
+   **Optimize** (right).
+   - *Research* streams live web research into an editable summary, outline and numbered sources.
+   - *Draft* streams the generated article into the TipTap editor (autosave, versions, DOCX/Drive export).
+   - *Optimize* = keyword coverage (H1 / first 100 words / H2, density), length vs target, and **Check against
+     guidelines** (AI) producing suggestions with in-text highlight, Accept / Adjust / Dismiss.
+5. **Guidelines** (`/c/[client]/guidelines`). Manual-first, categorized rules (SEO, structure, readability, sourcing,
+   brand, agency, client, blacklist). Import-from-document is secondary. The **blacklist** holds "sounds AI-written"
+   words and patterns that generation avoids and Optimize flags.
+6. **Admin** (super admin only): **Users** (approve/deny/disable, promote), **Universal guidelines** (the template), **Settings**
+   (provider keys, test, models per role).
+
+**Auth.** Google OAuth only. Only verified `@growth-rocket.com` accounts may sign in; they are `pending` until a super admin
+(`mike@growth-rocket.com`) approves them. Account status is read from the DB on every request (approvals/disables apply
+immediately). Every page and API route requires an active user.
 
 ---
 
-## Tech Stack
+## Repository map
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript (strict) |
-| UI Components | shadcn/ui + Tailwind CSS |
-| Animations | Framer Motion |
-| Rich Text Editor | TipTap |
-| Database | PostgreSQL (Drizzle ORM) |
-| Vector Search | pgvector |
-| AI | Anthropic Claude API (claude-sonnet-4-6, streaming) |
-| File Parsing | mammoth (DOCX), pdf-parse (PDF), Google Docs API |
-| Auth | NextAuth.js — **credentials provider only** (username + password, no OAuth) |
-| Storage | Local filesystem (`/app/uploads` via volume mount) |
-| Hosting | **VPS (Hostinger) via Docker** |
-| Reverse Proxy | Nginx |
-| CI/CD | **GitHub Actions → VPS via SSH (builds on server)** |
+```
+app/
+  (auth)/login, (auth)/pending          Google login + waiting/disabled screens
+  (main)/                               sidebar layout (requirePageUser)
+    c/[clientSlug]/{page,import,guidelines,articles/[articleId]}
+    admin/{users,universal-guidelines}, settings        super admin only
+    dashboard, analyze, guidelines      redirects to / (old bookmarks)
+  api/clients/[clientId]/…              articles, activity, guidelines, import (all tenant-scoped)
+  api/admin/…                           users, providers (keys), model-roles, universal-guidelines
+  api/content/{parse,fetch-gdoc}        file/URL/Google Doc text extraction (guideline import)
+  api/health, api/auth/…
+components/   shell, home, import, workspace, guidelines, settings, admin, editor, feedback, auth
+lib/
+  db/schema/*       Drizzle schema by domain (tenants = clients, heuristics = guidelines)
+  auth/ api/        guards (withRoute, requireUser…), {error, code} helpers, apiFetch
+  tenancy/ clients/ client lookup + creation (copies the Universal template)
+  articles/         repo, shared zod schemas (FROZEN contract), text helpers
+  ai/               provider contract (FROZEN), providers/*, roles, secrets, SSE, mock provider
+  pipeline/ prompts/ research + generation (prompt builders, persistence)
+  optimize/         keyword coverage, guideline-check prompt/parse
+  guidelines/       repo, schemas, categories, Universal template, extraction
+  import/           sheet parsing + column mapping
+drizzle/            versioned migrations (never db:push against real data)
+scripts/            db (migrate, baseline, fixtures, seed-universal), dev (api-sweep, smokes), ai-smoke, release
+docker/ Dockerfile docker-compose.yml   production stack (Caddy on 443)
+```
+
+**Conventions** (enforced in review):
+- Every API route is wrapped in `withRoute` (auth + `{ error, code }` errors); tenant comes from the URL and is verified
+  (`requireClient`). Validate input with zod.
+- Client code calls APIs through `apiFetch` (toasts every failure; never fail silently).
+- AI calls go through `lib/ai/roles` (`streamForRole`, `researchForRole`, `generateForRole`), never directly to an SDK.
+- Destructive actions go through `ConfirmModal`.
+- Numbers use `font-mono tabular-nums`. Framer Motion for transitions.
+- **Frozen contracts** (change deliberately, update all callers): `lib/ai/types.ts`, `lib/articles/schemas.ts`, `lib/nav.ts`,
+  `app/(main)/layout.tsx`.
+- Schema changes: edit `lib/db/schema/*`, `npm run db:generate` (hand-write a `--custom` migration for renames), commit the
+  migration. Production applies migrations automatically on deploy.
+- `lib/db/schema/legacy.ts` (`content_documents`, `score_jobs`, `edit_suggestions`, `batch_*`) is retired data kept read-only.
+  Dropping it needs explicit approval.
+
+---
+
+## Data model (tables)
+
+`tenants` (a client) · `users` (role `super_admin|member`, status `pending|active|disabled`) · `heuristics` (a client's guidelines:
+category, title, rule, weight 1–10, active, source `manual|ingested|template_copy`, sort order) · `universal_guidelines` (the
+template) · `guidelines` (raw ingested source documents) · `articles` (queue item and article in one row: status
+`queued|draft|in_review|done`, brief, `keywords[]`, primary keyword, target word count, `research` jsonb, draft HTML, last optimize)
+· `article_versions` · `article_events` (activity) · `import_batches` · `ai_provider_credentials` (encrypted keys) ·
+`ai_model_roles` · `ai_usage`.
 
 ---
 
@@ -66,61 +131,14 @@
 | Blacklist | `#9B2C2C` | white |
 | Agency | `#276749` | white |
 | Client | `#6B21A8` | white |
+| Structure | `#475569` | white |
+| Readability | `#0F766E` | white |
+| Sourcing | `#6D28D9` | white |
 
 ### Typography
 - Body: Inter | Scores/numbers: JetBrains Mono | Display: Playfair Display
 
 ### Default theme: **light** (ThemeProvider reads localStorage, falls back to `'light'`)
-
----
-
-## Routing
-
-```
-/login              → Login page (credentials only, no signup)
-/                   → Dashboard (protected)
-/analyze            → Score Content — editor + inline batch queue
-/guidelines         → Heuristic Store + Guideline Ingestion
-/settings           → Settings stub
-/score, /batch      → redirect to /analyze
-*                   → redirect to /
-```
-
-All routes except `/login` require authentication via NextAuth session.
-
----
-
-## Auth — Login Page
-
-**Credentials-only login** (username + password). No OAuth, no signup flow. Admins create accounts directly in the DB.
-
-### Login page design (match MP aesthetic)
-- Full-screen centered layout, `bg-background`
-- Centered card: `glass-card` max-w `400px`, padding `32px`
-- Top: Feather icon (accent, glow) + "Poe" in Playfair Display italic
-- Subtitle: "Growth Rocket Content Intelligence" in muted text
-- Fields: Username, Password (with show/hide toggle)
-- Primary button: "Sign In" full-width accent
-- Error state: inline red message below button (see Error Handling)
-- No "Forgot password", no "Sign up" link — intentional (internal tool)
-- Light mode default; no theme toggle on login screen
-
-### NextAuth config
-```typescript
-// app/api/auth/[...nextauth]/route.ts
-providers: [
-  CredentialsProvider({
-    credentials: {
-      username: { label: 'Username', type: 'text' },
-      password: { label: 'Password', type: 'password' },
-    },
-    async authorize(credentials) {
-      // Look up user in DB, verify bcrypt hash
-      // Return user object or null
-    }
-  })
-]
-```
 
 ---
 
@@ -155,7 +173,7 @@ interface Toast {
 ```
 
 **Visual spec:**
-- Position: fixed bottom-right, `24px` from edges, `z-50`
+- Position: **currently fixed top-center** (`hooks/useToast.tsx`); the spec below says bottom-right. Moving it is a design decision (needs a DR). `z-[99999]`
 - Width: `320px`
 - Each toast: `.glass-card` style, `p-4`, left `3px` colored border
 - Stack: up to 5 toasts, newest on top, `8px` gap between
@@ -224,17 +242,18 @@ interface ConfirmModal {
 
 ### Error state map — where toasts fire
 
-| Action | Success toast | Error toast | Warning toast |
+| Action | Success toast | Error toast | Warning / confirm |
 |---|---|---|---|
-| Score content (single) | "Scored: [title] — [score]/100" | "Scoring failed: [reason]" | score < 60: "Low score — review suggestions" |
-| Save heuristics from modal | "N heuristics saved to store" | "Failed to save heuristics" | — |
-| Batch job complete | "Batch complete: N/N scored" | "N items failed — see queue" | — |
-| Fetch URL | — | "Could not fetch URL: [error]" | — |
-| DOCX parse | — | "Could not parse file: [filename]" | — |
-| Toggle heuristic | — | "Failed to update rule" | — |
-| Delete heuristic | — | "Delete failed" | shown before: confirm modal |
-| Login failure | — | inline below button: "Invalid username or password" | — |
-| Session expired | — | Inline banner: "Your session has expired. Sign in again." | — |
+| New Article / Add client | "Article added to the queue" / "[Client] created" | the API error message | — |
+| Import sheet | "N articles added from [file]" | "Could not read [file]", "Import failed" | rows with errors/duplicates are shown in the preview, not toasted |
+| Run research / Generate draft | saved result appears in the workspace | the provider error (inline + toast), status resets | — |
+| Check against guidelines | "N suggestions" / "No guideline issues found" | "Guideline check failed" | "Text not found in the draft" when a suggestion is stale |
+| Save / toggle / reorder guideline | — | "Couldn't save guideline" etc. | delete goes through `ConfirmModal` |
+| Save provider key / models | "[Provider] key saved" / "Models saved" | the API error message | removing a key goes through `ConfirmModal` |
+| Approve / deny / disable user | "[Name] approved" etc. | "Couldn't update [name]" | deny and disable go through `ConfirmModal` |
+| Delete article | — | "Delete failed" | `ConfirmModal` first |
+| Sign-in rejected | — | inline on the login card: "Poe is only available to @growth-rocket.com Google accounts." | pending/disabled users see `/pending` |
+| Session expired | — | `apiFetch` redirects to `/login?callbackUrl=…` | — |
 
 ### Error boundary
 
@@ -247,418 +266,34 @@ Wrap each page with a React error boundary that catches unexpected crashes:
 
 ---
 
-## GitHub Repository
-
-> **Superseded (2026-10-05, WS-infra):** the deploy, Docker, nginx and VPS snippets in this section are the
-> old intended design. The source of truth is the repo's `Dockerfile`, `docker-compose.yml`,
-> `docker/Caddyfile`, `.github/workflows/deploy.yml` and the runbook `docs/deploy/CUTOVER.md`
-> (production: https://poe.vill.ar, `/var/www/poe`, Caddy on :443, no nginx).
-
-### Repo structure
-```
-github.com/mikevillargr/poe
-├── .github/
-│   └── workflows/
-│       ├── ci.yml           # Lint + typecheck on PR
-│       └── deploy.yml       # Build + deploy to VPS on git tag push (e.g., v0.1.0)
-├── docker/
-│   ├── Dockerfile
-│   └── nginx.conf
-├── docker-compose.yml       # Local dev + production
-├── .env.example
-└── [Next.js app files]
-```
-
-### `.github/workflows/ci.yml`
-```yaml
-name: CI
-on:
-  pull_request:
-    branches: [main]
-jobs:
-  lint-typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-```
-
-### `.github/workflows/deploy.yml`
-```yaml
-name: Deploy to VPS
-on:
-  push:
-    tags:
-      - 'v*.*.*'
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to VPS via SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            cd /var/www/poe
-            git fetch --tags
-            git checkout ${{ github.ref_name }}
-            docker compose build
-            docker compose up -d --remove-orphans
-            docker image prune -f
-```
-
-### Required GitHub Secrets
-```
-VPS_HOST          # VPS IP or domain
-VPS_USER          # SSH user (e.g. deploy)
-VPS_SSH_KEY       # Private key for passwordless SSH
-```
-
----
-
-## Docker
-
-> **Superseded (2026-10-05, WS-infra):** the deploy, Docker, nginx and VPS snippets in this section are the
-> old intended design. The source of truth is the repo's `Dockerfile`, `docker-compose.yml`,
-> `docker/Caddyfile`, `.github/workflows/deploy.yml` and the runbook `docs/deploy/CUTOVER.md`
-> (production: https://poe.vill.ar, `/var/www/poe`, Caddy on :443, no nginx).
-
-### `Dockerfile`
-```dockerfile
-FROM node:20-alpine AS base
-
-FROM base AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npm run build
-
-FROM base AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
-EXPOSE 3000
-CMD ["node", "server.js"]
-```
-
-Add to `next.config.ts`:
-```typescript
-output: 'standalone'
-```
-
-### `docker-compose.yml`
-```yaml
-version: '3.9'
-services:
-  app:
-    build: .
-    restart: unless-stopped
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      - NEXTAUTH_URL=${NEXTAUTH_URL}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - UPLOADS_DIR=/app/uploads
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./uploads:/app/uploads
-    depends_on:
-      - db
-
-  db:
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      - POSTGRES_DB=poe
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  nginx:
-    image: nginx:alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    depends_on:
-      - app
-
-volumes:
-  pgdata:
-```
-
-### `docker/nginx.conf`
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-
-    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
-
-    location / {
-        proxy_pass http://app:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
----
-
-## VPS Setup (one-time)
-
-> **Superseded (2026-10-05, WS-infra):** the deploy, Docker, nginx and VPS snippets in this section are the
-> old intended design. The source of truth is the repo's `Dockerfile`, `docker-compose.yml`,
-> `docker/Caddyfile`, `.github/workflows/deploy.yml` and the runbook `docs/deploy/CUTOVER.md`
-> (production: https://poe.vill.ar, `/var/www/poe`, Caddy on :443, no nginx).
-
-On the Hostinger VPS (Ubuntu 22.04):
-
-```bash
-# Install Docker
-curl -fsSL https://get.docker.com | sh
-usermod -aG docker $USER
-
-# Create app directory
-mkdir -p /var/www/poe
-cd /var/www/poe
-
-# Create .env file with production values
-nano .env
-
-# Create deploy user with SSH key (add pub key to authorized_keys)
-adduser deploy
-usermod -aG docker deploy
-mkdir -p /home/deploy/.ssh
-# paste GitHub Actions public key into authorized_keys
-
-# First deploy (before GitHub Actions is set up)
-docker compose pull && docker compose up -d
-
-# SSL (Let's Encrypt)
-apt install certbot python3-certbot-nginx
-certbot --nginx -d your-domain.com
-```
-
----
-
-## Page Structure (Next.js)
-
-```
-poe/
-├── .github/workflows/
-├── docker/
-├── app/
-│   ├── (auth)/
-│   │   └── login/page.tsx         # Login page (unauthenticated)
-│   ├── (app)/
-│   │   ├── layout.tsx             # Auth check + Sidebar + ThemeProvider
-│   │   ├── page.tsx               # Dashboard
-│   │   ├── analyze/page.tsx       # Score Content + Batch panel
-│   │   ├── guidelines/page.tsx    # Heuristic Store
-│   │   └── settings/page.tsx      # Settings stub
-│   ├── api/
-│   │   ├── auth/[...nextauth]/    # NextAuth credentials
-│   │   ├── score/route.ts         # Streaming SSE scorer
-│   │   ├── guidelines/
-│   │   │   ├── ingest/route.ts
-│   │   │   └── [id]/route.ts
-│   │   ├── batch/route.ts
-│   │   └── content/parse/route.ts
-│   └── layout.tsx
-├── components/
-│   ├── feedback/
-│   │   ├── Toast.tsx              # Severity-tiered toast
-│   │   ├── ToastContainer.tsx     # Fixed bottom-right stack
-│   │   ├── ErrorBanner.tsx        # Full-width blocking error
-│   │   ├── ConfirmModal.tsx       # Destructive action confirmation
-│   │   └── PageErrorBoundary.tsx  # React error boundary
-│   ├── CategoryBadge.tsx
-│   ├── ScoreGauge.tsx
-│   ├── Sidebar.tsx
-│   └── ThemeProvider.tsx
-├── hooks/
-│   ├── useToast.ts                # Global toast state + dispatch
-│   ├── useScoreStream.ts          # SSE streaming hook
-│   └── useTenant.ts
-├── lib/
-│   ├── ai/
-│   ├── parsers/
-│   └── db/
-├── Dockerfile
-├── docker-compose.yml
-├── docker/nginx.conf
-└── CLAUDE.md
-```
-
----
-
-## Known Gaps to Implement (from MP prototype)
-
-| # | Gap | Location | Priority |
-|---|---|---|---|
-| 1 | Re-prompt inline textarea per suggestion | ScoreContent center | High |
-| 2 | Blacklist/Agency/Client dimension rows | ScoreContent right panel | High |
-| 3 | Category filter logic in heuristic table | Guidelines | High |
-| 4 | Tenant switcher dropdown | Sidebar | High |
-| 5 | Save heuristics from modal to API | Guidelines modal | High |
-| 6 | `onOpenTab` from batch item into editor tab | ScoreContent tab bar | High |
-| 7 | Suggestion filter tabs wired to `activeFilter` | ScoreContent center | Medium |
-| 8 | Edit/Delete heuristic row wired to API | Guidelines | Medium |
-| 9 | Active toggle wired to PATCH API | Guidelines | Medium |
-| 10 | URL fetch + DOCX parse wired to API | ScoreContent blank canvas | High |
-
----
-
-## Data Models
-
-### Heuristic
-```typescript
-{ id, tenantId, category: 'brand'|'blacklist'|'seo'|'agency'|'client',
-  rule, weight: number, active: boolean, sourceGuidelineId?, createdAt, updatedAt }
-```
-
-### ScoreJob
-```typescript
-{ id, tenantId, contentText, contentSource: 'url'|'docx'|'gdoc'|'paste'|'csv_batch',
-  sourceRef?, status: 'pending'|'scoring'|'complete'|'error',
-  overallScore?, dimensionScores?, suggestions?, batchJobId?, createdAt }
-```
-
-### EditSuggestion
-```typescript
-{ id, jobId, heuristicId, type: 'insert'|'replace'|'delete',
-  originalText, suggestedText, charStart, charEnd,
-  reason, severity: 'high'|'medium'|'low',
-  status: 'pending'|'accepted'|'denied'|'modified', userModifiedText? }
-```
-
----
-
-## Scoring Prompt Output (inside `<score_result>` tags)
-
-```json
-{
-  "dimensionScores": [
-    { "category": "brand", "score": 82, "passCount": 5, "failCount": 1 },
-    { "category": "seo", "score": 61, "passCount": 3, "failCount": 2 },
-    { "category": "blacklist", "score": 100, "passCount": 4, "failCount": 0 },
-    { "category": "agency", "score": 70, "passCount": 3, "failCount": 1 },
-    { "category": "client", "score": 68, "passCount": 4, "failCount": 2 }
-  ],
-  "overallScore": 74,
-  "suggestions": [
-    { "heuristicId": "abc", "type": "replace",
-      "originalText": "...", "suggestedText": "...",
-      "charStart": 0, "charEnd": 48,
-      "reason": "...", "severity": "high" }
-  ]
-}
-```
-
----
-
-## Dev Conventions
-
-- Server actions for mutations, `ReadableStream` route handlers for SSE
-- All API routes validate `tenantId` from session
-- Framer Motion for all transitions — match MP patterns
-- All numeric values in `font-mono tabular-nums`
-- Errors return `{ error: string, code: string }`
-- `zod` for all API input validation
-- All destructive actions go through `ConfirmModal` before execution
-- All API failures fire a toast — never fail silently
-
----
-
-## Environment Variables
-
-```env
-ANTHROPIC_API_KEY=
-DATABASE_URL=postgresql://localhost:5432/poe
-NEXTAUTH_SECRET=
-NEXTAUTH_URL=https://your-domain.com
-UPLOADS_DIR=/app/uploads
-DB_USER=
-DB_PASSWORD=
-```
-
 ## Commands
 
 ```bash
-npm run dev              # Start development server
-npm run build            # Build for production
-npm run db:migrate       # Run database migrations
-npm run db:studio        # Open Drizzle Studio
-npm run lint             # Run ESLint
-npm run typecheck        # Run TypeScript checks
-npm run release:patch    # Release patch version (0.1.0 → 0.1.1)
-npm run release:minor    # Release minor version (0.1.0 → 0.2.0)
-npm run release:major    # Release major version (0.1.0 → 1.0.0)
-
-# Docker local
-docker compose up
-docker compose down
-
-# Release workflow (commits don't auto-deploy)
-npm run release:patch    # Create git tag → triggers VPS deployment
+npm run dev                 # dev server on :3001 (Google sign-in is registered for :3001 and :3002 only)
+npm run typecheck && npm run lint && npm test      # the real gates (next build ignores type/lint errors)
+npm run db:migrate          # apply migrations (tsx scripts/db/migrate.ts) to DATABASE_URL
+npm run db:generate         # new migration from schema changes
+npm run db:fixtures         # local mock data (4 clients, 24 articles); refuses non-local databases
+npx tsx scripts/dev/api-sweep.ts http://localhost:<port>   # every API route: 401 signed out, never 2xx for a pending user
+npx tsx --conditions=react-server scripts/ai-smoke.ts --provider anthropic|openai|moonshot   # live provider smoke (needs keys)
 ```
 
-## Release Workflow
+`AI_MOCK=1` uses a deterministic mock provider (no keys needed) for development.
 
-**Version management:**
-- Semantic versioning: `MAJOR.MINOR.PATCH` (e.g., `0.1.0`)
-- Pre-production: `< 1.0.0` (breaking changes OK)
-- Tag format: `v{version}` (e.g., `v0.1.0`)
+### Environment (see `.env.example`)
+`DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID/SECRET`, `ALLOWED_EMAIL_DOMAIN`, `SUPER_ADMIN_EMAIL`,
+`APP_ENCRYPTION_KEY` (encrypts provider keys; never change it once keys are stored), optional `ANTHROPIC_API_KEY` /
+`OPENAI_API_KEY` / `MOONSHOT_API_KEY` env fallbacks, `AI_MOCK`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID/API_KEY` (Drive export).
 
-**Release process:**
-1. Make changes on `main` branch and commit regularly
-2. When ready to release: `npm run release:patch` (or `:minor`, `:major`)
-3. Script automatically:
-   - Bumps `package.json` version
-   - Commits version bump
-   - Creates git tag (`v0.1.0`)
-   - Pushes to GitHub
-4. GitHub Actions detects tag → deploys to VPS
+## Releases and deploys
 
-**Example:**
+Work on a branch, open a PR (CI runs lint, typecheck and unit tests), merge. **Merging does not deploy.** To release, from a clean
+up-to-date `main`:
+
 ```bash
-# Make some changes
-git add .
-git commit -m "feat: add user authentication"
-git push
-
-# Ready to release
-npm run release:patch  # Creates v0.1.1, deploys to VPS
+npm run release:patch   # or :minor / :major. Bumps package.json, commits, tags vX.Y.Z, pushes
 ```
+
+The tag triggers `.github/workflows/deploy.yml`: GitHub builds the app and tools images, pushes them to `ghcr.io/mikevillargr/poe`,
+and the VPS pulls, backs up the database, migrates and restarts (about a minute on the server). Nothing is built on the server.
+Rollback and the one-time cutover are in `docs/deploy/CUTOVER.md`. Semantic versioning; pre-1.0 notes are irrelevant now (v1.x).
