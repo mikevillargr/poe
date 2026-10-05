@@ -135,6 +135,8 @@ jobs:
             # Migrations run before the new app starts; on failure the old containers keep serving.
             docker compose --profile tools run --rm migrate
             docker compose up -d --remove-orphans
+            # The Caddyfile is a bind mount, so `up -d` doesn't notice edits to it: reload it explicitly.
+            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || echo "::warning::caddy reload failed; Caddy keeps its previous config"
 
             # Health: app on loopback, then the public HTTPS edge (resolved locally, no hairpin).
             for i in $(seq 1 30); do

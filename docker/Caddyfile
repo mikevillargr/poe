@@ -3,7 +3,9 @@
 # Port 80 on the shared VPS is owned by another app (alwayssunny-frontend), so this Caddy only
 # publishes 443. Certificates are obtained with the ACME TLS-ALPN-01 challenge, which runs
 # entirely over :443; the HTTP-01 challenge and the HTTP->HTTPS redirect are disabled because
-# Caddy cannot receive traffic on :80. http://poe.vill.ar therefore does NOT redirect; use https.
+# Caddy cannot receive traffic on :80. http://poe.vill.ar therefore does NOT redirect. Instead the
+# Strict-Transport-Security header below makes browsers upgrade to https by themselves after the first
+# https visit (and modern browsers already try https first for a bare hostname).
 {
 	auto_https disable_redirects
 	# Drop idle keep-alive connections after 5 minutes; no server-side read/write deadline, so
@@ -21,6 +23,9 @@
 			disable_http_challenge
 		}
 	}
+
+	# HSTS for this host only. No includeSubDomains/preload: vill.ar hosts other things.
+	header Strict-Transport-Security "max-age=31536000"
 
 	# No `encode` directive: compressing text/event-stream would buffer SSE. Next.js already
 	# compresses regular responses.
