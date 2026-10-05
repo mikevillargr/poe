@@ -1,8 +1,20 @@
+# Build context for Dockerfile. Secrets and local state never enter the image.
 node_modules
 .next
 .git
+.github
+.agents
 *.md
 .env
 .env.*
 uploads
 .heuristics-store.json
+*.tsbuildinfo
+coverage
+docs
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker/Caddyfile
+deploy*.sh
+.DS_Store

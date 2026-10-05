@@ -1,0 +1,43 @@
+# Caddy edge for Poe: TLS termination for poe.vill.ar, reverse proxy to the app container.
+#
+# Port 80 on the shared VPS is owned by another app (alwayssunny-frontend), so this Caddy only
+# publishes 443. Certificates are obtained with the ACME TLS-ALPN-01 challenge, which runs
+# entirely over :443; the HTTP-01 challenge and the HTTP->HTTPS redirect are disabled because
+# Caddy cannot receive traffic on :80. http://poe.vill.ar therefore does NOT redirect; use https.
+{
+	auto_https disable_redirects
+	# Drop idle keep-alive connections after 5 minutes; no server-side read/write deadline, so
+	# long SSE responses are never cut by Caddy itself.
+	servers {
+		timeouts {
+			idle 5m
+		}
+	}
+}
+
+{$POE_DOMAIN:poe.vill.ar} {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
+
+	# No `encode` directive: compressing text/event-stream would buffer SSE. Next.js already
+	# compresses regular responses.
+	reverse_proxy app:3001 {
+		# Stream responses immediately (SSE for research/generation).
+		flush_interval -1
+		# Caddy sets X-Forwarded-For / -Proto / -Host by default; Auth.js reads them
+		# (AUTH_TRUST_HOST=true in .env).
+		transport http {
+			# Allow up to 10 minutes between bytes from the app (>= 300s requirement).
+			read_timeout 600s
+			write_timeout 600s
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

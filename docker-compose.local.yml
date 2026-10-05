@@ -1,0 +1,29 @@
+# Local production-mode smoke test: no TLS/Caddy, app on loopback, isolated project + volume.
+#
+#   cp .env.example .env.prodtest.local   # fill in; DATABASE_URL must use host `db`
+#   export POE_ENV_FILE=.env.prodtest.local POE_LOCAL_PORT=3013
+#   docker compose -p poe-local -f docker-compose.yml -f docker-compose.local.yml --env-file $POE_ENV_FILE build app migrate
+#   docker compose -p poe-local -f docker-compose.yml -f docker-compose.local.yml --env-file $POE_ENV_FILE run --rm migrate
+#   docker compose -p poe-local -f docker-compose.yml -f docker-compose.local.yml --env-file $POE_ENV_FILE up -d
+#   curl http://127.0.0.1:$POE_LOCAL_PORT/api/health
+#   docker compose -p poe-local -f docker-compose.yml -f docker-compose.local.yml --env-file $POE_ENV_FILE down -v
+#
+# `-p` overrides the pinned project name, so this never touches a `poe` project or `poe_pgdata`.
+# Day-to-day development still uses `npm run dev` against a local Postgres (.env.local).
+
+services:
+  app:
+    image: poe-app:local
+    env_file: !override
+      - ${POE_ENV_FILE:-.env.prodtest.local}
+    ports: !override
+      - "127.0.0.1:${POE_LOCAL_PORT:-3013}:3001"
+    volumes: !reset []
+
+  migrate:
+    image: poe-tools:local
+    env_file: !override
+      - ${POE_ENV_FILE:-.env.prodtest.local}
+
+  caddy:
+    profiles: ["disabled"]
