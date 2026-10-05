@@ -170,7 +170,8 @@ export function ResearchTab({
     <div className="max-w-3xl mx-auto p-8 space-y-8">
       <div className="flex items-center justify-between gap-4">
         <div className="text-xs text-muted font-mono tabular-nums">
-          {research!.queries.length} searches · {citations.length} sources
+          {research!.queries.length} search{research!.queries.length === 1 ? '' : 'es'} · {citations.length} source
+          {citations.length === 1 ? '' : 's'}
           {article.researchModel && <> · {article.researchModel}</>}
         </div>
         <button
