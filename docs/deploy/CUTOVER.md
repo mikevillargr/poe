@@ -309,3 +309,32 @@ need its own plan because it touches every app.
   - The `CLAUDE.md` Docker, VPS and nginx sections describe the old intended design. This runbook and
     the repo's `Dockerfile` / `docker-compose.yml` are the source of truth.
 - **Treat them as removed, not as targets to restore**, unless Mike explicitly asks for that.
+
+---
+
+## Releases after cutover (from v1.2.0)
+
+`npm run release:patch|minor|major` from a clean, up-to-date `main` pushes a `v*.*.*` tag. Then
+`.github/workflows/deploy.yml` runs two jobs:
+
+1. **build** (on GitHub): builds the `runner` and `tools` images with the GitHub Actions layer cache
+   and pushes them to `ghcr.io/mikevillargr/poe:<tag>` and `ghcr.io/mikevillargr/poe-tools:<tag>`
+   (plus `:latest`).
+2. **deploy** (over SSH, about 1–2 min):
+   - checks `.env`;
+   - fast-forwards `/var/www/poe` to the tag;
+   - writes `POE_APP_IMAGE`, `POE_TOOLS_IMAGE` and `POE_TAG` into `.env`;
+   - logs in to ghcr with the job's short-lived token, then pulls;
+   - tags the running image `poe-app:previous`;
+   - backs up to `/var/backups/poe/predeploy-<tag>-*.dump`;
+   - migrates, then runs `up -d`;
+   - health-checks. If the migration fails, the old app keeps serving.
+
+**Nothing is built on the server any more.** Building there took 15–20 minutes. To redeploy a tag, use
+Actions → "Deploy to VPS" → Run workflow and enter the tag.
+
+**SSH:** the `VPS_SSH_KEY` secret is a dedicated ed25519 deploy key (`poe-deploy`) whose public half is in
+`/root/.ssh/authorized_keys`. Before 2026-10-05 the secret wasn't a valid key, so every tag deploy failed.
+
+**Rollback:** set `POE_TAG` in `.env` to the previous tag and run `docker compose up -d app`, or retag
+`poe-app:previous`. If a migration ran, restore the predeploy dump first (see Rollback B).

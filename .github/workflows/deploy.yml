@@ -1,33 +1,103 @@
 name: Deploy to VPS
 
-# Tag push (vX.Y.Z, cut by `npm run release:*` from main) -> production at /var/www/poe.
-# The first production cutover is manual (docs/deploy/CUTOVER.md); this workflow refuses to run
-# until the server's .env is in the production format.
+# Push a v*.*.* tag (npm run release:patch|minor|major from a clean main) to deploy.
+# 1. build  – GitHub builds the app + tools images (layer cache in GitHub Actions) and pushes them
+#             to ghcr.io/mikevillargr/poe and ghcr.io/mikevillargr/poe-tools, tagged with the release.
+# 2. deploy – the VPS only pulls those images, backs up the DB, migrates, restarts and health-checks.
+#             No building on the server (it took 15–20 min there).
+# Manual re-run of a tag: Actions → Deploy to VPS → Run workflow → enter the tag.
 
 on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to (re)deploy, e.g. v1.1.0'
+        required: true
 
 concurrency:
   group: deploy-vps
   cancel-in-progress: false
 
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  APP_IMAGE: ghcr.io/mikevillargr/poe
+  TOOLS_IMAGE: ghcr.io/mikevillargr/poe-tools
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          push: true
+          build-args: |
+            GIT_SHA=${{ steps.sha.outputs.sha }}
+          tags: |
+            ${{ env.APP_IMAGE }}:${{ env.TAG }}
+            ${{ env.APP_IMAGE }}:latest
+          cache-from: type=gha,scope=poe-app
+          cache-to: type=gha,scope=poe-app,mode=max
+
+      - name: Build and push tools image (migrations)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: tools
+          push: true
+          build-args: |
+            GIT_SHA=${{ steps.sha.outputs.sha }}
+          tags: |
+            ${{ env.TOOLS_IMAGE }}:${{ env.TAG }}
+            ${{ env.TOOLS_IMAGE }}:latest
+          cache-from: type=gha,scope=poe-tools
+          cache-to: type=gha,scope=poe-tools,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Deploy to VPS via SSH
         uses: appleboy/ssh-action@v1
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          # `script_stop` was removed from ssh-action v1.2+; `set -euo pipefail` below does the same.
-          command_timeout: 30m
+          envs: TAG,APP_IMAGE,TOOLS_IMAGE,GHCR_USER,GHCR_TOKEN
+          command_timeout: 15m
           script: |
             set -euo pipefail
-            TAG='${{ github.ref_name }}'
             cd /var/www/poe
 
             # Guard: the server must have been cut over (production .env) first.
@@ -35,19 +105,26 @@ jobs:
               grep -q "^${v}=" .env || { echo "::error::.env is missing ${v}; run docs/deploy/CUTOVER.md first" >&2; exit 1; }
             done
 
-            # Fast-forward main to the tag (fails loudly if the checkout has diverged).
+            # Keep the checkout (compose file, migrations, docs) at the release.
             git fetch --tags origin
             git checkout main
             git merge --ff-only "refs/tags/${TAG}"
-            export GIT_SHA="$(git rev-parse HEAD)"
-            echo "Deploying ${TAG} (${GIT_SHA})"
+
+            # Point compose at the registry images for this release (also used by manual compose commands).
+            set_env() { if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi; }
+            set_env POE_APP_IMAGE "${APP_IMAGE}"
+            set_env POE_TOOLS_IMAGE "${TOOLS_IMAGE}"
+            set_env POE_TAG "${TAG}"
+
+            # Pull (no building on this host). The job token is short-lived; log out afterwards.
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin >/dev/null
+            trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+            docker compose --profile tools pull app migrate
+            echo "Deploying ${TAG}: $(docker image inspect "${APP_IMAGE}:${TAG}" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
 
             # Keep the running image for rollback (docs/deploy/CUTOVER.md "Rollback").
-            if docker image inspect poe-app:latest >/dev/null 2>&1; then
-              docker tag poe-app:latest poe-app:previous
-            fi
-
-            docker compose build app migrate
+            RUNNING=$(docker inspect poe-app-1 --format '{{.Image}}' 2>/dev/null || true)
+            [ -n "${RUNNING}" ] && docker tag "${RUNNING}" poe-app:previous
 
             # Pre-migration backup (migrations are forward-only; this dump is the rollback path).
             mkdir -p /var/backups/poe && chmod 700 /var/backups/poe
@@ -56,7 +133,7 @@ jobs:
             echo "Backup: ${DUMP} ($(du -h "${DUMP}" | cut -f1))"
 
             # Migrations run before the new app starts; on failure the old containers keep serving.
-            docker compose run --rm migrate
+            docker compose --profile tools run --rm migrate
             docker compose up -d --remove-orphans
 
             # Health: app on loopback, then the public HTTPS edge (resolved locally, no hairpin).
