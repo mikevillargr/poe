@@ -12,6 +12,5 @@ export const authConfig = {
     }),
   ],
   session: { strategy: 'jwt' },
-  // TODO(DR-002): set `pages: { signIn: '/login', error: '/login' }` once the custom login design is
-  // approved. Until then NextAuth's built-in sign-in/error pages are used so no unapproved UI ships.
+  pages: { signIn: '/login', error: '/login' },
 } satisfies NextAuthConfig
