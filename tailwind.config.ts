@@ -29,6 +29,9 @@ const config: Config = {
           blacklist: '#9B2C2C',
           agency: '#276749',
           client: '#6B21A8',
+          structure: '#475569',
+          readability: '#0F766E',
+          sourcing: '#6D28D9',
         },
       },
       fontFamily: {
