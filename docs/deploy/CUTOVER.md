@@ -35,9 +35,9 @@ redirect. Always link to `https://`. The optional fix is at the end of this file
 2. Google OAuth client: the redirect URI `https://poe.vill.ar/api/auth/callback/google` is
    registered (done). You need its client ID and secret.
 3. DNS: `poe.vill.ar` A record points to `76.13.191.149` (done; `dig +short poe.vill.ar`).
-4. **Hostinger firewall.** From outside, closed ports on this VPS time out instead of being refused,
-   so a provider-level firewall may be filtering traffic. If hPanel → VPS → Firewall has rules,
-   allow **443/tcp** (and 443/udp for HTTP/3) before the window. Let's Encrypt must reach 443.
+4. **Port 443 reachability: verified, nothing to do.** On 2026-10-05, a throwaway `nginx:alpine` on
+   `-p 443:80` answered HTTP 200 from outside, and it was removed straight after. Closed ports time out
+   upstream, but published ports are reachable, so no hPanel firewall change is needed.
 5. Generate secrets on your laptop (keep them out of chat and logs):
    ```bash
    openssl rand -base64 32   # AUTH_SECRET
@@ -181,8 +181,9 @@ curl -fsS http://127.0.0.1:3001/api/health  # {"ok":true,"db":true}
 `db` gets recreated with the new config (no published port), either here or already in step 8 when
 `run` started its dependency. The data stays on `poe_pgdata`.
 
-If Caddy logs ACME errors or timeouts, 443 is not reachable from the internet. Check the hPanel
-firewall (step 0.4). Caddy retries on its own once the port opens.
+If Caddy logs ACME errors or timeouts, check that the `caddy` container is publishing 443
+(`docker compose ps`) and that DNS for poe.vill.ar still points to 76.13.191.149. 443 was verified
+reachable on 2026-10-05 (step 0.4). Caddy retries on its own once the port opens.
 
 ## 10. Verify
 
