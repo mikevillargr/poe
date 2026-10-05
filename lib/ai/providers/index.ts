@@ -1,31 +1,23 @@
 import 'server-only'
-import { AIError, type AIProvider, type ProviderId } from '../types'
+import type { AIProvider, ProviderId } from '../types'
+import { getProviderCredentials } from '../secrets'
+import type { CredentialsLoader } from './shared'
+import { createAnthropicProvider } from './anthropic'
+import { createOpenAIProvider } from './openai'
+import { createMoonshotProvider } from './moonshot'
 
-// Real provider factories. OWNED BY WS-ai: replace each stub with lib/ai/providers/<id>.ts.
-// Factories are called per request so keys rotated in Settings take effect immediately.
+// Real provider factories (WS-ai). Factories are called per request, and each provider instance
+// resolves its credentials lazily (DB row → env) once, so keys rotated in Settings take effect on
+// the next request. listModels() works without a key (curated list); every other call throws
+// AIError('PROVIDER_NOT_CONFIGURED') when no key is set.
 
-function notImplemented(id: ProviderId): AIProvider {
-  const fail = () => {
-    throw new AIError('PROVIDER_NOT_IMPLEMENTED', `The ${id} provider is not implemented yet (WS-ai). Set AI_MOCK=1 to use the mock.`)
-  }
-  return {
-    id,
-    listModels: async () => fail(),
-    generateText: async () => fail(),
-    testKey: async () => fail(),
-    // eslint-disable-next-line require-yield
-    streamText: async function* () {
-      fail()
-    },
-    // eslint-disable-next-line require-yield
-    research: async function* () {
-      fail()
-    },
-  }
+function loader(id: ProviderId): CredentialsLoader {
+  let p: ReturnType<CredentialsLoader> | null = null
+  return () => (p ??= getProviderCredentials(id))
 }
 
 export const providerFactories: Record<ProviderId, () => Promise<AIProvider>> = {
-  anthropic: async () => notImplemented('anthropic'),
-  openai: async () => notImplemented('openai'),
-  moonshot: async () => notImplemented('moonshot'),
+  anthropic: async () => createAnthropicProvider(loader('anthropic')),
+  openai: async () => createOpenAIProvider(loader('openai')),
+  moonshot: async () => createMoonshotProvider(loader('moonshot')),
 }
