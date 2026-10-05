@@ -277,21 +277,17 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3001/login   # 200
 
 ---
 
-## Optional: HTTP to HTTPS redirect for poe.vill.ar
+## http → https for poe.vill.ar
 
-Port 80 belongs to AlwaysSunny (`/opt/alwayssunny`). To redirect `http://poe.vill.ar`, add a server block
-to **AlwaysSunny's** nginx. That's a change to another app, so it's Mike's call:
+Port 80 belongs to AlwaysSunny, whose nginx config is baked into its image, so a server-side redirect would mean rebuilding
+and redeploying another app. Instead (from v1.2.1):
+- Poe's Caddy sends `Strict-Transport-Security: max-age=31536000` (this host only; no `includeSubDomains`/`preload`, since
+  vill.ar hosts other things). After a browser's first https visit it upgrades `poe.vill.ar` to https by itself.
+- Modern browsers already try https first for a bare hostname typed in the address bar.
+- The deploy reloads Caddy so Caddyfile edits take effect (it's a bind mount; `up -d` doesn't notice them).
 
-```nginx
-server {
-    listen 80;
-    server_name poe.vill.ar;
-    return 301 https://poe.vill.ar$request_uri;
-}
-```
-
-The longer-term alternative is one shared edge proxy on 80/443 for every app on the box. It would
-need its own plan because it touches every app.
+A literal `http://poe.vill.ar` request still lands on AlwaysSunny until that app (or a future shared edge proxy for ports 80/443)
+adds a `return 301 https://poe.vill.ar$request_uri;` server block for `poe.vill.ar`.
 
 ---
 
