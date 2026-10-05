@@ -2,8 +2,8 @@
 #
 # Targets:
 #   runner (default)  the app: `node server.js` on :3001, non-root, healthchecked
-#   tools             one-off DB tooling (migrations, baseline marker); has the full
-#                     node_modules incl. tsx. Used by the `migrate` compose service.
+#   tools             one-off DB tooling (migrations, baseline marker, universal seed) as bundled
+#                     .cjs files in /app/dist, no node_modules. Used by the `migrate` compose service.
 #
 # Build:  docker build --build-arg GIT_SHA=$(git rev-parse HEAD) -t poe-app .
 #
@@ -15,24 +15,43 @@ FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# ---- deps: full install (dev deps are needed for `next build` and tsx) ----------------------
+# ---- manifest: package.json with the release version blanked ---------------------------------
+# scripts/release.js bumps "version" on every release. Feeding the raw package.json to `npm ci`
+# would bust the dependency layer each time; this stage emits a copy that only changes when the
+# dependencies do (COPY --from is keyed on content, so an identical output is a cache hit).
+FROM base AS manifest
+COPY package.json ./
+RUN node -e "const p=require('./package.json');p.version='0.0.0';require('fs').writeFileSync('/tmp/package.json',JSON.stringify(p))"
+
+# ---- deps: full install (dev deps are needed for `next build` and the tools bundle) ---------
 FROM base AS deps
-COPY package.json package-lock.json ./
+COPY --from=manifest /tmp/package.json ./package.json
+COPY package-lock.json ./
 # The lockfile references the vendored SheetJS tarball (file:vendor/xlsx-*.tgz).
 COPY vendor ./vendor
 RUN npm ci --no-audit --no-fund
 
-# ---- tools: migrations and other one-off DB scripts -----------------------------------------
-FROM base AS tools
+# ---- tools-build: bundle the DB scripts into self-contained CommonJS files -------------------
+# esbuild ships with tsx. Everything (drizzle-orm, pg, dotenv, lib/db/schema) is inlined, so the
+# tools image needs no node_modules.
+FROM deps AS tools-build
+COPY tsconfig.json ./
+COPY scripts/db ./scripts/db
+COPY lib ./lib
+RUN npx esbuild scripts/db/migrate.ts scripts/db/mark-baseline.ts scripts/db/seed-universal.ts \
+      --bundle --platform=node --target=node20 --format=cjs --outdir=dist --out-extension:.js=.cjs \
+      --log-level=warning \
+ && ls -l dist
+
+# ---- tools: migrations and other one-off DB scripts (no node_modules) ------------------------
+FROM node:20-alpine AS tools
 ENV NODE_ENV=production
-COPY --from=deps --chown=node:node /app/node_modules ./node_modules
-COPY --chown=node:node package.json tsconfig.json ./
+WORKDIR /app
+COPY --from=tools-build --chown=node:node /app/dist ./dist
 COPY --chown=node:node drizzle ./drizzle
-COPY --chown=node:node scripts/db ./scripts/db
-COPY --chown=node:node lib ./lib
 USER node
-# Override the command for other scripts, e.g. `npx tsx scripts/db/mark-baseline.ts`.
-CMD ["npx", "tsx", "scripts/db/migrate.ts"]
+# Override the command for other scripts, e.g. `node dist/mark-baseline.cjs`.
+CMD ["node", "dist/migrate.cjs"]
 
 # ---- builder: next build (standalone output) ------------------------------------------------
 FROM base AS builder
