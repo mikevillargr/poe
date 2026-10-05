@@ -45,7 +45,7 @@ export function buildResearchPrompt(article: PromptArticle): BuiltPrompt {
   return {
     system: SYSTEM,
     messages: [{ role: 'user', content: lines.join('\n') }],
-    maxTokens: 4096,
+    maxTokens: 16000, // web search + thinking models need room; providers also enforce a floor
     maxSearches: 6,
   }
 }

@@ -48,6 +48,22 @@ function parseSourcesList(text: string): Citation[] {
   return out
 }
 
+const urlKey = (u: string) => u.replace(/#.*$/, '').replace(/\/$/, '')
+
+/**
+ * The summary's inline [n] markers follow the model's own <sources> list, so that list's numbering
+ * wins. Provider-structured citations (Anthropic/OpenAI) only enrich it with title/snippet by URL;
+ * they're used on their own only when the model wrote no parseable source list.
+ */
+export function mergeCitations(listed: Citation[], provider: Citation[]): Citation[] {
+  if (!listed.length) return provider
+  const byUrl = new Map(provider.map((c) => [urlKey(c.url), c]))
+  return listed.map((c) => {
+    const p = byUrl.get(urlKey(c.url))
+    return { ...c, title: c.title || p?.title, snippet: c.snippet || p?.snippet }
+  })
+}
+
 function dedupeCitations(list: Citation[]): WorkspaceCitation[] {
   const seen = new Set<string>()
   const out: WorkspaceCitation[] = []
@@ -96,7 +112,7 @@ export function parseResearchOutput(
     }
   }
 
-  const citations = dedupeCitations(providerCitations.length ? providerCitations : parseSourcesList(sources ?? ''))
+  const citations = dedupeCitations(mergeCitations(parseSourcesList(sources ?? ''), providerCitations))
   return {
     summary: paragraphs(summary ?? '').slice(0, 50000),
     outlineHtml: outline ? cleanOutline(outline).slice(0, 200000) : '',
