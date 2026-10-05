@@ -52,7 +52,7 @@ export async function persistGeneratedDraft(
 }
 
 /**
- * Persists a finished revision: the new draft, a `generated` version labelled with the feedback, the
+ * Persists a finished revision: the new draft, a `revised` version labelled with the feedback, the
  * draft model, and a `revised` event carrying the full feedback text (article_events.payload). Status
  * is untouched. Returns the new version number.
  */
@@ -66,7 +66,7 @@ export async function persistRevisedDraft(
 ) {
   const html = cleanGeneratedHtml(rawText)
   if (countWords(html) === 0) throw Errors.badRequest('The model returned an empty draft.')
-  const version = await createVersion(articleId, html, 'generated', user, revisionLabel(opts.feedback))
+  const version = await createVersion(articleId, html, 'revised', user, revisionLabel(opts.feedback))
   const updated = await updateArticle(tenantId, articleId, { draftHtml: html }, user, {
     eventType: 'revised',
     eventPayload: {

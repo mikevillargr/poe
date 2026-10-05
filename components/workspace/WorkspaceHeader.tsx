@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, MoreHorizontal, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2 } from 'lucide-react'
 import { StatusPill } from '@/components/home/StatusPill'
-import { ARTICLE_STATUS_LABELS, type ArticleStatus } from '@/lib/articles/schemas'
+import { ARTICLE_STATUS_LABELS, ARTICLE_STATUSES, canTransition, type ArticleStatus } from '@/lib/articles/schemas'
 import type { WorkspaceArticle } from './types'
 import { hasResearch } from './types'
 
@@ -42,6 +42,7 @@ export function WorkspaceHeader({
   onTitleChange,
   onPrimary,
   onMoveBack,
+  onChangeStatus,
   onExportDocx,
   onExportDrive,
   onDelete,
@@ -59,6 +60,7 @@ export function WorkspaceHeader({
   onTitleChange: (title: string) => void
   onPrimary: (action: Exclude<PrimaryAction, null>) => void
   onMoveBack: (to: ArticleStatus) => void
+  onChangeStatus: (to: ArticleStatus) => void
   onExportDocx: () => void
   onExportDrive: () => void
   onDelete: () => void
@@ -66,6 +68,22 @@ export function WorkspaceHeader({
   const [title, setTitle] = useState(article.title)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const statusRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!statusOpen) return
+    const onDown = (e: MouseEvent) => {
+      if (!statusRef.current?.contains(e.target as Node)) setStatusOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setStatusOpen(false)
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [statusOpen])
 
   useEffect(() => setTitle(article.title), [article.title])
 
@@ -97,7 +115,7 @@ export function WorkspaceHeader({
   const item = 'w-full text-left px-3 py-2 text-sm flex items-center gap-2 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
   return (
-    <header className="h-16 shrink-0 border-b border-border bg-surface/80 backdrop-blur-md px-4 flex items-center gap-3">
+    <header className="relative z-40 h-16 shrink-0 border-b border-border bg-surface/80 backdrop-blur-md px-4 flex items-center gap-3">
       <Link
         href={`/c/${clientSlug}`}
         className="p-2 rounded-input text-muted hover:text-heading hover:bg-surface-hover transition-colors flex items-center gap-1.5 text-sm"
@@ -135,7 +153,54 @@ export function WorkspaceHeader({
         aria-label="Article title"
         className="flex-1 min-w-0 bg-transparent text-lg font-display text-heading truncate rounded-input px-2 py-1 border border-transparent hover:border-border focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/50"
       />
-      <StatusPill status={article.status} />
+      <div className="relative" ref={statusRef}>
+        <button
+          type="button"
+          onClick={() => setStatusOpen((o) => !o)}
+          disabled={busy || statusSaving}
+          aria-haspopup="menu"
+          aria-expanded={statusOpen}
+          aria-label={`Status: ${ARTICLE_STATUS_LABELS[article.status]}. Change status`}
+          className="flex items-center gap-1 rounded-full disabled:opacity-60"
+        >
+          <StatusPill status={article.status} />
+          <ChevronDown className="w-3.5 h-3.5 text-muted -ml-0.5" />
+        </button>
+        <AnimatePresence>
+          {statusOpen && (
+            <motion.div
+              role="menu"
+              initial={{ opacity: 0, y: -4, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 400, damping: 30 } }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              className="absolute left-0 top-full mt-2 w-56 glass-card bg-surface shadow-2xl p-1.5 z-40"
+            >
+              {ARTICLE_STATUSES.map((s) => {
+                const current = s === article.status
+                const allowed = canTransition(article.status, s)
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={current}
+                    disabled={current || !allowed}
+                    title={!current && !allowed ? 'Statuses change one step at a time' : undefined}
+                    onClick={() => {
+                      setStatusOpen(false)
+                      onChangeStatus(s)
+                    }}
+                    className={`${item} ${current ? 'text-heading' : 'text-body hover:bg-surface-hover'}`}
+                  >
+                    <span className="w-4 h-4 flex items-center justify-center">{current && <Check className="w-4 h-4 text-accent" />}</span>
+                    {ARTICLE_STATUS_LABELS[s]}
+                  </button>
+                )
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {meta && action && (
         <button

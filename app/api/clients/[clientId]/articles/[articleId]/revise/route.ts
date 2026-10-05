@@ -32,7 +32,7 @@ type P = { clientId: string; articleId: string }
 // Shares the 'generation' run slot and generation_status with …/generate: while it runs the article
 // shows generation_status 'running', and Stop is the same DELETE. The run is detached (leaving the page
 // doesn't cancel it). The existing draft is first saved as a `manual` version "Before revision"; the
-// result is saved as a `generated` version labelled "Revised: <feedback…>" and a `revised` event whose
+// result is saved as a `revised` version labelled "Revised: <feedback…>" and a `revised` event whose
 // payload holds { feedback (full text), model, versionNo, wordCount, usedResearch, snapshotVersionNo }.
 // Article status does not change.
 export const POST = withRoute<P>(async ({ req, params, user }) => {

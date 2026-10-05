@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Clock, Star, RotateCcw, Plus, FileText, Loader2, Sparkles, Undo2, Upload, Wand2 } from 'lucide-react'
+import { X, Clock, Star, RotateCcw, Plus, FileText, Loader2, Sparkles, Undo2, Upload, Wand2, MessageSquareText } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import type { ArticleVersionDTO } from '@/lib/pipeline/schemas'
@@ -16,6 +16,7 @@ const KIND_META: Record<ArticleVersionDTO['kind'], { label: string; icon: typeof
   suggestion_applied: { label: 'suggestion', icon: Wand2 },
   restore: { label: 'restore', icon: Undo2 },
   imported: { label: 'imported', icon: Upload },
+  revised: { label: 'revised', icon: MessageSquareText },
 }
 
 const nf = new Intl.NumberFormat('en-US')

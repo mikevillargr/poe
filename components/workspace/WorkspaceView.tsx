@@ -470,6 +470,7 @@ export function WorkspaceView({
         onTitleChange={(title) => patchFields({ title })}
         onPrimary={onPrimary}
         onMoveBack={moveStatus}
+        onChangeStatus={moveStatus}
         onExportDocx={() => {
           try {
             exportDocx(article.title, currentHtml())
@@ -621,6 +622,7 @@ export function WorkspaceView({
         message={`“${article.title}” will be permanently deleted, including its research, draft and version history. This can’t be undone.`}
         confirmLabel="Delete article"
         confirmVariant="danger"
+        requireText="delete"
         onConfirm={confirmDelete}
         onCancel={() => setConfirm(null)}
       />

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."article_version_kind" ADD VALUE IF NOT EXISTS 'revised';

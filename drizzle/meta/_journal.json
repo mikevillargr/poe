@@ -43,6 +43,13 @@
       "when": 1791211501918,
       "tag": "0005_remap_nch_guideline_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791213761538,
+      "tag": "0006_version_kind_revised",
+      "breakpoints": true
     }
   ]
 }

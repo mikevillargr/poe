@@ -11,6 +11,7 @@ export const articleVersionKind = pgEnum('article_version_kind', [
   'suggestion_applied',
   'restore',
   'imported',
+  'revised',
 ])
 
 export const guidelineSource = pgEnum('guideline_source', ['manual', 'ingested', 'template_copy'])
