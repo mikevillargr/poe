@@ -1,21 +1,19 @@
 'use client'
 
 import React, { useEffect, useCallback, useState, useRef } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import UnderlineExtension from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
-import { Extension } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import {
   Bold,
   Italic,
   Underline,
   Heading1,
   Heading2,
+  Heading3,
   List,
   ListOrdered,
   Quote,
@@ -24,6 +22,20 @@ import {
   Trash2,
   Link2,
 } from 'lucide-react'
+import { countWords } from '@/lib/articles/text'
+import {
+  KeywordHighlightExtension,
+  SuggestionHighlightExtension,
+  findTextRanges,
+  keywordHighlightKey,
+  scrollToFirstHighlight,
+  setDecorations,
+  suggestionHighlightKey,
+} from '@/lib/tiptap/highlights'
+
+// The Poe editor (owned by WS workspace). Retooled from the Analyze editor: same toolbar, autosave,
+// and in-text suggestion highlighting; adds H3, real save status, actual/target word count, keyword
+// highlighting and a toolbar slot for host actions.
 
 interface RichTextEditorProps {
   content?: string
@@ -36,68 +48,64 @@ interface RichTextEditorProps {
     charEnd?: number
   }>
   placeholder?: string
-  onSave?: (content: string) => void
+  /** Autosave target. If it returns a promise, the save status follows it (rejection → "Not saved"). */
+  onSave?: (content: string) => void | Promise<unknown>
   autoSaveDelay?: number
   activeSuggestionId?: string | null
   onSuggestionClick?: (id: string) => void
   onContentChange?: (content: string, wordCount: number, charCount: number) => void
   editorRef?: React.MutableRefObject<any>
   onDelete?: () => void
+  /** Shows "actual / target words" in the status bar. */
+  targetWords?: number | null
+  /** Keywords to highlight while `highlightKeywords` is on (first = primary). */
+  keywords?: string[]
+  highlightKeywords?: boolean
+  /** Extra controls rendered at the right of the toolbar (Save version, Versions, …). */
+  toolbarExtra?: React.ReactNode
+  onReady?: (editor: Editor) => void
 }
 
-// Plugin key for our decoration plugin
-const highlightPluginKey = new PluginKey('suggestionHighlight')
+type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error'
 
-// TipTap extension that uses ProseMirror decorations (not marks) for highlighting
-const SuggestionHighlightExtension = Extension.create({
-  name: 'suggestionHighlight',
+const nf = new Intl.NumberFormat('en-US')
 
-  addProseMirrorPlugins() {
-    return [
-      new Plugin({
-        key: highlightPluginKey,
-        state: {
-          init() {
-            return DecorationSet.empty
-          },
-          apply(tr, oldSet) {
-            // Check if we have new decorations via metadata
-            const meta = tr.getMeta(highlightPluginKey)
-            if (meta !== undefined) {
-              return meta
-            }
-            // Map existing decorations through document changes
-            return oldSet.map(tr.mapping, tr.doc)
-          },
-        },
-        props: {
-          decorations(state) {
-            return highlightPluginKey.getState(state)
-          },
-        },
-      }),
-    ]
-  },
-})
-
-// Find all positions of a search string within the ProseMirror document
-function findTextPositions(doc: any, searchText: string): Array<{ from: number; to: number }> {
-  const results: Array<{ from: number; to: number }> = []
-  const search = searchText.toLowerCase()
-
-  doc.descendants((node: any, pos: number) => {
-    if (!node.isText) return
-    const text: string = node.text || ''
-    const lower = text.toLowerCase()
-    let idx = lower.indexOf(search)
-    while (idx !== -1) {
-      results.push({ from: pos + idx, to: pos + idx + search.length })
-      idx = lower.indexOf(search, idx + 1)
-    }
-  })
-
-  return results
+const KEYWORD_STYLE = {
+  primary: 'background-color: rgba(30, 64, 175, 0.16); border-bottom: 2px solid rgba(30, 64, 175, 0.75); border-radius: 2px;',
+  secondary: 'background-color: rgba(30, 64, 175, 0.08); border-bottom: 2px dotted rgba(30, 64, 175, 0.55); border-radius: 2px;',
 }
+
+function ToolbarButton({
+  onClick,
+  active,
+  disabled,
+  title,
+  children,
+}: {
+  onClick: () => void
+  active?: boolean
+  disabled?: boolean
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`p-2 rounded transition-colors disabled:opacity-50 ${
+        active ? 'bg-accent text-white' : 'text-muted hover:text-heading hover:bg-surface-hover'
+      }`}
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+    >
+      {children}
+    </button>
+  )
+}
+
+const Divider = () => <div className="w-px h-6 bg-border mx-1" />
 
 export function RichTextEditor({
   content = '',
@@ -106,185 +114,147 @@ export function RichTextEditor({
   onSave,
   autoSaveDelay = 2000,
   activeSuggestionId,
-  onSuggestionClick,
   onContentChange,
   editorRef,
   onDelete,
+  targetWords,
+  keywords,
+  highlightKeywords = false,
+  toolbarExtra,
+  onReady,
 }: RichTextEditorProps) {
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
-  const [wordCount, setWordCount] = useState(0)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
+  const [wordCount, setWordCount] = useState(() => countWords(content))
   const prevSuggestionRef = useRef<string | null | undefined>(null)
+  const onSaveRef = useRef(onSave)
+  onSaveRef.current = onSave
+  const onContentChangeRef = useRef(onContentChange)
+  onContentChangeRef.current = onContentChange
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: {
-          levels: [1, 2],
-        },
-        paragraph: {
-          HTMLAttributes: {
-            class: 'mb-4', // Add margin between paragraphs
-          },
-        },
+        heading: { levels: [1, 2, 3] },
+        paragraph: { HTMLAttributes: { class: 'mb-4' } },
       }),
-      Placeholder.configure({
-        placeholder,
-      }),
-      CharacterCount.configure({
-        limit: null,
-      }),
+      Placeholder.configure({ placeholder }),
+      CharacterCount.configure({ limit: null }),
       UnderlineExtension,
       Link.configure({
         openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-accent underline cursor-pointer',
-        },
+        HTMLAttributes: { class: 'text-accent underline cursor-pointer' },
       }),
       SuggestionHighlightExtension,
+      KeywordHighlightExtension,
     ],
     content,
     immediatelyRender: false,
     editorProps: {
       attributes: {
-        class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-6 whitespace-pre-wrap',
+        class: 'prose prose-lg max-w-none focus:outline-none min-h-[500px] px-6 py-4',
       },
     },
     onUpdate: ({ editor }) => {
       setSaveStatus('unsaved')
-
-      // Update word count
-      const text = editor.getText()
-      const words = text.trim().split(/\s+/).filter(word => word.length > 0)
-      setWordCount(words.length)
-      
-      // Notify parent of content changes
-      if (onContentChange) {
-        const charCount = editor.storage.characterCount.characters()
-        onContentChange(editor.getHTML(), words.length, charCount)
-      }
+      const html = editor.getHTML()
+      const words = countWords(html)
+      setWordCount(words)
+      onContentChangeRef.current?.(html, words, editor.storage.characterCount.characters())
     },
   })
 
-  // Expose editor instance to parent via ref
+  // Expose the editor instance to the host.
   useEffect(() => {
-    if (editorRef && editor) {
-      editorRef.current = editor
+    if (!editor) return
+    if (editorRef) editorRef.current = editor
+    onReady?.(editor)
+    return () => {
+      if (editorRef?.current === editor) editorRef.current = null
     }
-  }, [editor, editorRef])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor])
 
-  // Initialize word count when editor content is loaded
-  useEffect(() => {
-    if (editor && content) {
-      const text = editor.getText()
-      const words = text.trim().split(/\s+/).filter(word => word.length > 0)
-      setWordCount(words.length)
-    }
-  }, [editor, content])
-
-  // Apply/remove decorations  // Highlight active suggestion
+  // Highlight the active suggestion (unchanged behaviour from the Analyze editor).
   useEffect(() => {
     if (!editor || !editor.view || !editor.isEditable) return
     if (prevSuggestionRef.current === activeSuggestionId) return
-    
-    // Small delay to ensure editor is fully ready after content changes
     const timer = setTimeout(() => {
-      if (!editor || !editor.view) return
-      
+      if (!editor || editor.isDestroyed) return
       prevSuggestionRef.current = activeSuggestionId
-
-      const { state } = editor.view
-      const { doc, tr } = state
-
-      if (!activeSuggestionId || !suggestions) {
-        // Clear all decorations
-        tr.setMeta(highlightPluginKey, DecorationSet.empty)
-        editor.view.dispatch(tr)
+      const suggestion = activeSuggestionId ? suggestions?.find((s) => s.id === activeSuggestionId) : undefined
+      if (!suggestion?.original) {
+        setDecorations(editor, suggestionHighlightKey, [])
         return
       }
-
-      const suggestion = suggestions.find(s => s.id === activeSuggestionId)
-      if (!suggestion || !suggestion.original) {
-        tr.setMeta(highlightPluginKey, DecorationSet.empty)
-        editor.view.dispatch(tr)
-        return
-      }
-
-      // Find positions of the original text in the document
-      const positions = findTextPositions(doc, suggestion.original)
-
-      if (positions.length === 0) {
-        console.warn('No matches found for:', suggestion.original)
-        tr.setMeta(highlightPluginKey, DecorationSet.empty)
-        editor.view.dispatch(tr)
-        return
-      }
-
-      // Create inline decorations at each position
-      const decorations = positions.map(({ from, to }) =>
-        Decoration.inline(from, to, {
-          class: 'suggestion-highlight',
-          'data-suggestion-id': suggestion.id,
-        })
+      const ranges = findTextRanges(editor.state.doc, suggestion.original)
+      setDecorations(
+        editor,
+        suggestionHighlightKey,
+        ranges.map((r) => ({ ...r, attrs: { class: 'suggestion-highlight', 'data-suggestion-id': suggestion.id } })),
       )
-
-      const decoSet = DecorationSet.create(doc, decorations)
-      tr.setMeta(highlightPluginKey, decoSet)
-      editor.view.dispatch(tr)
-
-      // Scroll to first match
-      setTimeout(() => {
-        const el = editor.view.dom.querySelector('.suggestion-highlight')
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-      }, 50)
+      if (ranges.length) scrollToFirstHighlight(editor)
     }, 10)
-    
     return () => clearTimeout(timer)
   }, [activeSuggestionId, editor, suggestions])
 
-  // Auto-save with debouncing
+  // Keyword highlighting: recomputed on toggle, keyword change and (debounced) edits.
+  const keywordKey = (keywords ?? []).join('\u0001')
+  const [docVersion, setDocVersion] = useState(0)
+  useEffect(() => {
+    if (!editor || !highlightKeywords) return
+    let t: ReturnType<typeof setTimeout>
+    const onUpdate = () => {
+      clearTimeout(t)
+      t = setTimeout(() => setDocVersion((v) => v + 1), 400)
+    }
+    editor.on('update', onUpdate)
+    return () => {
+      clearTimeout(t)
+      editor.off('update', onUpdate)
+    }
+  }, [editor, highlightKeywords])
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    const list = highlightKeywords ? (keywords ?? []).filter((k) => k.trim()) : []
+    const ranges = list.flatMap((k, i) =>
+      findTextRanges(editor.state.doc, k, { wholeWord: true }).map((r) => ({
+        ...r,
+        attrs: { style: i === 0 ? KEYWORD_STYLE.primary : KEYWORD_STYLE.secondary, 'data-keyword': k },
+      })),
+    )
+    setDecorations(editor, keywordHighlightKey, ranges)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, highlightKeywords, keywordKey, docVersion])
+
+  const runSave = useCallback(async () => {
+    if (!editor || !onSaveRef.current) return
+    setSaveStatus('saving')
+    try {
+      await onSaveRef.current(editor.getHTML())
+      // Edits made while saving keep the status "unsaved" (the next autosave picks them up).
+      setSaveStatus((s) => (s === 'saving' ? 'saved' : s))
+    } catch {
+      setSaveStatus('error')
+    }
+  }, [editor])
+
+  // Debounced autosave.
   useEffect(() => {
     if (!editor || saveStatus !== 'unsaved') return
-
-    const timer = setTimeout(() => {
-      if (onSave && editor) {
-        setSaveStatus('saving')
-        const html = editor.getHTML()
-        onSave(html)
-
-        setTimeout(() => {
-          setSaveStatus('saved')
-        }, 500)
-      }
-    }, autoSaveDelay)
-
+    const timer = setTimeout(runSave, autoSaveDelay)
     return () => clearTimeout(timer)
-  }, [editor, saveStatus, onSave, autoSaveDelay])
-
-  const handleSave = useCallback(() => {
-    if (!editor || !onSave) return
-
-    setSaveStatus('saving')
-    const html = editor.getHTML()
-    onSave(html)
-
-    setTimeout(() => {
-      setSaveStatus('saved')
-    }, 500)
-  }, [editor, onSave])
+  }, [editor, saveStatus, runSave, autoSaveDelay])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
-        handleSave()
+        runSave()
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleSave])
+  }, [runSave])
 
   if (!editor) {
     return (
@@ -295,160 +265,121 @@ export function RichTextEditor({
   }
 
   const characterCount = editor.storage.characterCount.characters()
+  const ratio = targetWords ? wordCount / targetWords : 0
+  const onTarget = ratio >= 0.9 && ratio <= 1.1
 
   return (
     <div className="flex flex-col h-full">
       {/* Formatting Toolbar */}
       <div className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur-sm px-4 py-2 flex items-center gap-1 flex-wrap">
-        {/* Text Formatting */}
-        <button
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!editor.can().chain().focus().toggleBold().run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('bold')
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('bold')}
           title="Bold (Cmd+B)"
         >
           <Bold className="w-4 h-4" />
-        </button>
-
-        <button
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           disabled={!editor.can().chain().focus().toggleItalic().run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('italic')
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('italic')}
           title="Italic (Cmd+I)"
         >
           <Italic className="w-4 h-4" />
-        </button>
-
-        <button
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           disabled={!editor.can().chain().focus().toggleUnderline().run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('underline')
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('underline')}
           title="Underline (Cmd+U)"
         >
           <Underline className="w-4 h-4" />
-        </button>
+        </ToolbarButton>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        <Divider />
 
-        {/* Headings */}
-        <button
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('heading', { level: 1 })
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('heading', { level: 1 })}
           title="Heading 1"
         >
           <Heading1 className="w-4 h-4" />
-        </button>
-
-        <button
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('heading', { level: 2 })
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('heading', { level: 2 })}
           title="Heading 2"
         >
           <Heading2 className="w-4 h-4" />
-        </button>
+        </ToolbarButton>
+        <ToolbarButton
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          active={editor.isActive('heading', { level: 3 })}
+          title="Heading 3"
+        >
+          <Heading3 className="w-4 h-4" />
+        </ToolbarButton>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        <Divider />
 
-        {/* Link */}
-        <button
+        <ToolbarButton
           onClick={() => {
             const url = window.prompt('Enter URL:')
-            if (url) {
-              editor.chain().focus().setLink({ href: url }).run()
-            }
+            if (url) editor.chain().focus().setLink({ href: url }).run()
           }}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('link')
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('link')}
           title="Add Link"
         >
           <Link2 className="w-4 h-4" />
-        </button>
+        </ToolbarButton>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        <Divider />
 
-        <button
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('bulletList')
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('bulletList')}
           title="Bullet List"
         >
           <List className="w-4 h-4" />
-        </button>
-
-        <button
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('orderedList')
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('orderedList')}
           title="Numbered List"
         >
           <ListOrdered className="w-4 h-4" />
-        </button>
-
-        <button
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          className={`p-2 rounded transition-colors ${
-            editor.isActive('blockquote')
-              ? 'bg-accent text-white'
-              : 'text-muted hover:text-heading hover:bg-surface-hover'
-          }`}
+          active={editor.isActive('blockquote')}
           title="Quote"
         >
           <Quote className="w-4 h-4" />
-        </button>
+        </ToolbarButton>
 
-        <div className="w-px h-6 bg-border mx-1" />
+        <Divider />
 
-        <button
+        <ToolbarButton
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().chain().focus().undo().run()}
-          className="p-2 rounded transition-colors text-muted hover:text-heading hover:bg-surface-hover disabled:opacity-50"
           title="Undo (Cmd+Z)"
         >
           <Undo className="w-4 h-4" />
-        </button>
-
-        <button
+        </ToolbarButton>
+        <ToolbarButton
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().chain().focus().redo().run()}
-          className="p-2 rounded transition-colors text-muted hover:text-heading hover:bg-surface-hover disabled:opacity-50"
           title="Redo (Cmd+Shift+Z)"
         >
           <Redo className="w-4 h-4" />
-        </button>
+        </ToolbarButton>
 
         {onDelete && (
           <>
-            <div className="w-px h-6 bg-border mx-1" />
+            <Divider />
             <button
+              type="button"
               onClick={onDelete}
               className="p-2 rounded transition-colors text-muted hover:text-danger hover:bg-danger/10"
               title="Delete document"
@@ -460,21 +391,22 @@ export function RichTextEditor({
 
         <div className="flex-1" />
 
-        <button
-          onClick={handleSave}
-          disabled={saveStatus === 'saving'}
-          className="px-4 py-2 rounded transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
-        >
-          {saveStatus === 'saved' && (
-            <span className="text-success">Saved</span>
-          )}
-          {saveStatus === 'saving' && (
-            <span className="text-accent">Saving...</span>
-          )}
-          {saveStatus === 'unsaved' && (
-            <span className="text-warning">Unsaved changes</span>
-          )}
-        </button>
+        {toolbarExtra}
+
+        {onSave && (
+          <button
+            type="button"
+            onClick={runSave}
+            disabled={saveStatus === 'saving'}
+            className="px-3 py-2 rounded transition-colors text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            title="Save now (Cmd+S)"
+          >
+            {saveStatus === 'saved' && <span className="text-success">Saved</span>}
+            {saveStatus === 'saving' && <span className="text-accent">Saving...</span>}
+            {saveStatus === 'unsaved' && <span className="text-warning">Unsaved changes</span>}
+            {saveStatus === 'error' && <span className="text-red-400">Not saved · Retry</span>}
+          </button>
+        )}
       </div>
 
       {/* Editor Content */}
@@ -485,26 +417,32 @@ export function RichTextEditor({
       {/* Bottom Status Bar */}
       <div className="h-10 border-t border-border bg-surface backdrop-blur-md flex items-center justify-between px-4 shrink-0 text-xs text-muted font-mono">
         <div className="flex items-center gap-4">
-          <span className="tabular-nums">{wordCount} words</span>
-          <span className="tabular-nums">{characterCount} characters</span>
+          <span className="tabular-nums">
+            {targetWords ? (
+              <>
+                <span className={onTarget ? 'text-green-500' : 'text-heading'}>{nf.format(wordCount)}</span>
+                {' / '}
+                {nf.format(targetWords)} words
+              </>
+            ) : (
+              <>{nf.format(wordCount)} words</>
+            )}
+          </span>
+          <span className="tabular-nums">{nf.format(characterCount)} characters</span>
         </div>
 
         <div className="flex items-center gap-2">
-          {saveStatus === 'unsaved' && (
-            <span className="text-warning">Unsaved changes</span>
-          )}
+          {saveStatus === 'unsaved' && <span className="text-warning">Unsaved changes</span>}
           {saveStatus === 'saving' && (
             <span className="text-accent flex items-center gap-1">
               <span className="w-2 h-2 bg-accent rounded-full animate-pulse" />
               Saving...
             </span>
           )}
-          {saveStatus === 'saved' && (
-            <span className="text-success">All changes saved</span>
-          )}
+          {saveStatus === 'saved' && <span className="text-success">All changes saved</span>}
+          {saveStatus === 'error' && <span className="text-red-400">Changes not saved</span>}
         </div>
       </div>
     </div>
   )
 }
-

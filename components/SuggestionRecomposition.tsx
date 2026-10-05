@@ -1,6 +1,7 @@
+'use client'
+
 import { useState } from 'react'
-import { Loader2, Sparkles } from 'lucide-react'
-import { useSettings } from '@/hooks/useSettings'
+import { Loader2, Sparkles, Info } from 'lucide-react'
 
 interface SuggestionRecompositionProps {
   suggestionId: string
@@ -8,7 +9,16 @@ interface SuggestionRecompositionProps {
   currentSuggestion: string
   onRecompose: (newText: string, metadata: { prompt?: string; tonality?: string }) => void
   onCancel: () => void
+  /**
+   * Recompose endpoint (WS optimize: POST /api/clients/[clientId]/articles/[articleId]/recompose,
+   * body { suggestionId, originalText, currentSuggestion, tonality?, customPrompt? } →
+   * { newSuggestion }). Until it ships, leave this unset: the form shows, Regenerate is disabled.
+   * Model keys are server-side now, so no API key is sent from the browser.
+   */
+  recomposeUrl?: string
 }
+
+const UNAVAILABLE = 'Adjust is coming with WS optimize (the recompose endpoint isn’t available yet).'
 
 const TONALITIES = [
   { value: 'professional', label: 'Professional' },
@@ -25,20 +35,16 @@ export function SuggestionRecomposition({
   currentSuggestion,
   onRecompose,
   onCancel,
+  recomposeUrl,
 }: SuggestionRecompositionProps) {
   const [tonality, setTonality] = useState<string>('')
   const [customPrompt, setCustomPrompt] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string>('')
-  const { settings } = useSettings()
+  const available = !!recomposeUrl
 
   const handleRegenerate = async () => {
-    if (!tonality && !customPrompt.trim()) {
-      return
-    }
-
-    if (!settings.apiKey) {
-      setError('API key not configured. Please set it in Settings.')
+    if (!recomposeUrl || (!tonality && !customPrompt.trim())) {
       return
     }
 
@@ -46,7 +52,7 @@ export function SuggestionRecomposition({
     setError('')
 
     try {
-      const response = await fetch('/api/suggestions/recompose', {
+      const response = await fetch(recomposeUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -55,7 +61,6 @@ export function SuggestionRecomposition({
           currentSuggestion,
           tonality: tonality || undefined,
           customPrompt: customPrompt.trim() || undefined,
-          apiKey: settings.apiKey,
         }),
       })
 
@@ -132,6 +137,13 @@ export function SuggestionRecomposition({
           />
         </div>
 
+        {!available && (
+          <div className="flex items-start gap-2 bg-surface border border-border rounded-input px-3 py-2 text-xs text-muted">
+            <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span>{UNAVAILABLE}</span>
+          </div>
+        )}
+
         {/* Error Message */}
         {error && (
           <div className="bg-danger/10 border border-danger/20 rounded-input px-3 py-2 text-xs text-red-400">
@@ -143,7 +155,8 @@ export function SuggestionRecomposition({
         <div className="flex items-center gap-2 pt-2">
           <button
             onClick={handleRegenerate}
-            disabled={isLoading || (!tonality && !customPrompt.trim())}
+            disabled={!available || isLoading || (!tonality && !customPrompt.trim())}
+            title={available ? undefined : UNAVAILABLE}
             className="flex-1 bg-accent hover:bg-accent/90 text-white py-2 rounded-input text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
