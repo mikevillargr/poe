@@ -137,8 +137,14 @@ jobs:
             # Migrations run before the new app starts; on failure the old containers keep serving.
             docker compose --profile tools run --rm migrate
             docker compose up -d --remove-orphans
-            # The Caddyfile is a bind mount, so `up -d` doesn't notice edits to it: reload it explicitly.
-            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile || echo "::warning::caddy reload failed; Caddy keeps its previous config"
+            # The Caddyfile is a single-file bind mount. The checkout above replaces the file (new inode), so the
+            # container keeps seeing the OLD one and `caddy reload` reports "config is unchanged". Compare what the
+            # container sees with the checkout and restart Caddy (a couple of seconds; certs live in a volume)
+            # only when they differ.
+            if ! docker compose exec -T caddy cat /etc/caddy/Caddyfile | cmp -s - docker/Caddyfile; then
+              echo "Caddyfile changed: restarting caddy"
+              docker compose restart caddy || echo "::warning::caddy restart failed"
+            fi
 
             # Health: app on loopback, then the public HTTPS edge (resolved locally, no hairpin).
             for i in $(seq 1 30); do

@@ -284,7 +284,7 @@ and redeploying another app. Instead (from v1.2.1):
 - Poe's Caddy sends `Strict-Transport-Security: max-age=31536000` (this host only; no `includeSubDomains`/`preload`, since
   vill.ar hosts other things). After a browser's first https visit it upgrades `poe.vill.ar` to https by itself.
 - Modern browsers already try https first for a bare hostname typed in the address bar.
-- The deploy reloads Caddy so Caddyfile edits take effect (it's a bind mount; `up -d` doesn't notice them).
+- The Caddyfile is a single-file bind mount that goes stale when the checkout replaces the file (and `caddy reload` then sees "config is unchanged"), so the deploy compares the container's copy with the checkout and restarts Caddy when they differ.
 
 A literal `http://poe.vill.ar` request still lands on AlwaysSunny until that app (or a future shared edge proxy for ports 80/443)
 adds a `return 301 https://poe.vill.ar$request_uri;` server block for `poe.vill.ar`.
