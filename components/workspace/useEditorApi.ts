@@ -8,7 +8,7 @@ import { findTextRanges, scrollToFirstHighlight, setDecorations, suggestionHighl
  * Editor API: the workspace ↔ optimize handshake (DR-005, INITIATIVE §3).
  *
  * The Article Workspace owns the TipTap editor and hands this object to the Optimize panel
- * (`<OptimizePanel articleId html editorApi />`, currently mounted as `OptimizeSlot`). Optimize
+ * (`<OptimizePanel … editorApi />`). Optimize
  * must go through it rather than touching TipTap directly.
  *
  * - `getHTML()`: the current draft HTML ('' while no editor is mounted, e.g. during generation).

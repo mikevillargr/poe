@@ -17,7 +17,37 @@ function lastUserText(p: GenerateParams) {
   return [...p.messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 }
 
+// WS optimize: deterministic stand-ins for the guideline check and recompose prompts, so the panel can
+// be built and tested without keys. Quotes are real sentences taken from the draft in the prompt.
+function mockOptimize(prompt: string): string {
+  const draft = prompt.split('DRAFT:\n---\n')[1] ?? ''
+  const sentences = draft
+    .split(/\n+/)
+    .flatMap((l) => l.split(/(?<=[.!?])\s+/))
+    .map((x) => x.trim())
+    .filter((x) => x.split(/\s+/).length >= 8 && x.length < 180)
+  const pick = [sentences[1], sentences[3], sentences[5]].filter(Boolean) as string[]
+  const meta = [
+    { category: 'Blacklist', severity: 'high', title: 'Reads as AI-written', reason: 'Sounds formulaic; rephrase plainly.' },
+    { category: 'SEO', severity: 'medium', title: 'Work in a secondary keyword', reason: 'Secondary keywords should appear naturally.' },
+    { category: 'Brand', severity: 'low', title: 'Tighten the wording', reason: 'Shorter sentences read better.' },
+  ]
+  return JSON.stringify({
+    overallScore: 78,
+    dimensionScores: [
+      { category: 'SEO', score: 82, passCount: 4, failCount: 1 },
+      { category: 'Blacklist', score: 70, passCount: 5, failCount: 2 },
+      { category: 'Brand', score: 84, passCount: 3, failCount: 1 },
+    ],
+    suggestions: pick.map((original, i) => ({ ...meta[i], original, suggested: `${original.replace(/[.!?]+$/, '')}, said plainly.` })),
+  })
+}
+
 function mockArticle(prompt: string): string {
+  if (prompt.includes('Check this article draft against the guidelines')) return mockOptimize(prompt)
+  if (prompt.includes('Reply with ONLY the rewritten passage')) {
+    return `${/Current suggested replacement: "([^"]*)"/.exec(prompt)?.[1] ?? 'Rewritten passage'} (rewritten)`
+  }
   const title = /title:\s*(.+)/i.exec(prompt)?.[1]?.trim() ?? 'Mock article'
   return [
     `<h1>${title}</h1>`,

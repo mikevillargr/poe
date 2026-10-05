@@ -17,7 +17,7 @@ import { WorkspaceHeader, type PrimaryAction } from './WorkspaceHeader'
 import { BriefPanel, type BriefPatch } from './BriefPanel'
 import { ResearchTab } from './ResearchTab'
 import { DraftTab } from './DraftTab'
-import { OptimizeSlot } from './OptimizeSlot'
+import { OptimizePanel } from './OptimizePanel'
 import { useEditorApi } from './useEditorApi'
 import { useDebouncedPatch } from './useDebouncedPatch'
 import { exportDocx, exportToGoogleDrive } from './export'
@@ -352,10 +352,13 @@ export function WorkspaceView({
     />
   )
   const optimize = (
-    <OptimizeSlot
+    <OptimizePanel
       clientId={client.id}
       articleId={article.id}
       html={liveHtml}
+      keywords={article.keywords}
+      primaryKeyword={article.primaryKeyword}
+      targetWordCount={article.targetWordCount}
       editorApi={editorApi}
       activeSuggestionId={activeSuggestionId}
       onActiveSuggestionChange={setActiveSuggestionId}
