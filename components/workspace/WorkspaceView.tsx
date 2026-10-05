@@ -205,8 +205,47 @@ export function WorkspaceView({
   })
   const generation = useAIStream({ onEvent: (ev) => onGenerateEvent.current(ev) })
 
+  // ── revise-with-feedback stream (DR-009) ───────────────────────────────────────────────────
+  // Shares the server's 'generation' run slot and generation_status, so reload/stale recovery below
+  // treats it exactly like a generation run.
+  const [reviseOpen, setReviseOpen] = useState(false)
+  const [reviseFeedback, setReviseFeedback] = useState('')
+  const onReviseEvent = useLatest((ev: AIStreamEvent) => {
+    if (ev.type === 'saved') {
+      handledLocally.current.generation = Date.now()
+      setReviseFeedback('')
+      setReviseOpen(false)
+      refetch()
+        .then((a) => {
+          setLiveHtml(a.draftHtml ?? '')
+          setEditorGen((g) => g + 1)
+          const target = a.targetWordCount
+          const words = a.wordCount ?? 0
+          if (target && (words < target * 0.9 || words > target * 1.1)) {
+            toast.info('Revised, off target length', `${nf.format(words)} words vs. a target of ${nf.format(target)}. Previous draft: “Before revision” in Versions.`)
+          } else {
+            toast.success('Revised', `${nf.format(words)} words · previous draft saved as “Before revision”`)
+          }
+          if (versionsOpen) void loadVersions()
+        })
+        .catch(() => {})
+    }
+    if (ev.type === 'error') {
+      if (ev.code === 'CONFLICT') toast.info('Already running', ev.message)
+      else {
+        handledLocally.current.generation = Date.now()
+        if (ev.code === 'NO_DRAFT') toast.error('Nothing to revise yet', ev.message)
+        else toast.error('Revision failed', ev.message)
+        setReviseOpen(true) // keep the feedback so it can be retried
+      }
+      refetch().catch(() => {})
+    }
+  })
+  const revision = useAIStream({ onEvent: (ev) => onReviseEvent.current(ev) })
+
   const researching = research.status === 'streaming'
-  const generating = generation.status === 'streaming'
+  const revising = revision.status === 'streaming'
+  const generating = generation.status === 'streaming' || revising
   // The server is the source of truth: a run can be going without a stream attached to this page
   // (we left and came back, or the connection dropped).
   const researchRemote = article.researchStatus === 'running' && !researching && !researchSaving
@@ -218,16 +257,20 @@ export function WorkspaceView({
   // Streams that ended without a result (stopped elsewhere, dropped connection): re-sync with the server.
   useEffect(() => {
     if (research.status === 'aborted' || generation.status === 'aborted') setResearchSaving(false)
-    for (const s of [research, generation]) {
+    for (const s of [research, generation, revision]) {
       if (s.status === 'error' && s.error?.code === 'NETWORK_ERROR') {
         toast.info('Connection lost', 'The run keeps going on the server. We’ll show it when it finishes.')
       }
     }
-    if (['aborted', 'done', 'error'].includes(research.status) || ['aborted', 'done', 'error'].includes(generation.status)) {
+    if (
+      ['aborted', 'done', 'error'].includes(research.status) ||
+      ['aborted', 'done', 'error'].includes(generation.status) ||
+      ['aborted', 'done', 'error'].includes(revision.status)
+    ) {
       refetch().catch(() => {})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [research.status, generation.status])
+  }, [research.status, generation.status, revision.status])
 
   // Poll while the server reports a run we have no live stream for; pick up the result when it ends.
   useEffect(() => {
@@ -280,10 +323,15 @@ export function WorkspaceView({
     } catch {
       return
     }
+    const wasRevising = kind === 'generation' && revising
     ;(kind === 'research' ? research : generation).abort()
+    if (kind === 'generation') revision.abort()
     setResearchSaving(false)
     refetch().catch(() => {})
-    toast.info('Stopped', 'Nothing was saved from that run.')
+    if (wasRevising) {
+      setReviseOpen(true)
+      toast.info('Revision stopped', 'Your draft is unchanged. “Before revision” is in Versions.')
+    } else toast.info('Stopped', 'Nothing was saved from that run.')
   }
 
   async function runResearch() {
@@ -308,6 +356,20 @@ export function WorkspaceView({
     setActiveSuggestionId(null)
     setTab('draft')
     void generation.start(`${base}/generate`, { useResearch })
+  }
+
+  async function runRevise() {
+    const feedback = reviseFeedback.trim()
+    if (!feedback || researchActive || generationActive) return
+    try {
+      await flushAll()
+    } catch {
+      return
+    }
+    setActiveSuggestionId(null)
+    setReviseOpen(false)
+    setTab('draft')
+    void revision.start(`${base}/revise`, { feedback })
   }
 
   function requestGenerate(useResearch = true) {
@@ -546,7 +608,7 @@ export function WorkspaceView({
                 editorRef={editorRef}
                 streaming={generationActive}
                 remote={generationRemote}
-                streamText={generation.text}
+                streamText={revising ? revision.text : generation.text}
                 activeSuggestionId={activeSuggestionId}
                 onClearSuggestion={() => {
                   setActiveSuggestionId(null)
@@ -566,6 +628,13 @@ export function WorkspaceView({
                 onRegenerate={() => requestGenerate(true)}
                 onGenerate={() => requestGenerate(true)}
                 onStop={() => void stopRun('generation')}
+                revising={revising}
+                reviseOpen={reviseOpen}
+                onReviseOpenChange={setReviseOpen}
+                feedback={reviseFeedback}
+                onFeedback={setReviseFeedback}
+                onRevise={() => void runRevise()}
+                aiEditUrl={`${base}/ai-edit`}
               />
             </div>
           )}

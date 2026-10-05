@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useCallback, useState, useRef } from 'react'
-import { useEditor, EditorContent, type Editor } from '@tiptap/react'
+import { useEditor, EditorContent, BubbleMenu, FloatingMenu, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
@@ -21,6 +21,7 @@ import {
   Redo,
   Trash2,
   Link2,
+  Sparkles,
 } from 'lucide-react'
 import { countWords } from '@/lib/articles/text'
 import {
@@ -32,6 +33,9 @@ import {
   setDecorations,
   suggestionHighlightKey,
 } from '@/lib/tiptap/highlights'
+import { AiEditExtension, type AiEditTriggers } from '@/lib/tiptap/ai-edit'
+import { useInlineAIEdit } from '@/hooks/useInlineAIEdit'
+import { InlineAIPrompt } from './InlineAIPrompt'
 
 // The Poe editor (owned by WS workspace). Retooled from the Analyze editor: same toolbar, autosave,
 // and in-text suggestion highlighting; adds H3, real save status, actual/target word count, keyword
@@ -64,6 +68,10 @@ interface RichTextEditorProps {
   /** Extra controls rendered at the right of the toolbar (Save version, Versions, …). */
   toolbarExtra?: React.ReactNode
   onReady?: (editor: Editor) => void
+  /** POST endpoint for inline AI edits (…/ai-edit). Omit to turn Improve / Write with AI off. */
+  aiEditUrl?: string
+  /** Rendered between the toolbar and the editing canvas (e.g. the Revise panel). */
+  aboveContent?: React.ReactNode
 }
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error'
@@ -122,6 +130,8 @@ export function RichTextEditor({
   highlightKeywords = false,
   toolbarExtra,
   onReady,
+  aiEditUrl,
+  aboveContent,
 }: RichTextEditorProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [wordCount, setWordCount] = useState(() => countWords(content))
@@ -130,6 +140,7 @@ export function RichTextEditor({
   onSaveRef.current = onSave
   const onContentChangeRef = useRef(onContentChange)
   onContentChangeRef.current = onContentChange
+  const triggersRef = useRef<AiEditTriggers | null>(null)
 
   const editor = useEditor({
     extensions: [
@@ -146,6 +157,7 @@ export function RichTextEditor({
       }),
       SuggestionHighlightExtension,
       KeywordHighlightExtension,
+      AiEditExtension.configure({ triggers: () => triggersRef.current }),
     ],
     content,
     immediatelyRender: false,
@@ -162,6 +174,12 @@ export function RichTextEditor({
       onContentChangeRef.current?.(html, words, editor.storage.characterCount.characters())
     },
   })
+
+  // Inline AI edit (DR-009): ⌘J / "/" on an empty line / the bubble button all go through this.
+  const ai = useInlineAIEdit(editor, aiEditUrl)
+  triggersRef.current = aiEditUrl ? { onShortcut: () => ai.open(), onSlash: () => ai.open('insert') } : null
+  const aiBusy = ai.state.phase !== 'closed'
+  const canImprove = !!aiEditUrl && !aiBusy && ((ai.selection.hasSelection && !ai.selection.multiBlock) || ai.selection.emptyLine)
 
   // Expose the editor instance to the host.
   useEffect(() => {
@@ -269,7 +287,7 @@ export function RichTextEditor({
   const onTarget = ratio >= 0.9 && ratio <= 1.1
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative [&_.ai-edit-range]:bg-accent/15 [&_.ai-edit-range]:rounded-sm [&_.ai-edit-range]:border-b-2 [&_.ai-edit-range]:border-dotted [&_.ai-edit-range]:border-accent [&_.ai-edit-insert-anchor]:bg-success/10 [&_.ai-edit-insert-anchor]:rounded [&_.ai-edit-flash]:bg-success/25 [&_.ai-edit-flash]:rounded-sm">
       {/* Formatting Toolbar */}
       <div className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur-sm px-4 py-2 flex items-center gap-1 flex-wrap">
         <ToolbarButton
@@ -375,6 +393,26 @@ export function RichTextEditor({
           <Redo className="w-4 h-4" />
         </ToolbarButton>
 
+        {aiEditUrl && (
+          <>
+            <Divider />
+            <button
+              type="button"
+              onClick={() => ai.open()}
+              disabled={!canImprove}
+              title={
+                ai.selection.multiBlock
+                  ? 'Select text within one paragraph to improve it'
+                  : 'Improve the selected text with AI, or write on an empty line (⌘J)'
+              }
+              aria-label="Improve with AI"
+              className="px-2.5 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Improve
+            </button>
+          </>
+        )}
+
         {onDelete && (
           <>
             <Divider />
@@ -409,10 +447,90 @@ export function RichTextEditor({
         )}
       </div>
 
+      {aboveContent}
+
       {/* Editor Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <EditorContent editor={editor} />
       </div>
+
+      {aiEditUrl && (
+        <>
+          <BubbleMenu
+            editor={editor}
+            tippyOptions={{ duration: 100, placement: 'top', maxWidth: 'none' }}
+            shouldShow={({ view, state, from, to }) =>
+              typeof window !== 'undefined' &&
+              window.innerWidth >= 768 &&
+              view.hasFocus() &&
+              !state.selection.empty &&
+              state.doc.textBetween(from, to, ' ').trim().length > 0 &&
+              editor.isEditable &&
+              ai.state.phase === 'closed'
+            }
+          >
+            {ai.selection.multiBlock ? (
+              <span title="Select text within one paragraph to improve it">
+                <button
+                  type="button"
+                  disabled
+                  className="glass-card shadow-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 text-muted opacity-70 cursor-not-allowed"
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> Improve
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => ai.open('rewrite')}
+                title="Improve the selected text with AI (⌘J)"
+                className="glass-card shadow-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 text-accent hover:bg-accent/10 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> Improve
+                <kbd className="font-mono text-[10px] text-muted">⌘J</kbd>
+              </button>
+            )}
+          </BubbleMenu>
+          <FloatingMenu
+            editor={editor}
+            tippyOptions={{ duration: 100, placement: 'right', offset: [0, 12], maxWidth: 'none' }}
+            shouldShow={({ view, state }) => {
+              const { $from } = state.selection
+              return (
+                view.hasFocus() &&
+                state.selection.empty &&
+                $from.depth === 1 &&
+                $from.parent.type.name === 'paragraph' &&
+                $from.parent.content.size === 0 &&
+                editor.isEditable &&
+                ai.state.phase === 'closed'
+              )
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => ai.open('insert')}
+              className="flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors whitespace-nowrap"
+              title="Write with AI at the cursor"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-accent" /> Press <kbd className="font-mono">/</kbd> or <kbd className="font-mono">⌘J</kbd> to write with AI
+            </button>
+          </FloatingMenu>
+          {ai.selection.hasSelection && ai.state.phase === 'closed' && (
+            <div className="md:hidden absolute bottom-12 right-3 z-20">
+              <button
+                type="button"
+                onClick={() => ai.open('rewrite')}
+                disabled={ai.selection.multiBlock}
+                className="glass-card shadow-lg px-4 py-2 text-sm font-medium flex items-center gap-1.5 text-accent disabled:text-muted disabled:opacity-70"
+              >
+                <Sparkles className="w-4 h-4" /> {ai.selection.multiBlock ? 'Select one paragraph' : 'Improve'}
+              </button>
+            </div>
+          )}
+          <InlineAIPrompt editor={editor} ai={ai} />
+        </>
+      )}
 
       {/* Bottom Status Bar */}
       <div className="h-10 border-t border-border bg-surface backdrop-blur-md flex items-center justify-between px-4 shrink-0 text-xs text-muted font-mono">
