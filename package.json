@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db/migrate.ts",
     "db:mark-baseline": "tsx scripts/db/mark-baseline.ts",
+    "db:fixtures": "tsx scripts/db/dev-fixtures.ts",
     "db:push": "node -e \"if(process.env.NODE_ENV==='production'){console.error('db:push is disabled in production; use db:migrate');process.exit(1)}\" && drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "release": "node scripts/release.js",
