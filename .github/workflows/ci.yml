@@ -19,3 +19,27 @@ jobs:
       - run: npm run typecheck
       - name: Unit tests
         run: npx tsx --conditions=react-server --test $(git ls-files 'lib/**/*.test.ts')
+
+  # Validates Dockerfile changes on PRs (both release targets, nothing pushed). Shares the layer
+  # cache scopes with deploy.yml so the release build benefits from warm caches.
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build app image (runner)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          push: false
+          cache-from: type=gha,scope=poe-app
+      - name: Build tools image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: tools
+          push: false
+          cache-from: |
+            type=gha,scope=poe-tools
+            type=gha,scope=poe-app

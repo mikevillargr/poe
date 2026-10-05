@@ -159,7 +159,7 @@ Production's schema was created with `drizzle-kit push`, so it has no migration 
 prod dump on 2026-10-05 (foundation log, Addendum 3).
 
 ```bash
-docker compose run --rm migrate npx tsx scripts/db/mark-baseline.ts
+docker compose run --rm migrate node dist/mark-baseline.cjs
 #  -> "Marked 0000_baseline as applied on postgresql://...:***@db:5432/poe."
 #     It refuses (and changes nothing) if the migrations table already has rows.
 docker compose run --rm migrate
@@ -329,6 +329,11 @@ need its own plan because it touches every app.
    - backs up to `/var/backups/poe/predeploy-<tag>-*.dump`;
    - migrates, then runs `up -d`;
    - health-checks. If the migration fails, the old app keeps serving.
+
+The `tools` image holds only the DB scripts bundled by esbuild into `/app/dist/*.cjs` (migrate, mark-baseline,
+seed-universal) on a plain `node:20-alpine`, about 195 MB instead of 1.1 GB. Run them as
+`docker compose run --rm migrate node dist/<script>.cjs`. The `npm ci` layer is keyed on the lockfile and the
+dependency lists only, so the version bump of a release doesn't invalidate it.
 
 **Nothing is built on the server any more.** Building there took 15–20 minutes. To redeploy a tag, use
 Actions → "Deploy to VPS" → Run workflow and enter the tag.

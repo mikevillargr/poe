@@ -67,7 +67,7 @@ services:
       retries: 10
     labels: *poe-labels
 
-  # One-off: `docker compose run --rm migrate` (or `... migrate npx tsx scripts/db/mark-baseline.ts`).
+  # One-off: `docker compose run --rm migrate` (or `... migrate node dist/mark-baseline.cjs`).
   migrate:
     build:
       context: .

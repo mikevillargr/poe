@@ -74,7 +74,9 @@ jobs:
           tags: |
             ${{ env.TOOLS_IMAGE }}:${{ env.TAG }}
             ${{ env.TOOLS_IMAGE }}:latest
-          cache-from: type=gha,scope=poe-tools
+          cache-from: |
+            type=gha,scope=poe-tools
+            type=gha,scope=poe-app
           cache-to: type=gha,scope=poe-tools,mode=max
 
   deploy:
