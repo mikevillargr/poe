@@ -135,7 +135,7 @@ export function ImportFromDocumentModal({
           apiFetch<{ guideline: GuidelineDTO }>(`/api/clients/${clientId}/guidelines`, {
             method: 'POST',
             errorTitle: 'Could not add a guideline',
-            body: { category: p.category, title: p.title.trim() || null, rule: p.rule.trim(), weight: p.weight },
+            body: { category: p.category, title: p.title.trim() || null, rule: p.rule.trim(), weight: p.weight, source: 'ingested' },
           }).then((r) => r.guideline),
         ),
       )
