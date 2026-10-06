@@ -1,6 +1,6 @@
 'use client'
 
-import { useId } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { GripVertical, Eye, Trash2, LayoutTemplate, AlertTriangle, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import {
@@ -86,6 +86,12 @@ function Avatar({ person }: { person?: Person }) {
   )
 }
 
+/** Optional columns, dropped when the table is narrow. */
+interface Cols {
+  keywords: boolean
+  meta: boolean
+}
+
 function Row({
   article,
   index,
@@ -93,6 +99,7 @@ function Row({
   draggable,
   templateName,
   batch,
+  cols,
   onOpen,
   onDelete,
 }: {
@@ -102,6 +109,7 @@ function Row({
   draggable: boolean
   templateName?: string
   batch?: { state: BatchState; message?: string }
+  cols: Cols
   onOpen: () => void
   onDelete: () => void
 }) {
@@ -140,7 +148,14 @@ function Row({
         <div className="text-sm font-medium text-heading line-clamp-2 break-words group-hover:text-accent transition-colors" title={article.title}>
           {article.title}
         </div>
-        {article.primaryKeyword && <div className="text-xs text-muted truncate mt-0.5">{article.primaryKeyword}</div>}
+        {cols.keywords
+          ? article.primaryKeyword && <div className="text-xs text-muted truncate mt-0.5">{article.primaryKeyword}</div>
+          : article.keywords.length > 0 && (
+              <div className="text-xs text-muted truncate mt-0.5" title={article.keywords.join(', ')}>
+                {article.keywords.slice(0, 3).join(' · ')}
+                {article.keywords.length > 3 && ` +${article.keywords.length - 3}`}
+              </div>
+            )}
         {(templateName || article.needsReview) && (
           <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
             {templateName && (
@@ -157,30 +172,36 @@ function Row({
           </div>
         )}
       </td>
-      <td className="px-4 py-4">
-        <div className="flex flex-wrap gap-1.5 max-w-[200px]">
-          {article.keywords.slice(0, 2).map((k) => (
-            <span key={k} className="px-2 py-0.5 rounded-full text-xs border border-border text-body bg-surface truncate max-w-[180px]">
-              {k}
-            </span>
-          ))}
-          {extra > 0 && <span className="text-xs text-muted self-center">+{extra}</span>}
-          {article.keywords.length === 0 && <span className="text-xs text-muted">—</span>}
-        </div>
-      </td>
+      {cols.keywords && (
+        <td className="px-4 py-4">
+          <div className="flex flex-wrap gap-1.5 max-w-[200px]">
+            {article.keywords.slice(0, 2).map((k) => (
+              <span key={k} className="px-2 py-0.5 rounded-full text-xs border border-border text-body bg-surface truncate max-w-[180px]">
+                {k}
+              </span>
+            ))}
+            {extra > 0 && <span className="text-xs text-muted self-center">+{extra}</span>}
+            {article.keywords.length === 0 && <span className="text-xs text-muted">—</span>}
+          </div>
+        </td>
+      )}
       <td className="px-4 py-4">
         <WordsCell actual={article.wordCount} target={article.targetWordCount} />
       </td>
       <td className="px-4 py-4">{batch ? <BatchPill state={batch.state} message={batch.message} /> : <StatusPill status={article.status} />}</td>
-      <td className="px-4 py-4">
-        <Avatar person={article.assigneeId ? people.get(article.assigneeId) : undefined} />
-      </td>
-      <td
-        className="px-4 py-4 text-sm text-muted font-mono truncate"
-        title={formatDistanceToNowStrict(new Date(article.updatedAt), { addSuffix: true })}
-      >
-        {formatDistanceToNowStrict(new Date(article.updatedAt), { addSuffix: true })}
-      </td>
+      {cols.meta && (
+        <>
+          <td className="px-4 py-4">
+            <Avatar person={article.assigneeId ? people.get(article.assigneeId) : undefined} />
+          </td>
+          <td
+            className="px-4 py-4 text-sm text-muted font-mono truncate"
+            title={formatDistanceToNowStrict(new Date(article.updatedAt), { addSuffix: true })}
+          >
+            {formatDistanceToNowStrict(new Date(article.updatedAt), { addSuffix: true })}
+          </td>
+        </>
+      )}
       <td className="px-4 py-4 text-right">
         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
@@ -242,20 +263,33 @@ export function QueueTable({
     if (e.over && e.active.id !== e.over.id) onReorder(String(e.active.id), String(e.over.id))
   }
 
+  // The title column takes what's left after the fixed columns, so drop the optional ones when the
+  // table itself is narrow (it shares the row with the activity rail on wide screens).
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState<number | null>(null)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const cols: Cols = { keywords: width === null || width >= 1120, meta: width === null || width >= 900 }
+
   const th = 'px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider border-b border-border'
   return (
-    <div>
+    <div ref={wrapRef}>
       <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <table className="w-full table-fixed text-left border-collapse">
           <colgroup>
             <col className="w-10" />
             <col className="w-10" />
             <col />
-            <col className="w-[200px]" />
+            {cols.keywords && <col className="w-[200px]" />}
             <col className="w-[130px]" />
             <col className="w-[124px]" />
-            <col className="w-14" />
-            <col className="w-[128px]" />
+            {cols.meta && <col className="w-14" />}
+            {cols.meta && <col className="w-[128px]" />}
             <col className="w-20" />
           </colgroup>
           <thead>
@@ -263,11 +297,11 @@ export function QueueTable({
               <th className={`${th} pl-3 w-8`} />
               <th className={`${th} px-2 w-10`}>#</th>
               <th className={th}>Article</th>
-              <th className={th}>Keywords</th>
+              {cols.keywords && <th className={th}>Keywords</th>}
               <th className={th}>Words</th>
               <th className={th}>Status</th>
-              <th className={th}>Owner</th>
-              <th className={th}>Updated</th>
+              {cols.meta && <th className={th}>Owner</th>}
+              {cols.meta && <th className={th}>Updated</th>}
               <th className={`${th} text-right`} />
             </tr>
           </thead>
@@ -281,6 +315,7 @@ export function QueueTable({
                   people={people}
                   draggable={draggable}
                   templateName={a.templateId ? templateNames?.get(a.templateId) : undefined}
+                  cols={cols}
                   batch={batch?.get(a.id)}
                   onOpen={() => onOpen(a)}
                   onDelete={() => onDelete(a)}

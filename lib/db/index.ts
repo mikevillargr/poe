@@ -10,7 +10,9 @@ if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'test') {
 
 const globalForDb = globalThis as unknown as { poePool?: pg.Pool }
 
-const pool = globalForDb.poePool ?? new pg.Pool({ connectionString: process.env.DATABASE_URL })
+// Timestamps are `timestamp without time zone`, read back as UTC. Pin the session to UTC so defaultNow()
+// writes UTC too; production's server already is, but a local Postgres in another zone skewed them by hours.
+const pool = globalForDb.poePool ?? new pg.Pool({ connectionString: process.env.DATABASE_URL, options: '-c timezone=UTC' })
 if (process.env.NODE_ENV !== 'production') globalForDb.poePool = pool
 
 export const db = drizzle(pool, { schema })
