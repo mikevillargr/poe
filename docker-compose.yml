@@ -24,8 +24,6 @@ services:
       target: runner
       args:
         GIT_SHA: ${GIT_SHA:-unknown}
-        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
-        NEXT_PUBLIC_GOOGLE_API_KEY: ${NEXT_PUBLIC_GOOGLE_API_KEY:-}
     image: ${POE_APP_IMAGE:-poe-app}:${POE_TAG:-latest}
     restart: unless-stopped
     # Required on the server (deploy.yml checks it); optional only so `docker compose config` works

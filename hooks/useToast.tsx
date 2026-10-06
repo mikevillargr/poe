@@ -14,7 +14,11 @@ export interface Toast {
   message?: string
   /** Override the default auto-dismiss time in ms; 0 = manual dismiss only. */
   dismissAfter?: number
+  /** Optional button (CLAUDE.md toast spec), e.g. "Open document". Clicking it also dismisses the toast. */
+  action?: { label: string; onClick: () => void }
 }
+
+type ToastOptions = Pick<Toast, 'action' | 'dismissAfter'>
 
 const AUTO_DISMISS_MS: Record<ToastSeverity, number> = { info: 4000, success: 4000, warning: 8000, error: 0 }
 
@@ -48,8 +52,8 @@ export function useToast() {
 
   return {
     toast: {
-      success: (title: string, message?: string) => {
-        addToast({ severity: 'success', title, message })
+      success: (title: string, message?: string, opts?: ToastOptions) => {
+        addToast({ severity: 'success', title, message, ...opts })
       },
       error: (title: string, message?: string) => {
         addToast({ severity: 'error', title, message })
@@ -107,6 +111,18 @@ export function Toast({ toast, onDismiss }: { toast: Toast; onDismiss: () => voi
           <h4 className="text-base font-semibold text-heading">{toast.title}</h4>
           {toast.message && (
             <p className="text-sm text-muted mt-1">{toast.message}</p>
+          )}
+          {toast.action && (
+            <button
+              type="button"
+              onClick={() => {
+                toast.action!.onClick()
+                onDismiss()
+              }}
+              className="mt-2 text-sm font-medium text-accent hover:underline"
+            >
+              {toast.action.label}
+            </button>
           )}
         </div>
         <button

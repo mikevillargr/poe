@@ -57,12 +57,7 @@ CMD ["node", "dist/migrate.cjs"]
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# NEXT_PUBLIC_* values are inlined into the client bundle at build time (public values only).
-ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
-ARG NEXT_PUBLIC_GOOGLE_API_KEY=""
-ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID \
-    NEXT_PUBLIC_GOOGLE_API_KEY=$NEXT_PUBLIC_GOOGLE_API_KEY \
-    NEXT_TELEMETRY_DISABLED=1 \
+ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production
 RUN npm run build
 
