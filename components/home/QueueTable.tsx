@@ -134,7 +134,10 @@ function Row({
       <td className="px-4 py-4">
         <Avatar person={article.assigneeId ? people.get(article.assigneeId) : undefined} />
       </td>
-      <td className="px-4 py-4 text-sm text-muted font-mono whitespace-nowrap">
+      <td
+        className="px-4 py-4 text-sm text-muted font-mono truncate"
+        title={formatDistanceToNowStrict(new Date(article.updatedAt), { addSuffix: true })}
+      >
         {formatDistanceToNowStrict(new Date(article.updatedAt), { addSuffix: true })}
       </td>
       <td className="px-4 py-4 text-right">
@@ -192,9 +195,20 @@ export function QueueTable({
 
   const th = 'px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider border-b border-border'
   return (
-    <div className="overflow-x-auto">
+    <div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <table className="w-full text-left border-collapse">
+        <table className="w-full table-fixed text-left border-collapse">
+          <colgroup>
+            <col className="w-10" />
+            <col className="w-10" />
+            <col />
+            <col className="w-[240px]" />
+            <col className="w-[140px]" />
+            <col className="w-[112px]" />
+            <col className="w-14" />
+            <col className="w-[152px]" />
+            <col className="w-20" />
+          </colgroup>
           <thead>
             <tr>
               <th className={`${th} pl-3 w-8`} />
