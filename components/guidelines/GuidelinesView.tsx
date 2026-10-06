@@ -13,6 +13,8 @@ import { GuidelineSection } from './GuidelineSection'
 import { GuidelineRow } from './GuidelineRow'
 import { GuidelineForm, type GuidelineFormValues } from './GuidelineForm'
 import { ImportFromDocumentModal } from './ImportFromDocumentModal'
+import { TemplateScopeContext } from './TemplateScopeContext'
+import { useClientTemplates } from '@/components/workspace/TemplatePicker'
 
 const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }
 const itemVariants = {
@@ -45,24 +47,36 @@ export function GuidelinesView({
 
   useEffect(() => setGuidelines(initialGuidelines), [initialGuidelines])
 
+  // D-002: rules can apply to the whole client or to one content template.
+  const clientTemplates = useClientTemplates(scope.kind === 'client' ? scope.clientId : '')
+  const scopeTemplates = useMemo(() => (scope.kind === 'client' ? (clientTemplates ?? []).map((t) => ({ id: t.id, name: t.name })) : []), [scope, clientTemplates])
+  const [appliesTo, setAppliesTo] = useState('')
+  const shown = useMemo(
+    () =>
+      guidelines.filter((g) =>
+        !appliesTo ? true : appliesTo === 'client' ? !g.contentTemplateId : g.contentTemplateId === appliesTo,
+      ),
+    [guidelines, appliesTo],
+  )
+
   const base = scope.kind === 'client' ? `/api/clients/${scope.clientId}/guidelines` : '/api/admin/universal-guidelines'
 
   const groups = useMemo(() => {
     const map = new Map<GuidelineCategory, GuidelineDTO[]>()
     for (const c of GUIDELINE_CATEGORIES) map.set(c, [])
-    for (const g of guidelines) {
+    for (const g of shown) {
       const list = map.get(g.category as GuidelineCategory)
       if (list) list.push(g)
     }
     for (const list of map.values()) list.sort((a, b) => a.sortOrder - b.sortOrder)
     return map
-  }, [guidelines])
+  }, [shown])
 
   // Rules whose category isn't canonical (e.g. ingested before the canonical set). They are shown
   // so they're never hidden; editing one asks for a canonical category.
   const uncategorized = useMemo(
-    () => guidelines.filter((g) => !(GUIDELINE_CATEGORIES as readonly string[]).includes(g.category)),
-    [guidelines],
+    () => shown.filter((g) => !(GUIDELINE_CATEGORIES as readonly string[]).includes(g.category)),
+    [shown],
   )
 
   function closeForms() {
@@ -89,7 +103,13 @@ export function GuidelinesView({
   async function saveGuideline(values: GuidelineFormValues, existing?: GuidelineDTO) {
     if (saving) return
     setSaving(true)
-    const body = { category: values.category, title: values.title.trim() || null, rule: values.rule.trim(), weight: values.weight }
+    const body = {
+      category: values.category,
+      title: values.title.trim() || null,
+      rule: values.rule.trim(),
+      weight: values.weight,
+      ...(scope.kind === 'client' ? { contentTemplateId: values.contentTemplateId } : {}),
+    }
     try {
       if (existing) {
         const { guideline } = await apiFetch<{ guideline: GuidelineDTO }>(`${base}/${existing.id}`, {
@@ -152,6 +172,7 @@ export function GuidelinesView({
   }
 
   return (
+    <TemplateScopeContext.Provider value={scopeTemplates}>
     <motion.div variants={containerVariants} initial="hidden" animate="show" className="p-8 xl:p-10 max-w-[1200px] mx-auto">
       <motion.div variants={itemVariants} className="flex items-start justify-between gap-4 mb-8">
         <div className="min-w-0">
@@ -168,6 +189,22 @@ export function GuidelinesView({
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {scopeTemplates.length > 0 && (
+            <select
+              value={appliesTo}
+              onChange={(e) => setAppliesTo(e.target.value)}
+              aria-label="Filter by what the rules apply to"
+              className="px-3 py-2 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-input text-sm text-heading focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              <option value="">All rules</option>
+              <option value="client">Whole client</option>
+              {scopeTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} only
+                </option>
+              ))}
+            </select>
+          )}
           {scope.kind === 'client' && (
             <button
               type="button"
@@ -286,5 +323,6 @@ export function GuidelinesView({
         onCancel={() => setDeleting(null)}
       />
     </motion.div>
+    </TemplateScopeContext.Provider>
   )
 }

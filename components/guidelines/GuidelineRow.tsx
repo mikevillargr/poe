@@ -1,10 +1,11 @@
 'use client'
 
-import { GripVertical, Pencil, Trash2 } from 'lucide-react'
+import { GripVertical, Pencil, Trash2, LayoutTemplate } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { GuidelineDTO } from '@/lib/guidelines'
 import { SourceTag } from './SourceTag'
+import { useScopeTemplates } from './TemplateScopeContext'
 import { GuidelineForm, type GuidelineFormValues } from './GuidelineForm'
 
 // DR-006 option A row: drag handle, title + rule, source tag, instant toggle, edit/delete.
@@ -32,6 +33,8 @@ export function GuidelineRow({
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: guideline.id,
   })
+  const templates = useScopeTemplates()
+  const scopedTo = guideline.contentTemplateId ? (templates.find((t) => t.id === guideline.contentTemplateId)?.name ?? 'a template') : null
 
   if (editing) {
     return (
@@ -67,6 +70,15 @@ export function GuidelineRow({
       </div>
 
       <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+        {scopedTo && (
+          <span
+            title={`Applies only to articles made with ${scopedTo}`}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border border-border text-muted bg-surface max-w-[160px]"
+          >
+            <LayoutTemplate className="w-3 h-3 shrink-0" />
+            <span className="truncate">{scopedTo}</span>
+          </span>
+        )}
         {showSource && <SourceTag source={guideline.source} />}
         <button
           type="button"

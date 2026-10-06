@@ -14,6 +14,8 @@ export const guidelineInputSchema = z.object({
   active: z.boolean().default(true),
   // Rules confirmed from "Import from document" are `ingested`; template copies are only made server-side.
   source: z.enum(['manual', 'ingested']).default('manual'),
+  // D-002: null = applies to every article for the client; set = only articles made with that template.
+  contentTemplateId: z.string().uuid().nullable().optional(),
 })
 export type GuidelineInput = z.output<typeof guidelineInputSchema>
 
@@ -51,6 +53,8 @@ export interface GuidelineDTO {
   weight: number
   active: boolean
   source?: GuidelineSource
+  /** D-002: the content template this rule is scoped to (null = whole client). */
+  contentTemplateId?: string | null
   sortOrder: number
   createdAt: string
   updatedAt: string
@@ -65,6 +69,7 @@ export function toGuidelineDTO(row: GuidelineRow): GuidelineDTO {
     weight: row.weight,
     active: row.active,
     source: row.source,
+    contentTemplateId: row.contentTemplateId,
     sortOrder: row.sortOrder,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

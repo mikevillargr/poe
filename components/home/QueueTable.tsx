@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { GripVertical, Eye, Trash2, LayoutTemplate, AlertTriangle, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import {
@@ -231,6 +232,8 @@ export function QueueTable({
   onDelete: (a: ArticleSummary) => void
   onReorder: (activeId: string, overId: string) => void
 }) {
+  // A stable id keeps dnd-kit's aria-describedby the same on server and client (hydration).
+  const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -242,7 +245,7 @@ export function QueueTable({
   const th = 'px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider border-b border-border'
   return (
     <div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+      <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <table className="w-full table-fixed text-left border-collapse">
           <colgroup>
             <col className="w-10" />

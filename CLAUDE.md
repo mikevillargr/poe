@@ -34,7 +34,12 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
      guidelines** (AI) producing suggestions with in-text highlight, Accept / Adjust / Dismiss.
 5. **Guidelines** (`/c/[client]/guidelines`). Manual-first, categorized rules (SEO, structure, readability, sourcing,
    brand, agency, client, blacklist). Import-from-document is secondary. The **blacklist** holds "sounds AI-written"
-   words and patterns that generation avoids and Optimize flags.
+   words and patterns that generation avoids and Optimize flags. A rule applies to the whole client or to one template
+   ("Applies to").
+5a. **Templates** (`/c/[client]/templates`). Per-client presets (D-002): writer prompt, link steps, placeholder sources,
+   hooks, checks. Create from the Standard preset, duplicate, or copy from another client; every save is a revision
+   (History: diff + restore). The editor's dry run previews the prompt, link picks or a full draft without saving.
+   **Client facts** (tribe keywords, CTA styles, host cities, product-page settings) feed the hooks.
 6. **Admin** (super admin only): **Users** (approve/deny/disable, promote), **Universal guidelines** (the template), **Settings**
    (provider keys, test, models per role).
 
@@ -50,16 +55,17 @@ immediately). Every page and API route requires an active user.
 app/
   (auth)/login, (auth)/pending          Google login + waiting/disabled screens
   (main)/                               sidebar layout (requirePageUser)
-    c/[clientSlug]/{page,import,sources,guidelines,articles/[articleId]}
+    c/[clientSlug]/{page,import,sources,templates(+[templateId]),guidelines,articles/[articleId]}
     admin/{users,universal-guidelines}, settings        super admin only
     dashboard, analyze, guidelines      redirects to / (old bookmarks)
   api/clients/[clientId]/…              articles, activity, guidelines, import, templates, articles/[id]/template,
-                                        articles/generate-batch, templates/[id]/import, inventories (+ upload),
+                                        articles/generate-batch, templates/[id] (+ import, revisions, restore, dry-run),
+                                        facts, inventories (+ upload),
                                         sheet-sources (+ [id], [id]/sync) (all tenant-scoped)
   api/admin/…                           users, providers (keys), model-roles, universal-guidelines
   api/content/{parse,fetch-gdoc}        file/URL/Google Doc text extraction (guideline import)
   api/health, api/auth/…
-components/   shell, home, import, workspace, guidelines, settings, admin, editor, feedback, auth
+components/   shell, home, import, workspace, templates, sources, guidelines, settings, admin, editor, feedback, auth
 lib/
   db/schema/*       Drizzle schema by domain (tenants = clients, heuristics = guidelines)
   auth/ api/        guards (withRoute, requireUser…), {error, code} helpers, apiFetch
@@ -73,7 +79,8 @@ lib/
   templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks),
                     execute.ts (hooks → link selectors → writer → checks → one retry), run.ts (server run on the
                     generation slot; Generate uses it when articles.template_id is set), batch.ts ("Generate
-                    queued", 2 at a time), repo/schema/facts, rows.ts + inputs.ts (sheet/file → queue rows
+                    queued", 2 at a time), repo/schema/facts, manage.ts (create from preset/duplicate/
+                    copy, save as revision, restore, delete) + dry-run.ts + diff.ts (History), rows.ts + inputs.ts (sheet/file → queue rows
                     or link inventories; sheet-source sync); seed/ holds the 10 verbatim prompts, template
                     configs, each client's imported rules and the Google Sheet sources
   google/           service-account credential (encrypted; GOOGLE_SERVICE_ACCOUNT_JSON fallback) + read-only
