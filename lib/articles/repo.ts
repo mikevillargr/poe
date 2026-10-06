@@ -35,6 +35,9 @@ function toSummary(a: Article): ArticleSummary {
     assigneeId: a.assigneeId,
     statusChangedAt: a.statusChangedAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
+    templateId: a.templateId,
+    generationStatus: a.generationStatus,
+    needsReview: !!a.generationMeta?.needsReview,
   }
 }
 

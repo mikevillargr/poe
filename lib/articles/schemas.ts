@@ -90,6 +90,10 @@ export interface ArticleSummary {
   assigneeId: string | null
   statusChangedAt: string
   updatedAt: string
+  /** D-002 (additive): content template, generation state and the "needs review" flag of a templated draft. */
+  templateId?: string | null
+  generationStatus?: 'idle' | 'running' | 'ready' | 'error'
+  needsReview?: boolean
 }
 
 export type StatusCounts = Record<ArticleStatus, number>

@@ -1,7 +1,7 @@
 'use client'
 
 import { formatDistanceToNowStrict } from 'date-fns'
-import { GripVertical, Eye, Trash2 } from 'lucide-react'
+import { GripVertical, Eye, Trash2, LayoutTemplate, AlertTriangle, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import {
   DndContext,
   KeyboardSensor,
@@ -23,6 +23,27 @@ export interface Person {
 }
 
 const nf = new Intl.NumberFormat('en-US')
+
+/** Live state of an article in a running "Generate queued" batch (DR-012). */
+export type BatchState = 'queued' | 'running' | 'done' | 'needs-review' | 'failed'
+
+const BATCH_PILL: Record<BatchState, { label: string; cls: string; Icon: typeof Clock }> = {
+  queued: { label: 'Waiting', cls: 'border-border text-muted', Icon: Clock },
+  running: { label: 'Generating', cls: 'border-accent/40 text-accent bg-accent/10', Icon: Loader2 },
+  done: { label: 'Generated', cls: 'border-success/40 text-green-400 bg-success/10', Icon: CheckCircle2 },
+  'needs-review': { label: 'Needs review', cls: 'border-warning/40 text-orange-400 bg-warning/10', Icon: AlertTriangle },
+  failed: { label: 'Failed', cls: 'border-danger/40 text-red-400 bg-danger/10', Icon: XCircle },
+}
+
+function BatchPill({ state, message }: { state: BatchState; message?: string }) {
+  const p = BATCH_PILL[state]
+  return (
+    <span title={message} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${p.cls}`}>
+      <p.Icon className={`w-3 h-3 ${state === 'running' ? 'animate-spin' : ''}`} />
+      {p.label}
+    </span>
+  )
+}
 
 function WordsCell({ actual, target }: { actual: number | null; target: number | null }) {
   const ratio = actual && target ? actual / target : 0
@@ -69,6 +90,8 @@ function Row({
   index,
   people,
   draggable,
+  templateName,
+  batch,
   onOpen,
   onDelete,
 }: {
@@ -76,6 +99,8 @@ function Row({
   index: number
   people: Map<string, Person>
   draggable: boolean
+  templateName?: string
+  batch?: { state: BatchState; message?: string }
   onOpen: () => void
   onDelete: () => void
 }) {
@@ -113,6 +138,21 @@ function Row({
       <td className="px-4 py-4 min-w-0">
         <div className="text-sm font-medium text-heading truncate group-hover:text-accent transition-colors">{article.title}</div>
         {article.primaryKeyword && <div className="text-xs text-muted truncate mt-0.5">{article.primaryKeyword}</div>}
+        {(templateName || article.needsReview) && (
+          <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
+            {templateName && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border border-border text-muted bg-surface truncate max-w-[200px]">
+                <LayoutTemplate className="w-3 h-3 shrink-0" />
+                <span className="truncate">{templateName}</span>
+              </span>
+            )}
+            {article.needsReview && !batch && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border border-warning/40 text-orange-400 bg-warning/10 shrink-0">
+                <AlertTriangle className="w-3 h-3" /> Needs review
+              </span>
+            )}
+          </div>
+        )}
       </td>
       <td className="px-4 py-4">
         <div className="flex flex-wrap gap-1.5 max-w-[260px]">
@@ -128,9 +168,7 @@ function Row({
       <td className="px-4 py-4">
         <WordsCell actual={article.wordCount} target={article.targetWordCount} />
       </td>
-      <td className="px-4 py-4">
-        <StatusPill status={article.status} />
-      </td>
+      <td className="px-4 py-4">{batch ? <BatchPill state={batch.state} message={batch.message} /> : <StatusPill status={article.status} />}</td>
       <td className="px-4 py-4">
         <Avatar person={article.assigneeId ? people.get(article.assigneeId) : undefined} />
       </td>
@@ -174,6 +212,8 @@ export function QueueTable({
   articles,
   people,
   draggable,
+  templateNames,
+  batch,
   onOpen,
   onDelete,
   onReorder,
@@ -181,6 +221,10 @@ export function QueueTable({
   articles: ArticleSummary[]
   people: Map<string, Person>
   draggable: boolean
+  /** Template id → name, for the template chip. */
+  templateNames?: Map<string, string>
+  /** Article id → live batch state while "Generate queued" runs. */
+  batch?: Map<string, { state: BatchState; message?: string }>
   onOpen: (a: ArticleSummary) => void
   onDelete: (a: ArticleSummary) => void
   onReorder: (activeId: string, overId: string) => void
@@ -231,6 +275,8 @@ export function QueueTable({
                   index={i}
                   people={people}
                   draggable={draggable}
+                  templateName={a.templateId ? templateNames?.get(a.templateId) : undefined}
+                  batch={batch?.get(a.id)}
                   onOpen={() => onOpen(a)}
                   onDelete={() => onDelete(a)}
                 />
