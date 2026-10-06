@@ -50,12 +50,12 @@ immediately). Every page and API route requires an active user.
 app/
   (auth)/login, (auth)/pending          Google login + waiting/disabled screens
   (main)/                               sidebar layout (requirePageUser)
-    c/[clientSlug]/{page,import,guidelines,articles/[articleId]}
+    c/[clientSlug]/{page,import,sources,guidelines,articles/[articleId]}
     admin/{users,universal-guidelines}, settings        super admin only
     dashboard, analyze, guidelines      redirects to / (old bookmarks)
   api/clients/[clientId]/…              articles, activity, guidelines, import, templates, articles/[id]/template,
                                         articles/generate-batch, templates/[id]/import, inventories (+ upload),
-                                        sheet-sources/[id]/sync (all tenant-scoped)
+                                        sheet-sources (+ [id], [id]/sync) (all tenant-scoped)
   api/admin/…                           users, providers (keys), model-roles, universal-guidelines
   api/content/{parse,fetch-gdoc}        file/URL/Google Doc text extraction (guideline import)
   api/health, api/auth/…
