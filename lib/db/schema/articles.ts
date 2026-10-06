@@ -14,6 +14,7 @@ import { articleStatus, researchStatus, articleVersionKind } from './enums'
 import { tenants } from './clients'
 import { users } from './auth'
 import { contentDocuments } from './legacy'
+import { contentTemplates } from './templates'
 
 export interface ResearchCitation {
   id: string
@@ -34,6 +35,29 @@ export interface OptimizeResult {
   overallScore?: number
   keywordCoverage?: Array<{ keyword: string; count: number; inTitle: boolean; inIntro: boolean; inHeading: boolean }>
   dimensionScores?: Array<{ category: string; score: number; passCount: number; failCount: number }>
+}
+
+export interface GenerationCheck {
+  id: string
+  ok: boolean
+  message: string
+}
+
+// D-002: what a templated generation produced besides the draft.
+export interface GenerationMeta {
+  templateId: string
+  revisionNo: number
+  metaTitle?: string
+  metaDescription?: string
+  tldr?: string
+  selectedLinks?: string[]
+  droppedLinks?: string[]
+  checks: GenerationCheck[]
+  needsReview: boolean
+  retried: boolean
+  ctaStyle?: string
+  models?: { utility?: string; generation?: string }
+  generatedAt: string
 }
 
 export const importBatches = pgTable('import_batches', {
@@ -75,6 +99,13 @@ export const articles = pgTable(
     wordCount: integer('word_count'),
     lastOptimize: jsonb('last_optimize').$type<OptimizeResult>(),
 
+    // D-002 templates (null = Poe's generic research → generate flow).
+    templateId: uuid('template_id').references((): AnyPgColumn => contentTemplates.id, { onDelete: 'set null' }),
+    templateInputs: jsonb('template_inputs').$type<Record<string, string | number | null>>(),
+    generationMeta: jsonb('generation_meta').$type<GenerationMeta>(),
+    // `<sheet source id>:<sheet row number>` for rows synced from a Google Sheet; dedupes re-syncs.
+    sourceRowKey: text('source_row_key'),
+
     assigneeId: uuid('assignee_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     importBatchId: uuid('import_batch_id').references(() => importBatches.id, { onDelete: 'set null' }),
     legacyDocumentId: uuid('legacy_document_id')
@@ -88,6 +119,7 @@ export const articles = pgTable(
   (t) => [
     index('articles_tenant_status_idx').on(t.tenantId, t.status),
     index('articles_tenant_position_idx').on(t.tenantId, t.position),
+    unique('articles_tenant_source_row_uq').on(t.tenantId, t.sourceRowKey),
   ],
 )
 

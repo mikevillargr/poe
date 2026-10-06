@@ -17,6 +17,7 @@ export function useAIStream(opts: { onEvent?: (ev: AIStreamEvent) => void } = {}
   const [citations, setCitations] = useState<Citation[]>([])
   const [searches, setSearches] = useState<string[]>([])
   const [error, setError] = useState<{ code: string; message: string } | null>(null)
+  const [step, setStep] = useState<{ step: string; label: string } | null>(null)
   const controller = useRef<AbortController | null>(null)
 
   const start = useCallback(
@@ -29,6 +30,7 @@ export function useAIStream(opts: { onEvent?: (ev: AIStreamEvent) => void } = {}
       setCitations([])
       setSearches([])
       setError(null)
+      setStep(null)
       try {
         const res = await fetch(url, {
           method: 'POST',
@@ -41,6 +43,8 @@ export function useAIStream(opts: { onEvent?: (ev: AIStreamEvent) => void } = {}
           if (ev.type === 'delta') setText((t) => t + ev.text)
           else if (ev.type === 'citation') setCitations((c) => [...c, ev.citation])
           else if (ev.type === 'search') setSearches((s) => [...s, ev.query])
+          else if (ev.type === 'step') setStep({ step: ev.step, label: ev.label })
+          else if (ev.type === 'reset') setText('') // a multi-step run is retrying: drop the first attempt
           else if (ev.type === 'error') {
             setError({ code: ev.code, message: ev.message })
             setStatus('error')
@@ -62,5 +66,5 @@ export function useAIStream(opts: { onEvent?: (ev: AIStreamEvent) => void } = {}
 
   const abort = useCallback(() => controller.current?.abort(), [])
 
-  return { start, abort, status, text, citations, searches, error }
+  return { start, abort, status, text, citations, searches, error, step }
 }

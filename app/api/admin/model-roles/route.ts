@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { withRoute, json } from '@/lib/auth/guards'
 import { Errors } from '@/lib/api/errors'
 import { currentRoles, modelOptions, saveRole } from '@/lib/admin/ai-settings'
-import { PROVIDER_LABELS } from '@/lib/ai/types'
+import { MODEL_ROLES, PROVIDER_LABELS } from '@/lib/ai/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,19 +17,19 @@ const roleSetting = z.object({
     })
     .default({}),
 })
-const bodySchema = z.object({ generation: roleSetting.optional(), research: roleSetting.optional() })
+const bodySchema = z.object({ generation: roleSetting.optional(), research: roleSetting.optional(), utility: roleSetting.optional() })
 
-// GET → { roles: { generation?, research? }, options: { [provider]: { configured, models[], warning? } } }
+// GET → { roles: { generation?, research?, utility? }, options: { [provider]: { configured, models[], warning? } } }
 export const GET = withRoute(async () => {
   const [roles, options] = await Promise.all([currentRoles(), modelOptions()])
   return json({ roles, options })
 }, { admin: true })
 
-// PUT { generation?, research? } → { roles }. Provider must be configured; research models must support web search.
+// PUT { generation?, research?, utility? } → { roles }. Provider must be configured; research models must support web search.
 export const PUT = withRoute(async ({ req, user }) => {
   const body = bodySchema.parse(await req.json())
   const options = await modelOptions()
-  for (const role of ['generation', 'research'] as const) {
+  for (const role of MODEL_ROLES) {
     const s = body[role]
     if (!s) continue
     const opt = options[s.provider]
@@ -40,7 +40,7 @@ export const PUT = withRoute(async ({ req, user }) => {
       throw Errors.badRequest(`“${model.label}” can’t search the web, so it can’t be the research model.`)
     }
   }
-  for (const role of ['generation', 'research'] as const) {
+  for (const role of MODEL_ROLES) {
     const s = body[role]
     if (s) await saveRole(role, s, user)
   }

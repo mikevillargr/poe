@@ -12,6 +12,7 @@ import {
 import { guidelineSource } from './enums'
 import { tenants } from './clients'
 import { users } from './auth'
+import { contentTemplates } from './templates'
 
 // Raw documents guidelines were ingested from. Physical name stays `guidelines`.
 export const guidelineSources = pgTable('guidelines', {
@@ -50,7 +51,10 @@ export const heuristics = pgTable(
     weight: integer('weight').notNull(),
     active: boolean('active').notNull().default(true),
     source: guidelineSource('source').notNull().default('manual'),
+    // The Universal-template rule this was copied from (not a content template).
     templateId: uuid('template_id').references(() => universalGuidelines.id, { onDelete: 'set null' }),
+    // D-002: set = the rule applies only to articles made with this content template; null = whole client.
+    contentTemplateId: uuid('content_template_id').references((): AnyPgColumn => contentTemplates.id, { onDelete: 'set null' }),
     sortOrder: doublePrecision('sort_order').notNull().default(0),
     createdBy: uuid('created_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     updatedBy: uuid('updated_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),

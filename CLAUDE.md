@@ -10,9 +10,10 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
 - **Repo:** https://github.com/mikevillargr/poe
 - **Stack:** Next.js 15 (App Router) · TypeScript (strict) · Tailwind + framer-motion · TipTap · Drizzle ORM on
   PostgreSQL (pgvector image) · Auth.js (NextAuth v5 beta, Google only) · zod · zustand · SheetJS (vendored).
-- **AI:** provider-agnostic layer in `lib/ai` for **Anthropic (Claude), OpenAI and Moonshot (Kimi)**. Two model
-  *roles* are configured by a super admin in Settings: **generation** (writes drafts, runs the guideline check) and
-  **research** (live web search). Keys are encrypted server-side and never reach the browser.
+- **AI:** provider-agnostic layer in `lib/ai` for **Anthropic (Claude), OpenAI and Moonshot (Kimi)**. Three model
+  *roles* are configured by a super admin in Settings: **generation** (writes drafts, runs the guideline check),
+  **research** (live web search) and **utility** (cheap steps such as link selection; falls back to the generation model
+  when unset). Keys are encrypted server-side and never reach the browser.
 
 ---
 
@@ -67,6 +68,8 @@ lib/
   optimize/         keyword coverage, guideline-check prompt/parse
   guidelines/       repo, schemas, categories, Universal template, extraction
   import/           sheet parsing + column mapping
+  templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks);
+                    seed/<client>/guidelines.ts holds each client's imported rules
 drizzle/            versioned migrations (never db:push against real data)
 scripts/            db (migrate, baseline, fixtures, seed-universal), dev (api-sweep, smokes), ai-smoke, release
 docker/ Dockerfile docker-compose.yml   production stack (Caddy on 443)
@@ -95,7 +98,11 @@ category, title, rule, weight 1–10, active, source `manual|ingested|template_c
 template) · `guidelines` (raw ingested source documents) · `articles` (queue item and article in one row: status
 `queued|draft|in_review|done`, brief, `keywords[]`, primary keyword, target word count, `research` jsonb, draft HTML, last optimize)
 · `article_versions` · `article_events` (activity) · `import_batches` · `ai_provider_credentials` (encrypted keys) ·
-`ai_model_roles` · `ai_usage`.
+`ai_model_roles` · `ai_usage` · D-002 templates: `content_templates` (per-client presets, soft delete) ·
+`content_template_revisions` · `template_events` · `link_inventories` + `link_inventory_items` · `sheet_sources` ·
+`google_credentials` (encrypted service-account key). `articles` also has `template_id`, `template_inputs`,
+`generation_meta` and `source_row_key`; `heuristics.content_template_id` scopes a guideline to one template
+(`heuristics.template_id` is the Universal rule it was copied from).
 
 ---
 

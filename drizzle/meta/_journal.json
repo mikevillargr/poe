@@ -50,6 +50,13 @@
       "when": 1791213761538,
       "tag": "0006_version_kind_revised",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791257261363,
+      "tag": "0007_content_templates",
+      "breakpoints": true
     }
   ]
 }

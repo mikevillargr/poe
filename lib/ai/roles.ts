@@ -21,8 +21,20 @@ export interface AICallContext {
 }
 
 // Which model does each role use? Settings (ai_model_roles) → env AI_DEFAULT_<ROLE>="provider:model"
-// → mock in AI_MOCK mode → error.
+// → (utility only) the generation model → mock in AI_MOCK mode → error.
 export async function resolveRole(role: ModelRole): Promise<ResolvedRole> {
+  const configured = await configuredRole(role)
+  if (configured) return configured
+  // The cheap utility model is optional: until it's set (or if it's removed), use the generation model.
+  if (role === 'utility') {
+    const generation = await configuredRole('generation')
+    if (generation) return { ...generation, role }
+  }
+  if (isMockMode()) return { role, provider: 'anthropic', modelId: 'mock-anthropic', params: {} }
+  throw new AIError('ROLE_NOT_CONFIGURED', `No model is configured for ${role}. Set it in Settings.`)
+}
+
+async function configuredRole(role: ModelRole): Promise<ResolvedRole | null> {
   const [row] = await db.select().from(aiModelRoles).where(eq(aiModelRoles.role, role)).limit(1)
   if (row) return { role, provider: row.provider, modelId: row.modelId, params: row.params ?? {} }
 
@@ -33,8 +45,7 @@ export async function resolveRole(role: ModelRole): Promise<ResolvedRole> {
       return { role, provider: provider as ProviderId, modelId: rest.join(':'), params: {} }
     }
   }
-  if (isMockMode()) return { role, provider: 'anthropic', modelId: 'mock-anthropic', params: {} }
-  throw new AIError('ROLE_NOT_CONFIGURED', `No model is configured for ${role}. Set it in Settings.`)
+  return null
 }
 
 async function logUsage(resolved: ResolvedRole, usage: Usage, ctx: AICallContext) {
