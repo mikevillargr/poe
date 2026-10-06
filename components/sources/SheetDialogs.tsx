@@ -1,5 +1,7 @@
 'use client'
 
+import { SheetFormatCard } from '@/components/import/SheetFormatCard'
+import { linkListFormat, templateFormat } from '@/lib/import/sheet-format'
 import { useEffect, useState } from 'react'
 import { Sheet, RefreshCw, Loader2, Copy, AlertCircle } from 'lucide-react'
 import { apiFetch, ApiFetchError } from '@/lib/api/fetch'
@@ -30,6 +32,7 @@ const nf = new Intl.NumberFormat('en-US')
 /** DR-011 "Add sheet" / edit: link + tab + what it feeds (+ optional link-list columns). */
 export function SheetSourceModal({
   clientId,
+  clientSlug,
   open,
   editing,
   templates,
@@ -38,6 +41,7 @@ export function SheetSourceModal({
   onSaved,
 }: {
   clientId: string
+  clientSlug: string
   open: boolean
   editing: SheetSource | null
   templates: TemplateOption[]
@@ -110,6 +114,7 @@ export function SheetSourceModal({
     }
   }
 
+  const selectedTemplate = templates.find((t) => t.id === templateId)
   const valid = name.trim() && sheet.trim() && tab.trim() && (target === 'topics' ? templateId : inventorySlug)
 
   return (
@@ -189,7 +194,6 @@ export function SheetSourceModal({
               </option>
             ))}
           </select>
-          <p className="text-xs text-muted mt-1">Columns are matched by the template’s column names (e.g. Title, Prompt, SEO Keywords, Number of Words).</p>
         </div>
       ) : (
         <>
@@ -228,6 +232,9 @@ export function SheetSourceModal({
           </div>
         </>
       )}
+      {/* DR-015: the columns this sheet needs, for the chosen template or the link list. */}
+      {target === 'topics' && selectedTemplate && <SheetFormatCard format={templateFormat(selectedTemplate)} clientId={clientId} clientSlug={clientSlug} />}
+      {target === 'inventory' && <SheetFormatCard format={linkListFormat()} clientId={clientId} clientSlug={clientSlug} />}
       {error && <p className="text-sm text-red-400">{error}</p>}
     </SourceModal>
   )

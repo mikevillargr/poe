@@ -1,5 +1,7 @@
 'use client'
 
+import { SheetFormatCard } from '@/components/import/SheetFormatCard'
+import { linkListFormat } from '@/lib/import/sheet-format'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileSpreadsheet, Upload, List, Loader2, ExternalLink, Search } from 'lucide-react'
 import { apiFetch, ApiFetchError } from '@/lib/api/fetch'
@@ -26,11 +28,13 @@ const nf = new Intl.NumberFormat('en-US')
 /** DR-011: upload a CSV/XLSX that replaces a link list (dry run first, then an explicit replace). */
 export function UploadLinksModal({
   clientId,
+  clientSlug,
   inventory,
   onClose,
   onDone,
 }: {
   clientId: string
+  clientSlug: string
   inventory: Inventory | null
   onClose: () => void
   onDone: () => void
@@ -113,6 +117,7 @@ export function UploadLinksModal({
       <p className="text-sm text-muted">
         A file with a column of URLs (and optionally titles). It replaces the whole list; templates pick internal links from it.
       </p>
+      <SheetFormatCard format={linkListFormat()} clientId={clientId} clientSlug={clientSlug} />
       <input
         ref={inputRef}
         type="file"
