@@ -56,7 +56,7 @@ immediately). Every page and API route requires an active user.
 app/
   (auth)/login, (auth)/pending          Google login + waiting/disabled screens
   (main)/                               sidebar layout (requirePageUser)
-    c/[clientSlug]/{page,import,sources,templates(+[templateId]),guidelines,articles/[articleId]}
+    c/[clientSlug]/{page,import,sources,templates(+[templateId]),guidelines,sheet-format,articles/[articleId]}
     admin/{users,universal-guidelines}, settings        super admin only
     dashboard, analyze, guidelines      redirects to / (old bookmarks)
   api/clients/[clientId]/…              articles, activity, guidelines, import, templates, articles/[id]/template,
@@ -77,7 +77,8 @@ lib/
   optimize/         keyword coverage, guideline-check prompt/parse
   guidelines/       repo, schemas, categories, Universal rules, extraction; prompt.ts merges live Universal (minus the
                     client's off switches) + client rules; render.ts prints them Universal-first for every prompt
-  import/           sheet parsing + column mapping
+  import/           sheet parsing + column mapping (a template's own column names win); sheet-format.ts = the
+                    format each import expects (Sheet format card, sample .xlsx route, /sheet-format page; DR-015)
   templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks),
                     execute.ts (hooks → link selectors → writer → checks → one retry), run.ts (server run on the
                     generation slot; Generate uses it when articles.template_id is set), batch.ts ("Generate

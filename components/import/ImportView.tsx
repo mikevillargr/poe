@@ -5,15 +5,18 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDistanceToNowStrict } from 'date-fns'
-import { ArrowLeft, Check, Download, FileSpreadsheet, Loader2, RotateCcw, AlertTriangle, AlertCircle, LayoutTemplate } from 'lucide-react'
+import { ArrowLeft, Check, FileSpreadsheet, Loader2, RotateCcw, AlertTriangle, AlertCircle, LayoutTemplate } from 'lucide-react'
 import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
+import { SheetFormatCard } from './SheetFormatCard'
+import { calendarFormat, templateFormat } from '@/lib/import/sheet-format'
 import {
   FIELD_LABELS,
   IMPORT_FIELDS,
   autoMap,
   buildRows,
   guessHeaderRow,
+  templateAliases,
   type ColumnMapping,
   type ImportField,
   type ImportRow,
@@ -66,6 +69,7 @@ export function ImportView({
   const templates = useClientTemplates(client.id)
   const [templateId, setTemplateId] = useState('')
   const template = templates?.find((t) => t.id === templateId) ?? null
+  const aliases = useMemo(() => templateAliases(template?.inputs), [template])
   const extraFields = template?.inputs.filter((f) => !(IMPORT_FIELDS as readonly string[]).includes(f.key)) ?? []
   const usesField = (f: ImportField) => f === 'title' || !template || template.inputs.some((i) => i.key === f)
   const [extraMap, setExtraMap] = useState<Record<string, number | null>>({})
@@ -131,10 +135,10 @@ export function ImportView({
         toast.error(`${file.name} has no rows`)
         return
       }
-      const hr = guessHeaderRow(res.grid)
+      const hr = guessHeaderRow(res.grid, aliases)
       setParsed(res)
       setHeaderRow(hr)
-      setMapping(autoMap(res.grid[hr] ?? []))
+      setMapping(autoMap(res.grid[hr] ?? [], aliases))
       setExtraMap(autoMapExtras(res.grid[hr] ?? []))
       setIncludeOverride({})
     } catch {
@@ -367,14 +371,7 @@ export function ImportView({
               </div>
             </div>
 
-            <div className="flex items-center justify-between">
-              <a
-                href={`/api/clients/${client.id}/articles/import/template`}
-                className="inline-flex items-center gap-2 text-sm text-body hover:text-accent transition-colors"
-              >
-                <Download className="w-4 h-4" /> Download template
-              </a>
-            </div>
+            <SheetFormatCard format={template ? templateFormat(template) : calendarFormat()} clientId={client.id} clientSlug={client.slug} />
 
             <div>
               <h2 className="text-lg font-display text-heading mb-3">Recent imports</h2>
@@ -415,7 +412,7 @@ export function ImportView({
                     onChange={(e) => {
                       const hr = Number(e.target.value)
                       setHeaderRow(hr)
-                      setMapping(autoMap(parsed.grid[hr] ?? []))
+                      setMapping(autoMap(parsed.grid[hr] ?? [], aliases))
                       setExtraMap(autoMapExtras(parsed.grid[hr] ?? []))
                     }}
                     className="px-2 py-1 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-input text-heading font-mono"

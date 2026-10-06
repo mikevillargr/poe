@@ -39,20 +39,44 @@ export function matchField(header: string): ImportField | null {
 /** Column index per field (or null), first match wins. */
 export type ColumnMapping = Record<ImportField, number | null>
 
-export function autoMap(headers: string[]): ColumnMapping {
+/** Extra header names per field, e.g. a template's own column names ("Product Name" for the title). */
+export type ExtraAliases = Partial<Record<ImportField, string[]>>
+
+/** A template's names for the standard fields, from its input definitions (D-002 aliases). */
+export function templateAliases(inputs: { key: string; label: string; aliases?: string[] }[] | undefined): ExtraAliases {
+  const out: ExtraAliases = {}
+  for (const f of inputs ?? []) {
+    if ((IMPORT_FIELDS as readonly string[]).includes(f.key)) out[f.key as ImportField] = [f.label, ...(f.aliases ?? [])]
+  }
+  return out
+}
+
+function matchExtra(header: string, extra: ExtraAliases): ImportField | null {
+  const h = norm(header)
+  if (!h) return null
+  for (const f of IMPORT_FIELDS) if (extra[f]?.some((a) => norm(a) === h)) return f
+  return null
+}
+
+/** Column per field. A template's own names win over the generic aliases, so both import paths agree. */
+export function autoMap(headers: string[], extra: ExtraAliases = {}): ColumnMapping {
   const m: ColumnMapping = { title: null, brief: null, keywords: null, wordcount: null }
   headers.forEach((h, i) => {
-    const f = matchField(h)
+    const f = matchExtra(h, extra)
     if (f && m[f] === null) m[f] = i
+  })
+  headers.forEach((h, i) => {
+    const f = matchField(h)
+    if (f && m[f] === null && !Object.values(m).includes(i)) m[f] = i
   })
   return m
 }
 
 /** First row (within the first 10) that looks like a header (contains a title alias); else first non-empty row. */
-export function guessHeaderRow(grid: string[][]): number {
+export function guessHeaderRow(grid: string[][], extra: ExtraAliases = {}): number {
   const limit = Math.min(grid.length, 10)
   for (let r = 0; r < limit; r++) {
-    if (grid[r]?.some((c) => matchField(String(c ?? '')) === 'title')) return r
+    if (grid[r]?.some((c) => matchExtra(String(c ?? ''), extra) === 'title' || matchField(String(c ?? '')) === 'title')) return r
   }
   for (let r = 0; r < limit; r++) {
     if (grid[r]?.some((c) => String(c ?? '').trim())) return r

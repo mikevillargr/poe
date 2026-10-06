@@ -297,6 +297,7 @@ export function SourcesView({ client, isSuperAdmin }: { client: { id: string; na
 
       <UploadLinksModal
         clientId={client.id}
+        clientSlug={client.slug}
         inventory={uploading}
         onClose={() => setUploading(null)}
         onDone={() => {
@@ -307,6 +308,7 @@ export function SourcesView({ client, isSuperAdmin }: { client: { id: string; na
       <ViewLinksModal clientId={client.id} inventory={viewing} onClose={() => setViewing(null)} />
       <SheetSourceModal
         clientId={client.id}
+        clientSlug={client.slug}
         open={adding || !!editing}
         editing={editing}
         templates={(templates ?? []).filter((t) => t.enabled)}
