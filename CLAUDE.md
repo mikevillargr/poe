@@ -118,7 +118,7 @@ live) · `client_universal_overrides` (a client's off switch for one Universal r
 · `article_versions` · `article_events` (activity) · `import_batches` · `ai_provider_credentials` (encrypted keys) ·
 `ai_model_roles` · `ai_usage` · D-002 templates: `content_templates` (per-client presets, soft delete) ·
 `content_template_revisions` · `template_events` · `link_inventories` + `link_inventory_items` · `sheet_sources` ·
-`google_credentials` (encrypted service-account key). `articles` also has `template_id`, `template_inputs`,
+`google_credentials` (encrypted service-account key) · `user_google_drive` (a person's Drive connection for Docs export, encrypted). `articles` also has `template_id`, `template_inputs`,
 `generation_meta` and `source_row_key`; `heuristics.content_template_id` scopes a guideline to one template
 (`heuristics.template_id` is legacy: copies were removed by migration 0008).
 
@@ -311,7 +311,7 @@ npx tsx --conditions=react-server scripts/ai-smoke.ts --provider anthropic|opena
 ### Environment (see `.env.example`)
 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID/SECRET`, `ALLOWED_EMAIL_DOMAIN`, `SUPER_ADMIN_EMAIL`,
 `APP_ENCRYPTION_KEY` (encrypts provider keys; never change it once keys are stored), optional `ANTHROPIC_API_KEY` /
-`OPENAI_API_KEY` / `MOONSHOT_API_KEY` env fallbacks, `AI_MOCK`, Google Docs export reuses `AUTH_GOOGLE_ID` at runtime (Drive API enabled + site in the OAuth client's JavaScript origins).
+`OPENAI_API_KEY` / `MOONSHOT_API_KEY` env fallbacks, `AI_MOCK`, Google Docs export (DR-014): each person connects their own Drive once (`drive.file`, refresh token encrypted in `user_google_drive`); the server uploads with `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`. Needs the Drive API enabled and `<AUTH_URL>/api/google/drive/callback` in the OAuth client's redirect URIs.
 
 ## Releases and deploys
 

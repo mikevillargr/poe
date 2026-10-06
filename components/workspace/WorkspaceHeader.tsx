@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Unlink, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2 } from 'lucide-react'
 import { StatusPill } from '@/components/home/StatusPill'
 import { ARTICLE_STATUS_LABELS, ARTICLE_STATUSES, canTransition, type ArticleStatus } from '@/lib/articles/schemas'
 import type { WorkspaceArticle } from './types'
@@ -46,6 +46,8 @@ export function WorkspaceHeader({
   onChangeStatus,
   onExportDocx,
   onExportDrive,
+  driveEmail,
+  onDisconnectDrive,
   onDelete,
 }: {
   clientSlug: string
@@ -64,6 +66,9 @@ export function WorkspaceHeader({
   onChangeStatus: (to: ArticleStatus) => void
   onExportDocx: () => void
   onExportDrive: () => void
+  /** DR-014: the connected Google account, or null when Drive isn't connected yet. */
+  driveEmail: string | null
+  onDisconnectDrive: () => void
   onDelete: () => void
 }) {
   const [title, setTitle] = useState(article.title)
@@ -292,8 +297,26 @@ export function WorkspaceHeader({
                   <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc" />
                   <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00" />
                 </svg>
-                Export to Google Docs
+                <span className="flex flex-col items-start leading-tight">
+                  Export to Google Docs
+                  <span className="text-[11px] text-muted truncate max-w-[200px]">
+                    {driveEmail ? `as ${driveEmail}` : 'Connect Google Drive first'}
+                  </span>
+                </span>
               </button>
+              {driveEmail && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onDisconnectDrive()
+                  }}
+                  className={`${item} text-muted hover:bg-surface-hover`}
+                >
+                  <Unlink className="w-4 h-4" /> Disconnect Google Drive
+                </button>
+              )}
               <div className="h-px bg-border my-1" />
               <button
                 type="button"

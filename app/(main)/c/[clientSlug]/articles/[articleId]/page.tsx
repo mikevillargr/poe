@@ -8,6 +8,7 @@ import { getArticleReconciled } from '@/lib/pipeline/runs'
 import { ApiError } from '@/lib/api/errors'
 import { modelRef, resolveRole } from '@/lib/ai/roles'
 import { WorkspaceView } from '@/components/workspace/WorkspaceView'
+import { driveStatus } from '@/lib/google/drive'
 import { toWorkspaceArticle, type ModelsInUse } from '@/components/workspace/types'
 
 export const dynamic = 'force-dynamic'
@@ -39,7 +40,7 @@ export default async function ArticleWorkspacePage({
     throw err
   }
 
-  const [people, research, generation] = await Promise.all([
+  const [people, research, generation, drive] = await Promise.all([
     db
       .select({ id: users.id, name: users.name, email: users.email, image: users.image })
       .from(users)
@@ -47,6 +48,7 @@ export default async function ArticleWorkspacePage({
       .orderBy(asc(users.name)),
     configuredModel('research'),
     configuredModel('generation'),
+    driveStatus(user.id),
   ])
   const models: ModelsInUse = { research, generation }
 
@@ -58,7 +60,7 @@ export default async function ArticleWorkspacePage({
       people={people}
       models={models}
       isSuperAdmin={user.role === 'super_admin'}
-      googleClientId={process.env.AUTH_GOOGLE_ID ?? ''}
+      initialDrive={drive}
     />
   )
 }
