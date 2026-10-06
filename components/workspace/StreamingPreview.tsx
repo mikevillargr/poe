@@ -5,13 +5,14 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import { cleanGeneratedHtml } from '@/lib/pipeline/html'
+import { tableExtensions } from '@/lib/tiptap/table'
 
 // Read-only TipTap view of a draft while it streams in. TipTap's schema renders only known nodes,
 // so partial or unexpected HTML from the model can't execute.
 export function StreamingPreview({ html }: { html: string }) {
   const lastApplied = useRef(0)
   const editor = useEditor({
-    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), Link.configure({ openOnClick: false })],
+    extensions: [StarterKit.configure({ heading: { levels: [1, 2, 3] } }), Link.configure({ openOnClick: false }), ...tableExtensions],
     content: '',
     editable: false,
     immediatelyRender: false,

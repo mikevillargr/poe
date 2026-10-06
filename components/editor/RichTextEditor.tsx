@@ -7,6 +7,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import UnderlineExtension from '@tiptap/extension-underline'
 import Link from '@tiptap/extension-link'
+import { tableExtensions } from '@/lib/tiptap/table'
 import {
   Bold,
   Italic,
@@ -151,6 +152,7 @@ export function RichTextEditor({
       Placeholder.configure({ placeholder }),
       CharacterCount.configure({ limit: null }),
       UnderlineExtension,
+      ...tableExtensions,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { class: 'text-accent underline cursor-pointer' },
