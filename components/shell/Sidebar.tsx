@@ -77,9 +77,9 @@ export function Sidebar({
 
   return (
     <div className="w-[240px] bg-gradient-to-b from-[#0D0D14] to-[#0A0A12] border-r border-white/[0.06] h-screen fixed left-0 top-0 flex flex-col z-50">
-      <div className="h-16 flex items-center px-6 border-b border-white/[0.06]">
+      <div className="h-16 flex items-center justify-center px-6 border-b border-white/[0.06]">
         <Feather className="w-5 h-5 text-accent mr-2 shrink-0 drop-shadow-[0_0_8px_rgba(232,69,10,0.5)]" />
-        <div className="min-w-0">
+        <div className="min-w-0 text-center">
           <div className="text-[#F1F5F9] font-display italic font-semibold text-2xl tracking-tight leading-none">Poe</div>
           <div className="text-[10px] text-[#64748B] mt-1">by Growth Rocket Propulsion Labs</div>
         </div>
@@ -145,7 +145,7 @@ export function Sidebar({
             <LogOut className="w-4 h-4" />
           </button>
         </div>
-        <div className="mt-3 text-[11px] font-mono text-[#64748B]/50">v{version}</div>
+        <div className="mt-3 text-center text-[11px] font-mono text-[#64748B]/50">v{version}</div>
       </div>
     </div>
   )
