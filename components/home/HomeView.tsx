@@ -226,7 +226,7 @@ export function HomeView({
         <StatusCards counts={counts} active={status} onSelect={setStatus} />
       </motion.div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-8 items-start">
+      <div className="grid grid-cols-1 min-[1700px]:grid-cols-[minmax(0,1fr)_300px] gap-8 items-start">
         <motion.section variants={itemVariants} className="min-w-0">
           <div className="flex items-center justify-between gap-4 mb-4">
             <div className="flex items-center gap-3 min-w-0">
