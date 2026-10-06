@@ -61,8 +61,11 @@ export function resolveValue(
       const v = inputs[source.key]
       return v === null || v === undefined || v === '' ? (source.fallback ?? '') : String(v)
     }
-    case 'wordCount':
-      return resolveWordCount(article.targetWordCount, config.defaultWordCount)
+    case 'wordCount': {
+      // The sheet's own text ("1500-2000") when the row came from a sheet, else the stored number.
+      const text = inputs.wordCount
+      return resolveWordCount(typeof text === 'string' && text.trim() ? text : article.targetWordCount, config.defaultWordCount)
+    }
     case 'currentYear':
       return currentYear(now)
     case 'inventory':
