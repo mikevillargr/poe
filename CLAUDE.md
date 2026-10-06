@@ -53,7 +53,8 @@ app/
     c/[clientSlug]/{page,import,guidelines,articles/[articleId]}
     admin/{users,universal-guidelines}, settings        super admin only
     dashboard, analyze, guidelines      redirects to / (old bookmarks)
-  api/clients/[clientId]/…              articles, activity, guidelines, import (all tenant-scoped)
+  api/clients/[clientId]/…              articles, activity, guidelines, import, templates, articles/[id]/template,
+                                        articles/generate-batch (all tenant-scoped)
   api/admin/…                           users, providers (keys), model-roles, universal-guidelines
   api/content/{parse,fetch-gdoc}        file/URL/Google Doc text extraction (guideline import)
   api/health, api/auth/…
@@ -68,10 +69,14 @@ lib/
   optimize/         keyword coverage, guideline-check prompt/parse
   guidelines/       repo, schemas, categories, Universal template, extraction
   import/           sheet parsing + column mapping
-  templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks);
-                    seed/<client>/guidelines.ts holds each client's imported rules
+  templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks),
+                    execute.ts (hooks → link selectors → writer → checks → one retry), run.ts (server run on the
+                    generation slot; Generate uses it when articles.template_id is set), batch.ts ("Generate
+                    queued", 2 at a time), repo/schema/facts; seed/ holds the 10 verbatim prompts, template
+                    configs and each client's imported rules
 drizzle/            versioned migrations (never db:push against real data)
-scripts/            db (migrate, baseline, fixtures, seed-universal), dev (api-sweep, smokes), ai-smoke, release
+scripts/            db (migrate, baseline, fixtures, seed-universal, seed-n8n), dev (api-sweep, smokes, template-e2e),
+                    ai-smoke, release
 docker/ Dockerfile docker-compose.yml   production stack (Caddy on 443)
 ```
 
@@ -282,6 +287,8 @@ npm run db:migrate          # apply migrations (tsx scripts/db/migrate.ts) to DA
 npm run db:generate         # new migration from schema changes
 npm run db:fixtures         # local mock data (4 clients, 24 articles); refuses non-local databases
 npx tsx scripts/dev/api-sweep.ts http://localhost:<port>   # every API route: 401 signed out, never 2xx for a pending user
+npx tsx scripts/db/seed-n8n.ts [--dry-run]                 # n8n clients, templates, inventories, imported guidelines (idempotent)
+npx tsx --env-file=.env.local scripts/dev/template-e2e.ts http://localhost:<port>   # templated generation e2e (AI_MOCK=1 server)
 npx tsx --conditions=react-server scripts/ai-smoke.ts --provider anthropic|openai|moonshot   # live provider smoke (needs keys)
 ```
 

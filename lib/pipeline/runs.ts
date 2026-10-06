@@ -49,6 +49,11 @@ export class Run {
     this.wake()
   }
 
+  /** Resolves when the run's body has finished (successfully or not). */
+  whenDone(): Promise<void> {
+    return this.completion
+  }
+
   waitDone(timeoutMs: number) {
     return Promise.race([this.completion, new Promise<void>((r) => setTimeout(r, timeoutMs))])
   }
