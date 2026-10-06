@@ -30,6 +30,7 @@ export function toSSEResponse(
         for await (const ev of events) {
           if (opts.signal?.aborted) break
           if (ev.type === 'delta') partial += ev.text
+          else if (ev.type === 'reset') partial = ''
           send(ev)
           if (ev.type === 'done' && opts.onDone) {
             const extra = await opts.onDone(ev)

@@ -2,7 +2,10 @@
 // Shared types only (safe to import from client code); implementations live in lib/ai/providers.
 
 export type ProviderId = 'anthropic' | 'openai' | 'moonshot'
-export type ModelRole = 'generation' | 'research'
+export type ModelRole = 'generation' | 'research' | 'utility'
+
+/** Every role, in Settings order. Use this instead of hard-coding the list. */
+export const MODEL_ROLES: ModelRole[] = ['generation', 'research', 'utility']
 
 export const PROVIDER_LABELS: Record<ProviderId, string> = {
   anthropic: 'Claude (Anthropic)',
@@ -13,6 +16,7 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
 export const ROLE_LABELS: Record<ModelRole, string> = {
   generation: 'Text generation',
   research: 'Research (web search)',
+  utility: 'Utility (link selection)',
 }
 
 export interface ModelInfo {
@@ -65,6 +69,10 @@ export type AIStreamEvent =
   | { type: 'error'; code: string; message: string }
   /** Emitted by route handlers (not providers) after results are persisted. */
   | { type: 'saved'; articleId: string; versionNo?: number }
+  /** Emitted by multi-step runs (templates): which step is running, e.g. selecting / writing / checking / retrying. */
+  | { type: 'step'; step: string; label: string }
+  /** Emitted by multi-step runs before a retry: discard the text streamed so far. */
+  | { type: 'reset'; reason?: string }
 
 export interface AIProvider {
   id: ProviderId

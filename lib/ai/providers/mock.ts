@@ -59,7 +59,28 @@ function mockRevision(prompt: string): string {
   return `${draft}\n<p>Mock revision applied: ${feedback.replace(/[<>]/g, '').slice(0, 120)}</p>`
 }
 
+// D-002 link selectors: pick real candidate URLs from the prompt (never the example.com samples).
+function mockLinkSelection(prompt: string): string {
+  const urls = [...new Set(prompt.match(/https?:\/\/[^\s,<>"')\]]+/g) ?? [])].filter((u) => !/example\.com/.test(u))
+  if (prompt.includes('Select exactly ONE YouTube video URL')) return urls.find((u) => /youtu\.?be/.test(u)) ?? ''
+  if (prompt.includes('PRODUCT_URLS:')) {
+    const products = urls.filter((u) => /\/products?\//.test(u)).slice(0, 2)
+    const articles = urls.filter((u) => !products.includes(u)).slice(0, 2)
+    return `ARTICLE_URLS:\n${articles.join(', ')}\n\nPRODUCT_URLS:\n${products.join(', ')}`
+  }
+  return urls.slice(0, 3).join(', ')
+}
+
+function isLinkSelection(prompt: string) {
+  return (
+    prompt.includes('Extract only the URLs') ||
+    prompt.includes('Select exactly ONE YouTube video URL') ||
+    (prompt.includes('ARTICLE_URLS:') && prompt.includes('PRODUCT_URLS:') && prompt.includes('STRICT OUTPUT FORMAT'))
+  )
+}
+
 function mockArticle(prompt: string): string {
+  if (isLinkSelection(prompt)) return mockLinkSelection(prompt)
   if (prompt.includes('Check this article draft against the guidelines')) return mockOptimize(prompt)
   if (prompt.includes('Reply with ONLY the rewritten passage')) {
     return `${/Current suggested replacement: "([^"]*)"/.exec(prompt)?.[1] ?? 'Rewritten passage'} (rewritten)`

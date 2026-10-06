@@ -17,7 +17,13 @@ export const articleVersionKind = pgEnum('article_version_kind', [
 export const guidelineSource = pgEnum('guideline_source', ['manual', 'ingested', 'template_copy'])
 
 export const aiProvider = pgEnum('ai_provider', ['anthropic', 'openai', 'moonshot'])
-export const aiModelRole = pgEnum('ai_model_role', ['generation', 'research'])
+export const aiModelRole = pgEnum('ai_model_role', ['generation', 'research', 'utility'])
+
+// D-002 content templates
+export const templateKind = pgEnum('template_kind', ['faq', 'blog', 'page'])
+export const linkInventoryKind = pgEnum('link_inventory_kind', ['articles', 'products', 'pages', 'videos', 'directory'])
+export const inputSource = pgEnum('input_source', ['upload', 'sheet'])
+export const sheetTarget = pgEnum('sheet_target', ['topics', 'inventory'])
 
 export type UserRole = (typeof userRole.enumValues)[number]
 export type UserStatus = (typeof userStatus.enumValues)[number]
@@ -27,3 +33,5 @@ export type ArticleVersionKind = (typeof articleVersionKind.enumValues)[number]
 export type GuidelineSource = (typeof guidelineSource.enumValues)[number]
 export type AIProviderId = (typeof aiProvider.enumValues)[number]
 export type AIModelRole = (typeof aiModelRole.enumValues)[number]
+export type TemplateKind = (typeof templateKind.enumValues)[number]
+export type LinkInventoryKind = (typeof linkInventoryKind.enumValues)[number]

@@ -6,7 +6,7 @@ import { KeyRound, Cpu, Eye, EyeOff, Loader2, Check, X, ChevronRight, Globe } fr
 import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
-import { PROVIDER_LABELS, ROLE_LABELS, type ModelInfo, type ModelRole, type ProviderId } from '@/lib/ai/types'
+import { MODEL_ROLES, PROVIDER_LABELS, ROLE_LABELS, type ModelInfo, type ModelRole, type ProviderId } from '@/lib/ai/types'
 
 interface ProviderStatus {
   provider: ProviderId
@@ -23,7 +23,12 @@ interface RoleSetting {
 type Options = Record<ProviderId, { configured: boolean; models: ModelInfo[]; warning?: string }>
 
 const PROVIDERS: ProviderId[] = ['anthropic', 'openai', 'moonshot']
-const ROLES: ModelRole[] = ['generation', 'research']
+const ROLES: ModelRole[] = MODEL_ROLES
+const ROLE_HINTS: Record<ModelRole, string> = {
+  generation: 'Writes the article drafts.',
+  research: 'Only models that can search the web are listed.',
+  utility: 'A fast, low-cost model for small steps such as picking internal links. Uses the text generation model until set.',
+}
 const MOONSHOT_REGIONS = [
   { label: 'International (api.moonshot.ai)', value: 'https://api.moonshot.ai/v1' },
   { label: 'China (api.moonshot.cn)', value: 'https://api.moonshot.cn/v1' },
@@ -412,7 +417,7 @@ function RoleRow({
       <div className="flex items-baseline justify-between mb-2">
         <label className="block text-sm font-medium text-heading">{ROLE_LABELS[role]}</label>
         <span className="text-xs text-muted">
-          {role === 'research' ? 'Only models that can search the web are listed.' : 'Writes the article drafts.'}
+          {ROLE_HINTS[role]}
         </span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-3">
