@@ -33,3 +33,10 @@ test('A1 ranges quote tab names', () => {
   assert.equal(a1Range('COMMUNITY PAGE LINKS/TRIBES', 'A1:Z1000'), "'COMMUNITY PAGE LINKS/TRIBES'!A1:Z1000")
   assert.equal(a1Range("Bob's tab"), "'Bob''s tab'")
 })
+
+test('spreadsheet ids from links or bare ids', async () => {
+  const { spreadsheetIdFrom } = await import('./ids')
+  assert.equal(spreadsheetIdFrom('https://docs.google.com/spreadsheets/d/1LZD-qRS7OaIjFhKu_0W-OAANeASuAS3lPa7F2WjvDMU/edit#gid=1702677029'), '1LZD-qRS7OaIjFhKu_0W-OAANeASuAS3lPa7F2WjvDMU')
+  assert.equal(spreadsheetIdFrom('1LZD-qRS7OaIjFhKu_0W-OAANeASuAS3lPa7F2WjvDMU'), '1LZD-qRS7OaIjFhKu_0W-OAANeASuAS3lPa7F2WjvDMU')
+  assert.equal(spreadsheetIdFrom('https://example.com/not-a-sheet'), null)
+})

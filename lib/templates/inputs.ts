@@ -127,21 +127,107 @@ export async function listInventories(tenantId: string) {
 }
 
 export async function listSheetSources(tenantId: string) {
-  return db
+  const rows = await db
     .select({
       id: sheetSources.id,
       name: sheetSources.name,
       spreadsheetId: sheetSources.spreadsheetId,
       tab: sheetSources.tab,
+      range: sheetSources.range,
+      headerRow: sheetSources.headerRow,
+      columnMap: sheetSources.columnMap,
       target: sheetSources.target,
       templateId: sheetSources.templateId,
+      templateName: contentTemplates.name,
       inventoryId: sheetSources.inventoryId,
+      inventorySlug: linkInventories.slug,
+      inventoryName: linkInventories.name,
+      createdBy: sheetSources.createdBy,
       lastSyncedAt: sheetSources.lastSyncedAt,
       lastSyncResult: sheetSources.lastSyncResult,
     })
     .from(sheetSources)
+    .leftJoin(contentTemplates, eq(contentTemplates.id, sheetSources.templateId))
+    .leftJoin(linkInventories, eq(linkInventories.id, sheetSources.inventoryId))
     .where(eq(sheetSources.tenantId, tenantId))
     .orderBy(asc(sheetSources.name))
+  // Sources seeded from the n8n register have no creator; added ones do.
+  return rows.map(({ createdBy, ...r }) => ({ ...r, seeded: !createdBy, lastSyncedAt: r.lastSyncedAt?.toISOString() ?? null }))
+}
+
+export interface SheetSourceInput {
+  name: string
+  spreadsheetId: string
+  tab: string
+  headerRow?: number
+  target: 'topics' | 'inventory'
+  templateId?: string | null
+  inventorySlug?: string | null
+  columnMap?: Record<string, string>
+}
+
+async function resolveTarget(tenantId: string, input: Pick<SheetSourceInput, 'target' | 'templateId' | 'inventorySlug'>) {
+  if (input.target === 'topics') {
+    if (!input.templateId) throw Errors.badRequest('Choose the template these rows are for.')
+    await getTemplate(tenantId, input.templateId)
+    return { templateId: input.templateId, inventoryId: null }
+  }
+  if (!input.inventorySlug) throw Errors.badRequest('Choose the link list this sheet fills.')
+  const [inv] = await db
+    .select({ id: linkInventories.id })
+    .from(linkInventories)
+    .where(and(eq(linkInventories.tenantId, tenantId), eq(linkInventories.slug, input.inventorySlug)))
+    .limit(1)
+  if (!inv) throw Errors.notFound('Link list')
+  return { templateId: null, inventoryId: inv.id }
+}
+
+export async function createSheetSource(tenantId: string, input: SheetSourceInput, user: AppUser) {
+  const target = await resolveTarget(tenantId, input)
+  const [row] = await db
+    .insert(sheetSources)
+    .values({
+      tenantId,
+      name: input.name,
+      spreadsheetId: input.spreadsheetId,
+      tab: input.tab,
+      headerRow: input.headerRow ?? 1,
+      columnMap: input.columnMap ?? {},
+      target: input.target,
+      ...target,
+      createdBy: user.id,
+    })
+    .returning({ id: sheetSources.id })
+  return row
+}
+
+export async function updateSheetSource(tenantId: string, id: string, input: SheetSourceInput) {
+  const target = await resolveTarget(tenantId, input)
+  const [row] = await db
+    .update(sheetSources)
+    .set({
+      name: input.name,
+      spreadsheetId: input.spreadsheetId,
+      tab: input.tab,
+      headerRow: input.headerRow ?? 1,
+      columnMap: input.columnMap ?? {},
+      target: input.target,
+      ...target,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(sheetSources.id, id), eq(sheetSources.tenantId, tenantId)))
+    .returning({ id: sheetSources.id })
+  if (!row) throw Errors.notFound('Sheet source')
+  return row
+}
+
+/** Removes the source only; articles and links it already brought in stay. */
+export async function deleteSheetSource(tenantId: string, id: string) {
+  const [row] = await db
+    .delete(sheetSources)
+    .where(and(eq(sheetSources.id, id), eq(sheetSources.tenantId, tenantId)))
+    .returning({ id: sheetSources.id })
+  if (!row) throw Errors.notFound('Sheet source')
 }
 
 /** Highest sheet row already imported from a source (for "continue where we left off"). */

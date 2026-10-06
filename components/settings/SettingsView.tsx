@@ -6,6 +6,7 @@ import { KeyRound, Cpu, Eye, EyeOff, Loader2, Check, X, ChevronRight, Globe } fr
 import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
+import { GoogleSheetsCard } from './GoogleSheetsCard'
 import { MODEL_ROLES, PROVIDER_LABELS, ROLE_LABELS, type ModelInfo, type ModelRole, type ProviderId } from '@/lib/ai/types'
 
 interface ProviderStatus {
@@ -162,7 +163,7 @@ export function SettingsView({ initialProviders }: { initialProviders: ProviderS
     <motion.div variants={containerVariants} initial="hidden" animate="show" className="p-10 max-w-4xl mx-auto">
       <motion.div variants={itemVariants} className="mb-8">
         <h1 className="text-3xl font-display text-heading mb-2">Settings</h1>
-        <p className="text-muted">AI providers and the models Poe uses for research and writing. Only super admins can see this page.</p>
+        <p className="text-muted">AI providers, the models Poe uses for research and writing, and Google Sheets. Only super admins can see this page.</p>
       </motion.div>
 
       {/* AI providers */}
@@ -379,6 +380,8 @@ export function SettingsView({ initialProviders }: { initialProviders: ProviderS
           )}
         </div>
       </motion.div>
+
+      <GoogleSheetsCard />
 
       <ConfirmModal
         isOpen={!!removing}

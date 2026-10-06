@@ -1,7 +1,7 @@
 // App navigation (DR-001). FROZEN after foundation: change only via INITIATIVE §7.
 // Client-scoped items are built from the active client's slug; admin items are super-admin only.
 import type { LucideIcon } from 'lucide-react'
-import { Home, Upload, BookOpen, Users, Library, Settings } from 'lucide-react'
+import { Home, Upload, BookOpen, Users, Library, Settings, Link2 } from 'lucide-react'
 
 export interface NavItem {
   key: string
@@ -23,6 +23,8 @@ export function clientNav(slug: string): NavItem[] {
       match: (p) => p === base || p.startsWith(`${base}/articles`),
     },
     { key: 'import', label: 'Import', icon: Upload, href: `${base}/import`, match: (p) => p.startsWith(`${base}/import`) },
+    // D-002 DR-011 (approved nav change): link lists and Google Sheets.
+    { key: 'sources', label: 'Sources', icon: Link2, href: `${base}/sources`, match: (p) => p.startsWith(`${base}/sources`) },
     {
       key: 'guidelines',
       label: 'Guidelines',
