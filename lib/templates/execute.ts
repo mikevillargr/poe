@@ -65,7 +65,27 @@ function render(text: string, values: Record<string, string>, where: string): st
   return out
 }
 
-export async function executeTemplate(deps: ExecuteDeps, input: ExecuteInput): Promise<ExecuteResult> {
+export interface PreparedRun {
+  values: Record<string, string>
+  /** The fully rendered writer prompt (research brief appended when given). */
+  prompt: string
+  selectedLinks: string[]
+  droppedLinks: string[]
+  supplied: string[]
+  ctaStyle?: string
+}
+
+/**
+ * Everything before the writer: values, hooks, link selection and the rendered prompt. With
+ * `runSelectors: false` (the editor's free "Preview prompt"), link steps aren't called and their outputs
+ * show a note instead.
+ */
+export async function prepareTemplateRun(
+  deps: Pick<ExecuteDeps, 'select' | 'fetchPage' | 'emit'>,
+  input: ExecuteInput,
+  opts: { runSelectors?: boolean } = {},
+): Promise<PreparedRun> {
+  const runSelectors = opts.runSelectors ?? true
   const { config, article, inputs, inventories, facts } = input
   const values = resolveValues(config, article, inputs, inventories, input.now)
   const candidateUrls = inventoryUrls(config, inventories)
@@ -121,6 +141,10 @@ export async function executeTemplate(deps: ExecuteDeps, input: ExecuteInput): P
       values[step.output] = ''
       continue
     }
+    if (!runSelectors) {
+      values[step.output] = `[links chosen by the "${step.id}" step at run time]`
+      continue
+    }
     const raw = await deps.select(render(step.prompt, values, `The "${step.id}" link step`), step.maxTokens)
     const candidates = step.candidates.flatMap((p) => candidateUrls[p] ?? extractUrls(values[p] ?? ''))
     if (step.format === 'sections') {
@@ -142,9 +166,16 @@ export async function executeTemplate(deps: ExecuteDeps, input: ExecuteInput): P
   supplied.push(...selectedLinks)
   for (const v of ['PAGE_URL', 'ITEM_URL']) if (values[v]) supplied.push(values[v])
 
-  // ── writer (generation model), checks, one retry ───────────────────────────────────────────
   let prompt = render(config.writerPrompt, values, 'The writer prompt')
   if (input.research?.trim()) prompt += `\n\nRESEARCH BRIEF (live web research for this article; use it for facts and figures):\n${input.research.trim()}`
+  return { values, prompt, selectedLinks, droppedLinks, supplied, ctaStyle }
+}
+
+export async function executeTemplate(deps: ExecuteDeps, input: ExecuteInput): Promise<ExecuteResult> {
+  const { config, article } = input
+  const { values, prompt, selectedLinks, droppedLinks, supplied, ctaStyle } = await prepareTemplateRun(deps, input)
+
+  // ── writer (generation model), checks, one retry ───────────────────────────────────────────
   const wordRange = parseWordRange(config.values.WORD_COUNT ? values.WORD_COUNT : (config.defaultWordCount ?? ''))
   const checkCtx = {
     markers: config.markers,

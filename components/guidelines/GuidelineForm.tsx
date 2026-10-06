@@ -8,12 +8,15 @@ import {
   type GuidelineCategory,
   type GuidelineDTO,
 } from '@/lib/guidelines'
+import { useScopeTemplates } from './TemplateScopeContext'
 
 export interface GuidelineFormValues {
   category: GuidelineCategory
   title: string
   rule: string
   weight: number
+  /** null = applies to every article for the client. */
+  contentTemplateId: string | null
 }
 
 const inputCls =
@@ -41,11 +44,13 @@ export function GuidelineForm({
   const [title, setTitle] = useState(initial?.title ?? '')
   const [rule, setRule] = useState(initial?.rule ?? '')
   const [weight, setWeight] = useState(initial?.weight ?? 5)
+  const templates = useScopeTemplates()
+  const [scope, setScope] = useState<string>(initial?.contentTemplateId ?? '')
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     if (!rule.trim() || saving) return
-    onSave({ category, title, rule, weight: Math.min(10, Math.max(1, Math.round(weight) || 5)) })
+    onSave({ category, title, rule, weight: Math.min(10, Math.max(1, Math.round(weight) || 5)), contentTemplateId: scope || null })
   }
 
   return (
@@ -100,6 +105,19 @@ export function GuidelineForm({
         />
       </div>
       <div className="flex items-center justify-end gap-3">
+        {templates.length > 0 && (
+          <label className="mr-auto flex items-center gap-2 text-xs font-medium text-muted">
+            Applies to
+            <select value={scope} onChange={(e) => setScope(e.target.value)} className={`${inputCls} w-auto py-1.5`}>
+              <option value="">All articles</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  Only {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button type="button" onClick={onCancel} className="px-4 py-2 text-sm font-medium text-muted hover:text-heading transition-colors">
           Cancel
         </button>

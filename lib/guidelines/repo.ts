@@ -1,7 +1,7 @@
 import 'server-only'
 import { and, asc, eq, inArray, max } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { heuristics, universalGuidelines } from '@/lib/db/schema'
+import { contentTemplates, heuristics, universalGuidelines } from '@/lib/db/schema'
 import { Errors } from '@/lib/api/errors'
 import { categoryRank } from './categories'
 import type { GuidelineInput, GuidelineUpdate } from './schemas'
@@ -37,7 +37,19 @@ export async function listGuidelines(tenantId: string): Promise<Guideline[]> {
   return rows.sort(byCategoryThenOrder)
 }
 
+/** A content-template scope must be one of this client's templates. */
+async function checkTemplateScope(tenantId: string, contentTemplateId: string | null | undefined) {
+  if (!contentTemplateId) return
+  const [t] = await db
+    .select({ id: contentTemplates.id })
+    .from(contentTemplates)
+    .where(and(eq(contentTemplates.id, contentTemplateId), eq(contentTemplates.tenantId, tenantId)))
+    .limit(1)
+  if (!t) throw Errors.badRequest('That template doesn’t belong to this client.')
+}
+
 export async function createGuideline(tenantId: string, input: GuidelineInput, userId: string): Promise<Guideline> {
+  await checkTemplateScope(tenantId, input.contentTemplateId)
   const sortOrder = await nextSortOrder(tenantId, input.category)
   const [row] = await db
     .insert(heuristics)
@@ -49,6 +61,7 @@ export async function createGuideline(tenantId: string, input: GuidelineInput, u
       weight: input.weight,
       active: input.active,
       source: input.source,
+      contentTemplateId: input.contentTemplateId ?? null,
       sortOrder,
       createdBy: userId,
       updatedBy: userId,
@@ -76,6 +89,10 @@ export async function updateGuideline(
   if (patch.rule !== undefined) set.rule = patch.rule
   if (patch.weight !== undefined) set.weight = patch.weight
   if (patch.active !== undefined) set.active = patch.active
+  if (patch.contentTemplateId !== undefined) {
+    await checkTemplateScope(tenantId, patch.contentTemplateId)
+    set.contentTemplateId = patch.contentTemplateId
+  }
   if (patch.category !== undefined && patch.category !== current.category) {
     set.category = patch.category
     set.sortOrder = await nextSortOrder(tenantId, patch.category) // move to the end of the new category

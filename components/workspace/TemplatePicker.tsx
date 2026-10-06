@@ -29,6 +29,10 @@ export function useClientTemplates(clientId: string) {
   const [templates, setTemplates] = useState<TemplateOption[] | null>(null)
   useEffect(() => {
     let live = true
+    if (!clientId) {
+      setTemplates([])
+      return
+    }
     apiFetch<{ templates: TemplateOption[] }>(`/api/clients/${clientId}/templates`, { errorTitle: 'Couldn’t load templates' })
       .then((d) => live && setTemplates(d.templates))
       .catch(() => live && setTemplates([]))
