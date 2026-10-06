@@ -75,7 +75,7 @@ export function WorkspaceView({
   const base = `/api/clients/${client.id}/articles/${initialArticle.id}`
 
   const [article, setArticle] = useState(initialArticle)
-  const [tab, setTab] = useState<Tab>(hasDraft(initialArticle) ? 'draft' : 'research')
+  const [tab, setTab] = useState<Tab>(hasDraft(initialArticle) || initialArticle.templateId ? 'draft' : 'research')
   const [editorGen, setEditorGen] = useState(0)
   const [liveHtml, setLiveHtml] = useState(initialArticle.draftHtml ?? '')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
@@ -483,6 +483,7 @@ export function WorkspaceView({
       isSuperAdmin={isSuperAdmin}
       disabled={streaming}
       onChange={patchFields}
+      onTemplateSaved={(next) => setArticle((a) => ({ ...a, ...next }))}
     />
   )
   const optimize = (

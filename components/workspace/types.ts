@@ -1,6 +1,7 @@
 // Client-side shapes for the Article Workspace (WS workspace).
 import type { ArticleStatus } from '@/lib/articles/schemas'
 import type { WorkspaceResearch } from '@/lib/pipeline/schemas'
+import type { GenerationMeta } from '@/lib/db/schema/articles'
 
 export interface WorkspaceArticle {
   id: string
@@ -22,6 +23,10 @@ export interface WorkspaceArticle {
   wordCount: number | null
   assigneeId: string | null
   updatedAt: string
+  /** D-002: the article's content template (null = the standard research → generate flow). */
+  templateId: string | null
+  templateInputs: Record<string, string | number | null>
+  generationMeta: GenerationMeta | null
 }
 
 export interface WorkspaceClient {
@@ -76,6 +81,9 @@ export function toWorkspaceArticle(raw: Raw): WorkspaceArticle {
     wordCount: r.wordCount ?? null,
     assigneeId: r.assigneeId ?? null,
     updatedAt: String(raw.updatedAt),
+    templateId: r.templateId ?? null,
+    templateInputs: (raw.templateInputs as Record<string, string | number | null> | null) ?? {},
+    generationMeta: (raw.generationMeta as GenerationMeta | null) ?? null,
   }
 }
 

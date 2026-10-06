@@ -15,7 +15,8 @@ export type PrimaryAction = 'research' | 'generate' | 'review' | 'done' | null
 
 /** DR-005: the primary action follows the status (Queued → Run research, Draft → Send to review, In Review → Mark done). */
 export function primaryActionFor(a: WorkspaceArticle): PrimaryAction {
-  if (a.status === 'queued') return hasResearch(a) ? 'generate' : 'research'
+  // Templated articles go straight to Generate (a template's research step is optional and built in).
+  if (a.status === 'queued') return a.templateId || hasResearch(a) ? 'generate' : 'research'
   if (a.status === 'draft') return 'review'
   if (a.status === 'in_review') return 'done'
   return null
