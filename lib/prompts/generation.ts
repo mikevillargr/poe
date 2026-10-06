@@ -1,6 +1,7 @@
 // Generation prompt (WS pipeline): brief + keywords + target length + client guidelines + the
 // edited research brief → a full HTML article.
 import type { GuidelineGroup } from '@/lib/pipeline/guidelines'
+import { renderGuidelineTiers } from '@/lib/guidelines/render'
 import type { WorkspaceResearch } from '@/lib/pipeline/schemas'
 import { htmlToText } from '@/lib/articles/text'
 import type { BuiltPrompt } from './research'
@@ -19,12 +20,12 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function guidelinesSection(groups: GuidelineGroup[]): string {
   if (!groups.length) return ''
-  const parts = groups.map((g) => {
+  const text = renderGuidelineTiers(groups, (g) => {
     const label = CATEGORY_LABELS[g.category] ?? g.category.charAt(0).toUpperCase() + g.category.slice(1)
     const rules = g.rules.map((r) => `- ${r.title ? `${r.title}: ` : ''}${r.rule.trim()}`).join('\n')
     return `### ${label}\n${rules}`
   })
-  return `\n\n## Client guidelines (mandatory)\nThese come from the client and the agency. Follow every one. Where a guideline conflicts with the general rules above, the guideline wins, except that you must never invent facts.\n\n<guidelines>\n${fence(parts.join('\n\n'))}\n</guidelines>`
+  return `\n\n## Guidelines (mandatory)\nAgency-wide rules apply to every client; the client's own rules follow them. Follow every one. Where a client rule contradicts an agency-wide rule, the client rule wins. Where a guideline conflicts with the general rules above, the guideline wins, except that you must never invent facts.\n\n<guidelines>\n${fence(text)}\n</guidelines>`
 }
 
 export function systemPrompt(clientName: string, groups: GuidelineGroup[]): string {

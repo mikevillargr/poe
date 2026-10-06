@@ -263,27 +263,16 @@ async function main() {
           .values({ name: c.name, slug: c.slug, website: c.website, createdBy: admin?.id ?? null })
           .returning()
 
-        // Guidelines = copy of the template + client-specific manual rules.
-        const copied = template.filter((g) => g.active)
-        await tx.insert(heuristics).values([
-          ...copied.map((g, i) => ({
-            tenantId: client.id,
-            category: g.category,
-            title: g.title,
-            rule: g.rule,
-            weight: g.weight,
-            source: 'template_copy' as const,
-            templateId: g.id,
-            sortOrder: (i + 1) * 1024,
-          })),
-          ...c.extraGuidelines.map((g, i) => ({
+        // Client-specific manual rules; the Universal rules apply live (D-003), nothing is copied.
+        await tx.insert(heuristics).values(
+          c.extraGuidelines.map((g, i) => ({
             tenantId: client.id,
             ...g,
             source: 'manual' as const,
-            sortOrder: (copied.length + i + 1) * 1024,
+            sortOrder: (i + 1) * 1024,
             createdBy: authors[i % authors.length]?.id ?? null,
           })),
-        ])
+        )
 
         // One import batch for the calendar, as if uploaded from a sheet 12 days ago.
         const importedAt = new Date(Date.now() - 12 * DAY)
@@ -353,7 +342,7 @@ async function main() {
           }
           await tx.insert(articleEvents).values(events)
         }
-        console.log(`- ${c.name}: ${c.calendar.length} articles, ${copied.length + c.extraGuidelines.length} guidelines.`)
+        console.log(`- ${c.name}: ${c.calendar.length} articles, ${c.extraGuidelines.length} own guidelines (+ the live Universal rules).`)
       }
     })
     console.log(`Fixtures loaded into ${redact(url)}.`)

@@ -9,10 +9,10 @@ import { apiFetch, ApiFetchError } from '@/lib/api/fetch'
 interface Props {
   isOpen: boolean
   onClose: () => void
-  onCreated: (client: { id: string; name: string; slug: string }, copiedGuidelines: number) => void
+  onCreated: (client: { id: string; name: string; slug: string }, universalRules: number) => void
 }
 
-// DR-001: name + auto-derived slug + optional website; notes the Universal template copy.
+// DR-001: name + auto-derived slug + optional website; notes that the client follows the Universal rules (D-003).
 export function AddClientModal({ isOpen, onClose, onCreated }: Props) {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
@@ -49,11 +49,11 @@ export function AddClientModal({ isOpen, onClose, onCreated }: Props) {
     setSubmitting(true)
     setErrors({})
     try {
-      const body = await apiFetch<{ client: { id: string; name: string; slug: string }; copiedGuidelines: number }>(
+      const body = await apiFetch<{ client: { id: string; name: string; slug: string }; universalRules: number }>(
         '/api/clients',
         { method: 'POST', body: { name: name.trim(), slug, website: website.trim() || undefined }, silent: true },
       )
-      onCreated(body.client, body.copiedGuidelines)
+      onCreated(body.client, body.universalRules)
     } catch (err) {
       // Inline errors in the form instead of a toast.
       if (err instanceof ApiFetchError && err.details?.fieldErrors) {
@@ -163,7 +163,7 @@ export function AddClientModal({ isOpen, onClose, onCreated }: Props) {
               </div>
 
               <p className="text-sm text-muted">
-                Starts with a copy of the Universal guidelines
+                Follows the Universal guidelines
                 {templateCount !== null && (
                   <>
                     {' '}

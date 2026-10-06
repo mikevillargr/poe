@@ -7,14 +7,14 @@ export const dynamic = 'force-dynamic'
 // GET /api/clients → { clients: ClientSummary[] }
 export const GET = withRoute(async () => json({ clients: await listClients() }))
 
-// POST /api/clients { name, slug, website?, notes? } → { client, copiedGuidelines }
+// POST /api/clients { name, slug, website?, notes? } → { client, universalRules }
 export const POST = withRoute(async ({ req, user }) => {
   const input = createClientSchema.parse(await req.json())
-  const { client, copiedGuidelines } = await createClient(input, user)
+  const { client, universalRules } = await createClient(input, user)
   return json(
     {
       client: { id: client.id, name: client.name, slug: client.slug, website: client.website },
-      copiedGuidelines,
+      universalRules,
     },
     { status: 201 },
   )

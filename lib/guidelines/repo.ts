@@ -1,7 +1,7 @@
 import 'server-only'
 import { and, asc, eq, inArray, max } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { contentTemplates, heuristics, universalGuidelines } from '@/lib/db/schema'
+import { clientUniversalOverrides, contentTemplates, heuristics, universalGuidelines } from '@/lib/db/schema'
 import { Errors } from '@/lib/api/errors'
 import { categoryRank } from './categories'
 import type { GuidelineInput, GuidelineUpdate } from './schemas'
@@ -215,4 +215,37 @@ export async function reorderUniversalGuidelines(category: string, orderedIds: s
         .where(eq(universalGuidelines.id, id))
     }
   })
+}
+
+// D-003: the Universal rules a client inherits, each with this client's switch. `onForClient` is false when the
+// client switched it off; a rule that is off on the Universal page is off for everyone regardless.
+export async function listUniversalForClient(tenantId: string): Promise<(UniversalGuideline & { onForClient: boolean })[]> {
+  const rows = await db
+    .select({ g: universalGuidelines, override: clientUniversalOverrides.active })
+    .from(universalGuidelines)
+    .leftJoin(
+      clientUniversalOverrides,
+      and(eq(clientUniversalOverrides.universalGuidelineId, universalGuidelines.id), eq(clientUniversalOverrides.tenantId, tenantId)),
+    )
+    .orderBy(asc(universalGuidelines.sortOrder))
+  return rows.map((r) => ({ ...r.g, onForClient: r.override ?? true })).sort(byCategoryThenOrder)
+}
+
+export async function setUniversalForClient(tenantId: string, universalGuidelineId: string, on: boolean, userId: string) {
+  const [exists] = await db.select({ id: universalGuidelines.id }).from(universalGuidelines).where(eq(universalGuidelines.id, universalGuidelineId)).limit(1)
+  if (!exists) throw Errors.notFound('Universal guideline')
+  if (on) {
+    // On is the default, so no row is needed.
+    await db
+      .delete(clientUniversalOverrides)
+      .where(and(eq(clientUniversalOverrides.tenantId, tenantId), eq(clientUniversalOverrides.universalGuidelineId, universalGuidelineId)))
+  } else {
+    await db
+      .insert(clientUniversalOverrides)
+      .values({ tenantId, universalGuidelineId, active: false, updatedBy: userId })
+      .onConflictDoUpdate({
+        target: [clientUniversalOverrides.tenantId, clientUniversalOverrides.universalGuidelineId],
+        set: { active: false, updatedBy: userId, updatedAt: new Date() },
+      })
+  }
 }

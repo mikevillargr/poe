@@ -163,9 +163,9 @@ export function ClientSwitcher({ clients, activeSlug }: { clients: ClientSummary
       <AddClientModal
         isOpen={adding}
         onClose={() => setAdding(false)}
-        onCreated={(client, copied) => {
+        onCreated={(client, universal) => {
           setAdding(false)
-          toast.success(`${client.name} created`, `Started with ${copied} Universal ${copied === 1 ? 'guideline' : 'guidelines'}.`)
+          toast.success(`${client.name} created`, `Follows the ${universal} Universal ${universal === 1 ? 'guideline' : 'guidelines'}.`)
           router.push(`/c/${client.slug}`)
           router.refresh()
         }}
