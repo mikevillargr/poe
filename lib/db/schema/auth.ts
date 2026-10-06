@@ -15,3 +15,18 @@ export const users = pgTable('users', {
   lastLoginAt: timestamp('last_login_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
+
+// DR-014: a person's own Google Drive connection for exporting to Google Docs. Holds a refresh token for the
+// `drive.file` scope (only files Poe creates), AES-256-GCM encrypted like the provider keys. Never sent to the browser.
+export const userGoogleDrive = pgTable('user_google_drive', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  googleEmail: text('google_email').notNull(),
+  keyCiphertext: text('key_ciphertext').notNull(),
+  keyIv: text('key_iv').notNull(),
+  keyTag: text('key_tag').notNull(),
+  scope: text('scope'),
+  connectedAt: timestamp('connected_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})

@@ -21,8 +21,8 @@ import { OptimizePanel } from './OptimizePanel'
 import { TemplateRunPanel, type RunStep } from './TemplateRunPanel'
 import { useEditorApi } from './useEditorApi'
 import { useDebouncedPatch } from './useDebouncedPatch'
-import { exportDocx, exportToGoogleDrive } from './export'
-import { preloadGoogleDrive } from '@/lib/googleDrive'
+import { exportDocx } from './export'
+import { useDriveExport, type DriveState } from './useDriveExport'
 import {
   hasDraft,
   hasResearch,
@@ -65,15 +65,15 @@ export function WorkspaceView({
   people,
   models,
   isSuperAdmin,
-  googleClientId,
+  initialDrive,
 }: {
   client: WorkspaceClient
   initialArticle: WorkspaceArticle
   people: WorkspacePerson[]
   models: ModelsInUse
   isSuperAdmin: boolean
-  /** Public OAuth client ID for the Google Docs export (the one Poe signs in with). */
-  googleClientId: string
+  /** DR-014: this person's Google Drive connection, for Export to Google Docs. */
+  initialDrive: DriveState
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -470,23 +470,7 @@ export function WorkspaceView({
   // ── export / delete ───────────────────────────────────────────────────────────────────────
   const currentHtml = () => editorApi.getHTML() || article.draftHtml || ''
 
-  // Load Google sign-in up front so its window can open straight from the Export click.
-  useEffect(() => {
-    if (googleClientId) preloadGoogleDrive().catch(() => {})
-  }, [googleClientId])
-
-  async function onExportDrive() {
-    try {
-      const url = await exportToGoogleDrive(googleClientId, article.title, currentHtml())
-      // Opened from the toast button: a window opened after the upload finishes would be blocked as a pop-up.
-      toast.success('Saved to Google Docs', 'The article is in your Google Drive.', {
-        dismissAfter: 15000,
-        action: { label: 'Open document', onClick: () => window.open(url, '_blank', 'noopener') },
-      })
-    } catch (err) {
-      toast.error('Google Docs export failed', err instanceof Error ? err.message : 'Please try again.')
-    }
-  }
+  const driveExport = useDriveExport({ exportUrl: `${base}/export/google-doc`, initial: initialDrive, getHtml: currentHtml })
 
   async function confirmDelete() {
     setConfirm(null)
@@ -604,7 +588,9 @@ export function WorkspaceView({
             toast.error('Export failed', err instanceof Error ? err.message : undefined)
           }
         }}
-        onExportDrive={onExportDrive}
+        onExportDrive={() => void driveExport.exportDoc()}
+        driveEmail={driveExport.drive.connected ? driveExport.drive.email : null}
+        onDisconnectDrive={() => void driveExport.disconnect()}
         onDelete={() => setConfirm('delete')}
       />
 
