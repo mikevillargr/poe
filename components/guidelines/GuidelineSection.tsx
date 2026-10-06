@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { ChevronDown, Plus } from 'lucide-react'
 import {
   DndContext,
@@ -51,6 +52,8 @@ export function GuidelineSection({
   onCancelForm: () => void
   onReorder: (category: GuidelineCategory, activeId: string, overId: string) => void
 }) {
+  // A stable id keeps dnd-kit's aria-describedby the same on server and client (hydration).
+  const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -84,7 +87,7 @@ export function GuidelineSection({
           {items.length === 0 ? (
             <p className="px-5 py-4 text-sm text-muted">No {label} rules yet.</p>
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
               <SortableContext items={items.map((g) => g.id)} strategy={verticalListSortingStrategy}>
                 <ul className="divide-y divide-border">
                   {items.map((g) => (

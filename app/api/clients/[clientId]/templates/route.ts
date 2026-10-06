@@ -23,6 +23,7 @@ export const GET = withRoute<P>(async ({ params }) => {
       revisionNo: t.revisionNo,
       inputs: t.config.inputs,
       researchEnabled: t.config.researchEnabled,
+      hooks: t.config.hooks.map((h) => h.id),
       updatedAt: extra.get(t.id)?.updatedAt ?? null,
       updatedBy: extra.get(t.id)?.updatedBy ?? null,
       articles: extra.get(t.id)?.articles ?? 0,
