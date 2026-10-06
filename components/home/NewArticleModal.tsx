@@ -148,7 +148,7 @@ export function NewArticleModal({
                 <label htmlFor="na-title" className="block text-sm font-medium text-heading mb-1.5">
                   {titleLabel}
                 </label>
-                <input id="na-title" ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} className={inputCls} placeholder="e.g. How to Form an LLC in Nevada" />
+                <input id="na-title" ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} className={inputCls} placeholder={template ? undefined : 'e.g. How to Form an LLC in Nevada'} />
                 {errors.title && <p className="mt-1 text-xs text-red-400">{errors.title}</p>}
               </div>
               {rowFields.map((f) => (

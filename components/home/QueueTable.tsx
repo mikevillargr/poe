@@ -136,7 +136,9 @@ function Row({
       </td>
       <td className="px-2 py-4 text-sm text-muted font-mono tabular-nums w-10">{index + 1}</td>
       <td className="px-4 py-4 min-w-0">
-        <div className="text-sm font-medium text-heading truncate group-hover:text-accent transition-colors">{article.title}</div>
+        <div className="text-sm font-medium text-heading line-clamp-2 break-words group-hover:text-accent transition-colors" title={article.title}>
+          {article.title}
+        </div>
         {article.primaryKeyword && <div className="text-xs text-muted truncate mt-0.5">{article.primaryKeyword}</div>}
         {(templateName || article.needsReview) && (
           <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
@@ -155,7 +157,7 @@ function Row({
         )}
       </td>
       <td className="px-4 py-4">
-        <div className="flex flex-wrap gap-1.5 max-w-[260px]">
+        <div className="flex flex-wrap gap-1.5 max-w-[200px]">
           {article.keywords.slice(0, 2).map((k) => (
             <span key={k} className="px-2 py-0.5 rounded-full text-xs border border-border text-body bg-surface truncate max-w-[180px]">
               {k}
@@ -246,11 +248,11 @@ export function QueueTable({
             <col className="w-10" />
             <col className="w-10" />
             <col />
-            <col className="w-[240px]" />
-            <col className="w-[140px]" />
-            <col className="w-[112px]" />
+            <col className="w-[200px]" />
+            <col className="w-[130px]" />
+            <col className="w-[124px]" />
             <col className="w-14" />
-            <col className="w-[152px]" />
+            <col className="w-[128px]" />
             <col className="w-20" />
           </colgroup>
           <thead>

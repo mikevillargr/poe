@@ -244,7 +244,7 @@ export function HomeView({
                   }`}
                 >
                   <AlertTriangle className="w-3 h-3" />
-                  <span className="font-mono tabular-nums">{needsReview}</span> need review
+                  <span className="font-mono tabular-nums">{needsReview}</span> {needsReview === 1 ? 'needs' : 'need'} review
                 </button>
               )}
             </div>

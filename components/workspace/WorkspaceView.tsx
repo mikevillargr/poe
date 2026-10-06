@@ -663,7 +663,10 @@ export function WorkspaceView({
                   className="shrink-0 w-full px-5 py-2 bg-warning/10 border-b border-warning/30 text-left text-sm text-orange-400 flex items-center gap-2 hover:bg-warning/15 transition-colors"
                 >
                   <AlertTriangle className="w-4 h-4 shrink-0" />
-                  Needs review: {article.generationMeta.checks.filter((c) => !c.ok).length} template checks still fail after the rewrite. See Template run.
+                  {(() => {
+                    const n = article.generationMeta.checks.filter((c) => !c.ok).length
+                    return `Needs review: ${n} template ${n === 1 ? 'check still fails' : 'checks still fail'} after the rewrite. See Template run.`
+                  })()}
                 </button>
               )}
               <div className="flex-1 min-h-0">
