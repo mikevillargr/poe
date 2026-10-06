@@ -28,7 +28,7 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
   const b = bodySchema.parse(await req.json())
 
   // The blacklist rules always apply to rewrites, so a rewrite can't reintroduce an AI tell.
-  const blacklist = (await getActiveGuidelines(client.id)).find((g) => g.category === 'blacklist')
+  const blacklist = (await getActiveGuidelines(client.id, article.templateId)).find((g) => g.category === 'blacklist')
   const hint = blacklist?.rules.map((r) => r.rule).join(' ').slice(0, 1500)
 
   const { text } = await generateForRole(

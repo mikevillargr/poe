@@ -25,7 +25,7 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
   const draftText = htmlToText(article.draftHtml)
   if (draftText.length < 50) throw Errors.badRequest('Generate or write a draft first (at least 50 characters).')
 
-  const guidelines = await getActiveGuidelines(client.id)
+  const guidelines = await getActiveGuidelines(client.id, article.templateId)
   const guidelineCount = guidelines.reduce((n, g) => n + g.rules.length, 0)
   if (!guidelineCount) throw Errors.badRequest('This client has no active guidelines to check against. Add some on the Guidelines page.')
 

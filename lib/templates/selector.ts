@@ -48,15 +48,34 @@ export interface Filtered {
 }
 
 /**
- * Keeps URLs that are in the candidate list. Candidate lists that hold no URLs at all (e.g. LFP's product
- * list, which can be slugs) can't be checked, so everything is kept.
+ * The candidate a returned URL refers to: an exact match, or a candidate followed by "-<title>". Lists
+ * like LFP's are written `url-Title` with no space, so a model can echo `…/returns-Returns` back.
+ */
+export function matchCandidate(url: string, candidates: string[]): string | null {
+  const key = urlKey(url)
+  let best: string | null = null
+  for (const c of candidates) {
+    const ck = urlKey(c)
+    if (ck === key) return c
+    if (key.startsWith(ck + '-') && (!best || ck.length > urlKey(best).length)) best = c
+  }
+  return best
+}
+
+/**
+ * Keeps URLs that are in the candidate list (as the candidate's own URL). Candidate lists that hold no
+ * URLs at all (e.g. LFP's product list, which can be slugs) can't be checked, so everything is kept.
  */
 export function filterToCandidates(urls: string[], candidates: string[]): Filtered {
-  const allowed = new Set(candidates.flatMap(extractUrls).map(urlKey))
-  if (!allowed.size) return { kept: urls, dropped: [] }
+  const allowed = candidates.flatMap((c) => (/^https?:\/\//i.test(c.trim()) ? [c.trim()] : extractUrls(c)))
+  if (!allowed.length) return { kept: urls, dropped: [] }
   const kept: string[] = []
   const dropped: string[] = []
-  for (const u of urls) (allowed.has(urlKey(u)) ? kept : dropped).push(u)
+  for (const u of urls) {
+    const m = matchCandidate(u, allowed)
+    if (!m) dropped.push(u)
+    else if (!kept.includes(m)) kept.push(m)
+  }
   return { kept, dropped }
 }
 

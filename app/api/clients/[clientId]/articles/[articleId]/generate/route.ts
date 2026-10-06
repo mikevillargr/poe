@@ -11,6 +11,7 @@ import { snapshotDraft } from '@/lib/pipeline/versions'
 import { tapStream, toApiError } from '@/lib/pipeline/stream'
 import { drive, reserveRun, setRunState, stopRun } from '@/lib/pipeline/runs'
 import { generateBodySchema } from '@/lib/pipeline/schemas'
+import { startTemplateGeneration } from '@/lib/templates/run'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,6 +28,12 @@ export const POST = withRoute<P>(async ({ req, params, user }) => {
   const client = await requireClient(params.clientId, { write: true })
   const body = generateBodySchema.parse(await req.json().catch(() => ({})))
   const article = await getArticle(client.id, params.articleId)
+  // D-002: articles made from a template run the template pipeline (link selection, writer, checks,
+  // one retry) in the same run slot, with the same snapshot and status handling.
+  if (article.templateId) {
+    const templated = await startTemplateGeneration(client, article, user)
+    return toSSEResponse(templated.subscribe(req.signal), { signal: req.signal })
+  }
   const run = reserveRun('generation', article.id)
   try {
     const research = readResearch(article.research)
@@ -34,7 +41,7 @@ export const POST = withRoute<P>(async ({ req, params, user }) => {
     const useResearch = hasResearch && body.useResearch !== false
     const previousState = article.draftHtml?.trim() ? 'ready' : 'idle'
 
-    const guidelines = await getActiveGuidelines(client.id)
+    const guidelines = await getActiveGuidelines(client.id, article.templateId)
     const prompt = buildGenerationPrompt(article, {
       clientName: client.name,
       guidelines,

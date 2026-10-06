@@ -36,7 +36,7 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
   const client = await requireClient(params.clientId, { write: true })
   const body = aiEditBodySchema.parse(await req.json().catch(() => ({})))
   const article = await getArticle(client.id, params.articleId)
-  const guidelines = await getActiveGuidelines(client.id)
+  const guidelines = await getActiveGuidelines(client.id, article.templateId)
   const prompt = buildAiEditPrompt(article, body, guidelines)
 
   let started: Awaited<ReturnType<typeof streamForRole>>

@@ -38,7 +38,7 @@ FROM deps AS tools-build
 COPY tsconfig.json ./
 COPY scripts/db ./scripts/db
 COPY lib ./lib
-RUN npx esbuild scripts/db/migrate.ts scripts/db/mark-baseline.ts scripts/db/seed-universal.ts \
+RUN npx esbuild scripts/db/migrate.ts scripts/db/mark-baseline.ts scripts/db/seed-universal.ts scripts/db/seed-n8n.ts \
       --bundle --platform=node --target=node20 --format=cjs --outdir=dist --out-extension:.js=.cjs \
       --log-level=warning \
  && ls -l dist

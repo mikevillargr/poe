@@ -107,6 +107,6 @@ test('selector: url lists, sections, hallucinations dropped', () => {
   assert.deepEqual(s, { articles: ['https://x.com/a', 'https://x.com/b'], products: ['https://x.com/p1'] })
   assert.equal(formatSectioned(s), 'ARTICLE_URLS:\nhttps://x.com/a, https://x.com/b\n\nPRODUCT_URLS:\nhttps://x.com/p1')
   const f = filterToCandidates(['https://x.com/a', 'https://made.up/z'], ['Title A-https://www.x.com/a/', 'Other-https://x.com/c'])
-  assert.deepEqual(f, { kept: ['https://x.com/a'], dropped: ['https://made.up/z'] })
+  assert.deepEqual(f, { kept: ['https://www.x.com/a/'], dropped: ['https://made.up/z'] }, 'kept as the candidate spells it')
   assert.deepEqual(filterToCandidates(['https://x.com/p'], ['slug-only - Product']).kept, ['https://x.com/p'], 'slug lists cannot be checked')
 })
