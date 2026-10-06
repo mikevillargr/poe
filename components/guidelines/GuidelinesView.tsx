@@ -14,6 +14,7 @@ import { GuidelineRow } from './GuidelineRow'
 import { GuidelineForm, type GuidelineFormValues } from './GuidelineForm'
 import { ImportFromDocumentModal } from './ImportFromDocumentModal'
 import { TemplateScopeContext } from './TemplateScopeContext'
+import { AgencyWideSection } from './AgencyWideSection'
 import { useClientTemplates } from '@/components/workspace/TemplatePicker'
 
 const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }
@@ -23,7 +24,7 @@ const itemVariants = {
 }
 
 export type GuidelinesScope =
-  | { kind: 'client'; clientId: string; clientName: string; clientSlug: string }
+  | { kind: 'client'; clientId: string; clientName: string; clientSlug: string; canEditUniversal?: boolean }
   | { kind: 'universal' }
 
 // DR-006 option A: categorized sections on one page, shared between the per-client editor and
@@ -51,11 +52,14 @@ export function GuidelinesView({
   const clientTemplates = useClientTemplates(scope.kind === 'client' ? scope.clientId : '')
   const scopeTemplates = useMemo(() => (scope.kind === 'client' ? (clientTemplates ?? []).map((t) => ({ id: t.id, name: t.name })) : []), [scope, clientTemplates])
   const [appliesTo, setAppliesTo] = useState('')
+  // "agency" shows only the inherited Universal rules (D-003); any other filter hides them.
   const shown = useMemo(
     () =>
-      guidelines.filter((g) =>
-        !appliesTo ? true : appliesTo === 'client' ? !g.contentTemplateId : g.contentTemplateId === appliesTo,
-      ),
+      appliesTo === 'agency'
+        ? []
+        : guidelines.filter((g) =>
+            !appliesTo ? true : appliesTo === 'client' ? !g.contentTemplateId : g.contentTemplateId === appliesTo,
+          ),
     [guidelines, appliesTo],
   )
 
@@ -185,11 +189,11 @@ export function GuidelinesView({
           <p className="text-sm text-muted mt-1">
             {scope.kind === 'client'
               ? `The rules generation and optimization follow for ${scope.clientName}.`
-              : 'The agency template. New clients start with a copy of these rules.'}
+              : 'Every client follows these rules first. Editing one changes it for all clients at once.'}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {scopeTemplates.length > 0 && (
+          {scope.kind === 'client' && (
             <select
               value={appliesTo}
               onChange={(e) => setAppliesTo(e.target.value)}
@@ -197,6 +201,7 @@ export function GuidelinesView({
               className="px-3 py-2 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-input text-sm text-heading focus:outline-none focus:ring-2 focus:ring-accent"
             >
               <option value="">All rules</option>
+              <option value="agency">Agency-wide</option>
               <option value="client">Whole client</option>
               {scopeTemplates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -233,7 +238,8 @@ export function GuidelinesView({
         <motion.div variants={itemVariants} className="glass-card p-4 mb-8 flex items-start gap-3">
           <Info className="w-4 h-4 text-muted shrink-0 mt-0.5" />
           <p className="text-sm text-muted">
-            New clients start with a copy of this template. Editing it does not change existing clients.
+            Each client’s own rules come after these and win where they conflict. A client can switch a rule off on its own
+            Guidelines page.
           </p>
         </motion.div>
       )}
@@ -244,35 +250,49 @@ export function GuidelinesView({
         </motion.div>
       )}
 
-      <div className="space-y-6">
-        {GUIDELINE_CATEGORIES.map((c) => (
-          <motion.div key={c} variants={itemVariants}>
-            <GuidelineSection
-              category={c}
-              items={groups.get(c) ?? []}
-              collapsed={!!collapsed[c]}
-              editingId={editingId}
-              addingHere={addingInCategory === c}
-              saving={saving}
-              showSource={scope.kind === 'client'}
-              onToggleCollapse={(cat) => setCollapsed((m) => ({ ...m, [cat]: !m[cat] }))}
-              onStartAdd={(cat) => {
-                closeForms()
-                setAddingInCategory(cat)
-              }}
-              onToggleActive={toggleActive}
-              onEdit={(g) => {
-                closeForms()
-                setEditingId(g.id)
-              }}
-              onDelete={setDeleting}
-              onSaveForm={saveGuideline}
-              onCancelForm={closeForms}
-              onReorder={reorder}
-            />
-          </motion.div>
-        ))}
-      </div>
+      {scope.kind === 'client' && (!appliesTo || appliesTo === 'agency') && (
+        <motion.div variants={itemVariants}>
+          <AgencyWideSection
+            key={appliesTo === 'agency' ? 'agency' : 'all'}
+            clientId={scope.clientId}
+            clientName={scope.clientName}
+            defaultCollapsed={appliesTo !== 'agency' && guidelines.length > 0}
+            canEditUniversal={!!scope.canEditUniversal}
+          />
+        </motion.div>
+      )}
+
+      {appliesTo !== 'agency' && (
+        <div className="space-y-6">
+          {GUIDELINE_CATEGORIES.map((c) => (
+            <motion.div key={c} variants={itemVariants}>
+              <GuidelineSection
+                category={c}
+                items={groups.get(c) ?? []}
+                collapsed={!!collapsed[c]}
+                editingId={editingId}
+                addingHere={addingInCategory === c}
+                saving={saving}
+                showSource={scope.kind === 'client'}
+                onToggleCollapse={(cat) => setCollapsed((m) => ({ ...m, [cat]: !m[cat] }))}
+                onStartAdd={(cat) => {
+                  closeForms()
+                  setAddingInCategory(cat)
+                }}
+                onToggleActive={toggleActive}
+                onEdit={(g) => {
+                  closeForms()
+                  setEditingId(g.id)
+                }}
+                onDelete={setDeleting}
+                onSaveForm={saveGuideline}
+                onCancelForm={closeForms}
+                onReorder={reorder}
+              />
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {uncategorized.length > 0 && (
         <motion.section variants={itemVariants} className="glass-card overflow-hidden mt-6">
