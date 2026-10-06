@@ -119,3 +119,18 @@ export async function saveGenerationMeta(tenantId: string, articleId: string, me
     .set({ generationMeta: meta })
     .where(and(eq(articles.id, articleId), eq(articles.tenantId, tenantId)))
 }
+
+/** Clears the "needs review" flag on a templated draft once someone has looked at the failing checks. */
+export async function markChecksReviewed(tenantId: string, articleId: string, user: AppUser) {
+  const [row] = await db
+    .select({ meta: articles.generationMeta })
+    .from(articles)
+    .where(and(eq(articles.id, articleId), eq(articles.tenantId, tenantId)))
+    .limit(1)
+  if (!row) throw Errors.notFound('Article')
+  if (!row.meta) throw Errors.badRequest('This article has no templated draft to review.')
+  const meta: GenerationMeta = { ...row.meta, needsReview: false, reviewedBy: user.name || user.email, reviewedAt: new Date().toISOString() }
+  await db.update(articles).set({ generationMeta: meta }).where(and(eq(articles.id, articleId), eq(articles.tenantId, tenantId)))
+  await db.insert(articleEvents).values({ articleId, tenantId, type: 'checks_reviewed', payload: { failed: meta.checks.filter((c) => !c.ok).length }, userId: user.id })
+  return meta
+}
