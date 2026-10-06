@@ -4,7 +4,7 @@
 import { saveAs } from 'file-saver'
 // @ts-expect-error - html-docx-js ships no types
 import htmlDocx from 'html-docx-js/dist/html-docx'
-import { initGoogleDrive, isGoogleDriveConfigured, uploadToGoogleDrive } from '@/lib/googleDrive'
+import { uploadHtmlAsGoogleDoc } from '@/lib/googleDrive'
 
 function escapeHtml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -48,10 +48,6 @@ export function exportDocx(title: string, bodyHtml: string) {
 }
 
 /** Uploads as a Google Doc and returns its URL. Throws with a user-facing message on failure. */
-export async function exportToGoogleDrive(title: string, bodyHtml: string): Promise<string> {
-  if (!isGoogleDriveConfigured()) {
-    throw new Error('Google Drive export isn’t configured (NEXT_PUBLIC_GOOGLE_CLIENT_ID / NEXT_PUBLIC_GOOGLE_API_KEY).')
-  }
-  await initGoogleDrive()
-  return uploadToGoogleDrive(title || 'Article', buildExportDocument(title, bodyHtml), 'text/html')
+export async function exportToGoogleDrive(googleClientId: string, title: string, bodyHtml: string): Promise<string> {
+  return uploadHtmlAsGoogleDoc(googleClientId, title || 'Article', buildExportDocument(title, bodyHtml))
 }

@@ -311,7 +311,7 @@ npx tsx --conditions=react-server scripts/ai-smoke.ts --provider anthropic|opena
 ### Environment (see `.env.example`)
 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID/SECRET`, `ALLOWED_EMAIL_DOMAIN`, `SUPER_ADMIN_EMAIL`,
 `APP_ENCRYPTION_KEY` (encrypts provider keys; never change it once keys are stored), optional `ANTHROPIC_API_KEY` /
-`OPENAI_API_KEY` / `MOONSHOT_API_KEY` env fallbacks, `AI_MOCK`, `NEXT_PUBLIC_GOOGLE_CLIENT_ID/API_KEY` (Drive export).
+`OPENAI_API_KEY` / `MOONSHOT_API_KEY` env fallbacks, `AI_MOCK`, Google Docs export reuses `AUTH_GOOGLE_ID` at runtime (Drive API enabled + site in the OAuth client's JavaScript origins).
 
 ## Releases and deploys
 

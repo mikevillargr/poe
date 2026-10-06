@@ -1,198 +1,133 @@
-// Google Drive API integration
-// You'll need to set up OAuth credentials in Google Cloud Console
-// and add the client ID to your environment variables
+// Google Docs export from the browser: Google Identity Services gets a short-lived token for the
+// `drive.file` scope (only files Poe creates), then the article is uploaded as HTML and Drive converts it
+// into a Google Doc. No API key and nothing baked in at build time: the OAuth client ID (the same public ID
+// Poe signs in with) is passed in from the server.
 
-const SCOPES = 'https://www.googleapis.com/auth/drive.file'
+const SCOPE = 'https://www.googleapis.com/auth/drive.file'
+const GIS_SRC = 'https://accounts.google.com/gsi/client'
+const UPLOAD_URL = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink'
 
-// Get from Google Cloud Console
-const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || ''
-
-let gapiInited = false
-let gisInited = false
-let tokenClient: any = null
-let initPromise: Promise<void> | null = null
-
-/** False when the public Google client ID / API key aren't set, so export can say why. */
-export const isGoogleDriveConfigured = () => !!CLIENT_ID && !!API_KEY
-
-/** Loads gapi + GIS once per page; later calls reuse the same promise. */
-export const initGoogleDrive = (): Promise<void> => {
-  if (!initPromise) {
-    initPromise = loadGoogleDrive().catch((err) => {
-      initPromise = null
-      throw err
-    })
-  }
-  return initPromise
+interface TokenResponse {
+  access_token?: string
+  expires_in?: number
+  error?: string
+  error_description?: string
 }
 
-const loadGoogleDrive = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (typeof window === 'undefined') {
-      reject('Not in browser environment')
-      return
-    }
-
-    // Load gapi script
-    const script = document.createElement('script')
-    script.src = 'https://apis.google.com/js/api.js'
-    script.onload = () => {
-      window.gapi.load('client', async () => {
-        try {
-          await window.gapi.client.init({
-            apiKey: API_KEY,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-          })
-          gapiInited = true
-          maybeResolve()
-        } catch (error) {
-          reject(error)
-        }
-      })
-    }
-    script.onerror = () => reject(new Error('Could not load the Google API script.'))
-    document.body.appendChild(script)
-
-    // Load GIS script
-    const gisScript = document.createElement('script')
-    gisScript.src = 'https://accounts.google.com/gsi/client'
-    gisScript.onload = () => {
-      tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: '', // defined later
-      })
-      gisInited = true
-      maybeResolve()
-    }
-    gisScript.onerror = () => reject(new Error('Could not load Google sign-in.'))
-    document.body.appendChild(gisScript)
-
-    function maybeResolve() {
-      if (gapiInited && gisInited) {
-        resolve()
-      }
-    }
-  })
+interface TokenClient {
+  callback: (resp: TokenResponse) => void
+  error_callback?: (err: { type?: string; message?: string }) => void
+  requestAccessToken: (opts?: { prompt?: string }) => void
 }
 
-export const authenticateGoogleDrive = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (!tokenClient) {
-      reject('Google API not initialized')
-      return
-    }
-
-    tokenClient.callback = async (resp: any) => {
-      if (resp.error !== undefined) {
-        reject(resp)
-        return
-      }
-      resolve()
-    }
-
-    if (window.gapi.client.getToken() === null) {
-      // Prompt the user to select a Google Account and ask for consent
-      tokenClient.requestAccessToken({ prompt: 'consent' })
-    } else {
-      // Skip display of account chooser and consent dialog for an existing session
-      tokenClient.requestAccessToken({ prompt: '' })
-    }
-  })
-}
-
-export const createGoogleDoc = async (
-  title: string,
-  htmlContent: string
-): Promise<string> => {
-  try {
-    // First, authenticate if needed
-    if (!window.gapi.client.getToken()) {
-      await authenticateGoogleDrive()
-    }
-
-    // Convert HTML to plain text for Google Docs
-    // Google Docs API doesn't accept HTML directly, so we'll create a plain doc
-    const tempDiv = document.createElement('div')
-    tempDiv.innerHTML = htmlContent
-    const textContent = tempDiv.textContent || tempDiv.innerText || ''
-
-    // Create a new Google Doc
-    const fileMetadata = {
-      name: title,
-      mimeType: 'application/vnd.google-apps.document',
-    }
-
-    const response = await window.gapi.client.drive.files.create({
-      resource: fileMetadata,
-      fields: 'id,webViewLink',
-    })
-
-    const fileId = response.result.id
-
-    // Insert content into the document
-    // Note: For rich formatting, you'd need to use the Google Docs API
-    // For now, we'll create an empty doc and return the link
-    // The user can paste content manually or we can implement full Docs API
-
-    return response.result.webViewLink || `https://docs.google.com/document/d/${fileId}/edit`
-  } catch (error) {
-    console.error('Error creating Google Doc:', error)
-    throw error
-  }
-}
-
-export const uploadToGoogleDrive = async (
-  fileName: string,
-  content: string,
-  mimeType: string = 'text/html'
-): Promise<string> => {
-  try {
-    if (!window.gapi.client.getToken()) {
-      await authenticateGoogleDrive()
-    }
-
-    const boundary = '-------314159265358979323846'
-    const delimiter = "\r\n--" + boundary + "\r\n"
-    const close_delim = "\r\n--" + boundary + "--"
-
-    const metadata = {
-      name: fileName,
-      mimeType: 'application/vnd.google-apps.document',
-    }
-
-    const multipartRequestBody =
-      delimiter +
-      'Content-Type: application/json\r\n\r\n' +
-      JSON.stringify(metadata) +
-      delimiter +
-      'Content-Type: ' + mimeType + '\r\n\r\n' +
-      content +
-      close_delim
-
-    const response = await window.gapi.client.request({
-      path: '/upload/drive/v3/files',
-      method: 'POST',
-      params: { uploadType: 'multipart' },
-      headers: {
-        'Content-Type': 'multipart/related; boundary="' + boundary + '"',
-      },
-      body: multipartRequestBody,
-    })
-
-    const fileId = response.result.id
-    return `https://docs.google.com/document/d/${fileId}/edit`
-  } catch (error) {
-    console.error('Error uploading to Google Drive:', error)
-    throw error
-  }
-}
-
-// Extend Window interface for TypeScript
 declare global {
   interface Window {
-    gapi: any
-    google: any
+    google?: {
+      accounts: {
+        oauth2: {
+          initTokenClient: (cfg: {
+            client_id: string
+            scope: string
+            callback: (resp: TokenResponse) => void
+            error_callback?: (err: { type?: string; message?: string }) => void
+          }) => TokenClient
+        }
+      }
+    }
   }
+}
+
+let gisPromise: Promise<void> | null = null
+let token: { value: string; expiresAt: number } | null = null
+
+/** Loads Google Identity Services once. Call it early (e.g. on page load) so the sign-in popup can open
+ *  straight from the click; browsers block popups opened after a long wait. */
+export function preloadGoogleDrive(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve()
+  if (window.google?.accounts?.oauth2) return Promise.resolve()
+  if (!gisPromise) {
+    gisPromise = new Promise<void>((resolve, reject) => {
+      const s = document.createElement('script')
+      s.src = GIS_SRC
+      s.async = true
+      s.onload = () => resolve()
+      s.onerror = () => {
+        gisPromise = null
+        reject(new Error('Couldn’t load Google sign-in. Check your connection or ad blocker and try again.'))
+      }
+      document.head.appendChild(s)
+    })
+  }
+  return gisPromise
+}
+
+function getToken(clientId: string): Promise<string> {
+  if (token && Date.now() < token.expiresAt - 60_000) return Promise.resolve(token.value)
+  const oauth2 = window.google?.accounts?.oauth2
+  if (!oauth2) return Promise.reject(new Error('Google sign-in isn’t loaded yet. Try again in a moment.'))
+  return new Promise((resolve, reject) => {
+    const client = oauth2.initTokenClient({
+      client_id: clientId,
+      scope: SCOPE,
+      callback: (resp) => {
+        if (!resp.access_token) {
+          reject(new Error(resp.error === 'access_denied' ? 'Google Drive access wasn’t allowed.' : resp.error_description || resp.error || 'Google sign-in failed.'))
+          return
+        }
+        token = { value: resp.access_token, expiresAt: Date.now() + (resp.expires_in ?? 3600) * 1000 }
+        resolve(resp.access_token)
+      },
+      error_callback: (err) =>
+        reject(
+          new Error(
+            err.type === 'popup_closed'
+              ? 'The Google window was closed before finishing.'
+              : err.type === 'popup_failed_to_open'
+                ? 'The browser blocked the Google sign-in window. Allow pop-ups for this site and try again.'
+                : err.message || 'Google sign-in failed.',
+          ),
+        ),
+    })
+    client.requestAccessToken({ prompt: token ? '' : 'consent' })
+  })
+}
+
+/** Turns a Drive API error body into something an editor can act on. */
+function driveError(status: number, body: unknown): Error {
+  const err = (body as { error?: { message?: string; errors?: { reason?: string }[]; details?: { reason?: string }[] } })?.error
+  const reasons = [...(err?.errors ?? []), ...(err?.details ?? [])].map((e) => e.reason)
+  if (reasons.includes('accessNotConfigured') || reasons.includes('SERVICE_DISABLED')) {
+    return new Error('The Google Drive API isn’t enabled for Poe’s Google Cloud project. An admin needs to enable it.')
+  }
+  if (status === 401) {
+    token = null
+    return new Error('Your Google session expired. Try again.')
+  }
+  if (status === 403 && reasons.includes('storageQuotaExceeded')) return new Error('Your Google Drive is full.')
+  return new Error(err?.message || `Google Drive returned ${status}.`)
+}
+
+/** Uploads `html` as a new Google Doc in the user's Drive and returns its link. */
+export async function uploadHtmlAsGoogleDoc(clientId: string, name: string, html: string): Promise<string> {
+  if (!clientId) throw new Error('Google Docs export isn’t set up on this server (no Google client ID).')
+  await preloadGoogleDrive()
+  const accessToken = await getToken(clientId)
+
+  const boundary = `poe-${Math.random().toString(36).slice(2)}`
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify({ name, mimeType: 'application/vnd.google-apps.document' }) +
+    `\r\n--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n` +
+    html +
+    `\r\n--${boundary}--`
+
+  const res = await fetch(UPLOAD_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+  })
+  const json = await res.json().catch(() => null)
+  if (!res.ok) throw driveError(res.status, json)
+  const { id, webViewLink } = json as { id: string; webViewLink?: string }
+  return webViewLink || `https://docs.google.com/document/d/${id}/edit`
 }

@@ -58,6 +58,7 @@ export default async function ArticleWorkspacePage({
       people={people}
       models={models}
       isSuperAdmin={user.role === 'super_admin'}
+      googleClientId={process.env.AUTH_GOOGLE_ID ?? ''}
     />
   )
 }
