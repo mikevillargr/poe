@@ -26,7 +26,7 @@ export async function cachedModels(key: string, load: () => Promise<ModelInfo[]>
   if (pending) return pending
   const p = load()
     .then((models) => {
-      cache.set(key, { at: Date.now(), models })
+      cache.set(key, { at: now, models })
       return models
     })
     .finally(() => inflight.delete(key))
