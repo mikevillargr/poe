@@ -34,7 +34,7 @@ export const POST = withRoute<P>(async ({ req, params, user }) => {
     const useResearch = hasResearch && body.useResearch !== false
     const previousState = article.draftHtml?.trim() ? 'ready' : 'idle'
 
-    const guidelines = await getActiveGuidelines(client.id)
+    const guidelines = await getActiveGuidelines(client.id, article.templateId)
     const prompt = buildGenerationPrompt(article, {
       clientName: client.name,
       guidelines,

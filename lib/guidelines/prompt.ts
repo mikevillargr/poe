@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, isNull, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { heuristics } from '@/lib/db/schema'
 import { categoryRank } from './categories'
@@ -33,12 +33,18 @@ export function groupForPrompt(rows: PromptGuideline[]): GuidelineGroup[] {
     .map(([category, rules]) => ({ category, rules: rules.sort((a, b) => b.weight - a.weight) }))
 }
 
-/** The client's active guidelines, grouped by category, heaviest first within a group. */
-export async function getGuidelinesForPrompt(tenantId: string): Promise<GuidelineGroup[]> {
+/**
+ * The client's active guidelines, grouped by category, heaviest first within a group. Rules scoped to a
+ * content template (D-002) are included only for articles made with that template.
+ */
+export async function getGuidelinesForPrompt(tenantId: string, contentTemplateId?: string | null): Promise<GuidelineGroup[]> {
+  const scope = contentTemplateId
+    ? or(isNull(heuristics.contentTemplateId), eq(heuristics.contentTemplateId, contentTemplateId))
+    : isNull(heuristics.contentTemplateId)
   const rows = await db
     .select({ category: heuristics.category, title: heuristics.title, rule: heuristics.rule, weight: heuristics.weight })
     .from(heuristics)
-    .where(and(eq(heuristics.tenantId, tenantId), eq(heuristics.active, true)))
+    .where(and(eq(heuristics.tenantId, tenantId), eq(heuristics.active, true), scope))
     .orderBy(asc(heuristics.category), desc(heuristics.weight), asc(heuristics.sortOrder))
   return groupForPrompt(rows)
 }

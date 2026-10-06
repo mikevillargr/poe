@@ -20,6 +20,39 @@ export interface SelectorStep {
   output: string
   /** `urls`: comma list. `sections`: ARTICLE_URLS / PRODUCT_URLS blocks. `single-url`: one URL. */
   format: 'urls' | 'sections' | 'single-url'
+  /**
+   * Placeholders holding the candidate list. Returned URLs not in them are dropped, and the step is
+   * skipped (output '') when they're all empty.
+   */
+  candidates: string[]
+}
+
+/** Where a placeholder's value comes from (hooks and selector steps fill the rest). */
+export type ValueSource =
+  | { from: 'article'; field: 'title' | 'brief' | 'primaryKeyword' }
+  /** Keywords joined with ", " (`empty` when there are none). */
+  | { from: 'keywords'; empty?: string }
+  /** Per-row template input (`articles.template_inputs`), e.g. itemUrl. */
+  | { from: 'input'; key: string; fallback?: string }
+  /** The row's target word count, or the template's `defaultWordCount`. */
+  | { from: 'wordCount' }
+  | { from: 'currentYear' }
+  /** One line per link-inventory item, e.g. `{title}-{url}`; rows missing a used field are skipped. */
+  | { from: 'inventory'; inventory: string; format: string }
+
+/** Input columns a row can carry (drives sheet/upload column mapping). */
+export interface TemplateInputField {
+  key: string
+  label: string
+  required?: boolean
+  /** Header names that map to this field, e.g. ["Item URL", "Item URL (B)"]. */
+  aliases?: string[]
+}
+
+export interface TemplateHookRef {
+  id: string
+  /** Hook-specific settings, e.g. `{ inventory: 'blog-articles' }`. */
+  options?: Record<string, string>
 }
 
 export interface Range {
@@ -69,8 +102,18 @@ export interface TemplateConfig {
   blogCleanup: boolean
   /** Used when the row has no word count, e.g. `1500-2500`. */
   defaultWordCount?: string
-  /** Hook ids from `hooks/registry.ts`, run before the selectors. */
-  hooks: string[]
+  /** Hooks from `hooks/registry.ts`, run before (and some after) the selectors. */
+  hooks: TemplateHookRef[]
+  /** Placeholder → source. Every placeholder in a prompt needs a source, a hook or a selector output. */
+  values: Record<string, ValueSource>
+  /** Columns a row carries beyond the article fields. */
+  inputs: TemplateInputField[]
+  /** Placeholder used as the title when the model returns none (default: the article title). */
+  titlePlaceholder?: string
+  /** CTA targets: always allowed, and not counted as internal links. */
+  ctaUrls?: string[]
+  /** Lead-in phrases banned before links (default: checks.DEFAULT_LEAD_INS). */
+  leadIns?: string[]
   checks: CheckConfig
   researchEnabled: boolean
 }

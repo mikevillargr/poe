@@ -47,7 +47,7 @@ export const POST = withRoute<P>(async ({ req, params, user }) => {
     const research = readResearch(article.research)
     const hasResearch = !!research && !!(research.summary?.trim() || research.outlineHtml?.trim() || research.citations.length)
 
-    const guidelines = await getActiveGuidelines(client.id)
+    const guidelines = await getActiveGuidelines(client.id, article.templateId)
     const prompt = buildRevisionPrompt(article, {
       clientName: client.name,
       guidelines,
