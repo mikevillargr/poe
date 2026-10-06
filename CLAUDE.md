@@ -54,7 +54,8 @@ app/
     admin/{users,universal-guidelines}, settings        super admin only
     dashboard, analyze, guidelines      redirects to / (old bookmarks)
   api/clients/[clientId]/…              articles, activity, guidelines, import, templates, articles/[id]/template,
-                                        articles/generate-batch (all tenant-scoped)
+                                        articles/generate-batch, templates/[id]/import, inventories (+ upload),
+                                        sheet-sources/[id]/sync (all tenant-scoped)
   api/admin/…                           users, providers (keys), model-roles, universal-guidelines
   api/content/{parse,fetch-gdoc}        file/URL/Google Doc text extraction (guideline import)
   api/health, api/auth/…
@@ -72,8 +73,11 @@ lib/
   templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks),
                     execute.ts (hooks → link selectors → writer → checks → one retry), run.ts (server run on the
                     generation slot; Generate uses it when articles.template_id is set), batch.ts ("Generate
-                    queued", 2 at a time), repo/schema/facts; seed/ holds the 10 verbatim prompts, template
-                    configs and each client's imported rules
+                    queued", 2 at a time), repo/schema/facts, rows.ts + inputs.ts (sheet/file → queue rows
+                    or link inventories; sheet-source sync); seed/ holds the 10 verbatim prompts, template
+                    configs, each client's imported rules and the Google Sheet sources
+  google/           service-account credential (encrypted; GOOGLE_SERVICE_ACCOUNT_JSON fallback) + read-only
+                    Sheets client (self-signed JWT, no googleapis)
 drizzle/            versioned migrations (never db:push against real data)
 scripts/            db (migrate, baseline, fixtures, seed-universal, seed-n8n), dev (api-sweep, smokes, template-e2e),
                     ai-smoke, release
@@ -289,6 +293,7 @@ npm run db:fixtures         # local mock data (4 clients, 24 articles); refuses 
 npx tsx scripts/dev/api-sweep.ts http://localhost:<port>   # every API route: 401 signed out, never 2xx for a pending user
 npx tsx scripts/db/seed-n8n.ts [--dry-run]                 # n8n clients, templates, inventories, imported guidelines (idempotent)
 npx tsx --env-file=.env.local scripts/dev/template-e2e.ts http://localhost:<port>   # templated generation e2e (AI_MOCK=1 server)
+npx tsx --env-file=.env.local scripts/dev/inputs-e2e.ts http://localhost:<port>     # inventory upload, template import, sheet sources, Google key
 npx tsx --conditions=react-server scripts/ai-smoke.ts --provider anthropic|openai|moonshot   # live provider smoke (needs keys)
 ```
 

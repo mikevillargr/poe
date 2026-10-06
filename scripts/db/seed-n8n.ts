@@ -6,6 +6,8 @@
 // - templates are added by slug; an existing one is left alone unless --update-templates, which saves
 //   the seed config as a new revision when it differs;
 // - inventories (empty) are added by slug; facts only fill keys the client doesn't have yet;
+// - Google Sheet sources from the doc's register are added (matched by sheet, tab, target and template /
+//   inventory); syncing them is a separate, explicit step;
 // - a doc guideline is skipped when the client already has the same rule text. For clients that
 //   already had their own rules (NCH's legacy rules), a doc rule that looks like one of them is added
 //   **inactive**, titled "… (possible duplicate of: <existing title>)". Nothing is ever deleted.
@@ -16,6 +18,7 @@ import pg from 'pg'
 import * as schema from '../../lib/db/schema'
 import { CLIENT_GUIDELINE_SETS } from '../../lib/templates/seed/guidelines'
 import { CLIENT_TEMPLATE_SETS } from '../../lib/templates/seed/templates'
+import { CLIENT_SHEET_SOURCES } from '../../lib/templates/seed/sheet-sources'
 import { closestOverlap } from '../../lib/guidelines/overlap'
 import type { TemplateFacts } from '../../lib/templates/facts'
 import { requireDatabaseUrl, redact } from './env'
@@ -107,6 +110,35 @@ async function main() {
               await tx.insert(schema.templateEvents).values({ templateId: existing.id, tenantId: tenantId!, type: 'updated', payload: { source: 'n8n seed', revisionNo } })
             }
           }
+        }
+
+        // Google Sheet sources
+        const invIds = new Map(
+          (tenantId ? await tx.select().from(schema.linkInventories).where(eq(schema.linkInventories.tenantId, tenantId)) : []).map((r) => [r.slug, r.id]),
+        )
+        const existingSources = tenantId ? await tx.select().from(schema.sheetSources).where(eq(schema.sheetSources.tenantId, tenantId)) : []
+        for (const src of CLIENT_SHEET_SOURCES[set.slug] ?? []) {
+          const templateId = src.template ? (templateIds.get(src.template) ?? null) : null
+          const inventoryId = src.inventory ? (invIds.get(src.inventory) ?? null) : null
+          const exists = existingSources.some(
+            (e) => e.spreadsheetId === src.spreadsheetId && e.tab === src.tab && e.target === src.target && e.templateId === templateId && e.inventoryId === inventoryId,
+          )
+          if (exists) continue
+          log.push(`sheet source "${src.name}" (${src.target}${src.template ? ` → ${src.template}` : ''}${src.inventory ? ` → ${src.inventory}` : ''})`)
+          if (dryRun || !tenantId) continue
+          if ((src.template && !templateId) || (src.inventory && !inventoryId)) throw new Error(`${set.slug}: target missing for sheet source "${src.name}"`)
+          await tx.insert(schema.sheetSources).values({
+            tenantId,
+            name: src.name,
+            spreadsheetId: src.spreadsheetId,
+            tab: src.tab,
+            range: src.range ?? null,
+            headerRow: src.headerRow ?? 1,
+            columnMap: src.columnMap,
+            target: src.target,
+            templateId,
+            inventoryId,
+          })
         }
 
         // Guidelines
