@@ -2,7 +2,7 @@
 //   npx tsx scripts/db/seed-n8n.ts [--dry-run] [--only=slug,slug] [--update-templates]
 //   prod: docker compose --profile tools run --rm migrate node dist/seed-n8n.cjs --dry-run
 // Uses DATABASE_URL from .env.local or the environment. Idempotent:
-// - a missing client is created (with the Universal guidelines copy, like "Add client");
+// - a missing client is created, like "Add client" (it follows the live Universal rules, D-003);
 // - templates are added by slug; an existing one is left alone unless --update-templates, which saves
 //   the seed config as a new revision when it differs;
 // - inventories (empty) are added by slug; facts only fill keys the client doesn't have yet;
@@ -51,7 +51,7 @@ async function main() {
         // Client
         let [tenant] = await tx.select().from(schema.tenants).where(eq(schema.tenants.slug, set.slug)).limit(1)
         if (!tenant) {
-          log.push(`create client "${set.name}" (+ Universal guidelines copy)`)
+          log.push(`create client "${set.name}" (follows the live Universal rules)`)
           if (!dryRun) tenant = await createClient(tx, set.name, set.slug, set.website)
         } else if (!tenant.website && set.website) {
           log.push(`set website ${set.website}`)
@@ -195,26 +195,7 @@ async function createClient(tx: Tx, name: string, slug: string, website?: string
     .insert(schema.tenants)
     .values({ name, slug, website: website ?? null, notes: 'Created by the n8n template seed (D-002).' })
     .returning()
-  const template = await tx
-    .select()
-    .from(schema.universalGuidelines)
-    .where(eq(schema.universalGuidelines.active, true))
-    .orderBy(asc(schema.universalGuidelines.sortOrder))
-  if (template.length) {
-    await tx.insert(schema.heuristics).values(
-      template.map((g, i) => ({
-        tenantId: client.id,
-        category: g.category,
-        title: g.title,
-        rule: g.rule,
-        weight: g.weight,
-        active: true,
-        source: 'template_copy' as const,
-        templateId: g.id,
-        sortOrder: (i + 1) * 1024,
-      })),
-    )
-  }
+  // D-003: no Universal copy; every client follows the live Universal rules.
   return client
 }
 

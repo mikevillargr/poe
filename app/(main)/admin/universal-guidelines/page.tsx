@@ -5,8 +5,8 @@ import { GuidelinesView } from '@/components/guidelines/GuidelinesView'
 
 export const dynamic = 'force-dynamic'
 
-// Universal guidelines (WS guidelines, DR-006): the agency-level template new clients start
-// from. Super-admin gate mirrors ../users; also enforced by the API routes.
+// Universal guidelines (WS guidelines, DR-006; live for every client since D-003): the agency-wide rules every client
+// follows first. Super-admin gate mirrors ../users; also enforced by the API routes.
 export default async function UniversalGuidelinesPage() {
   await requirePageUser({ admin: true })
   const rows = await listUniversalGuidelines()

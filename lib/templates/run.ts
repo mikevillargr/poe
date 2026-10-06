@@ -5,6 +5,7 @@ import { ApiError, Errors } from '@/lib/api/errors'
 import type { AppUser } from '@/lib/auth/guards'
 import type { Article } from '@/lib/articles/repo'
 import { categoryLabel } from '@/lib/guidelines/categories'
+import { renderGuidelineTiers } from '@/lib/guidelines/render'
 import { getActiveGuidelines } from '@/lib/pipeline/guidelines'
 import { persistGeneratedDraft } from '@/lib/pipeline/generate'
 import { readResearch } from '@/lib/pipeline/research'
@@ -54,9 +55,7 @@ export async function fetchProductPage(url: string, facts: ResolvedFacts, client
 }
 
 function guidelinesText(groups: Awaited<ReturnType<typeof getActiveGuidelines>>): string {
-  return groups
-    .map((g) => `### ${categoryLabel(g.category)}\n${g.rules.map((r) => `- ${r.title ? `${r.title}: ` : ''}${r.rule}`).join('\n')}`)
-    .join('\n\n')
+  return renderGuidelineTiers(groups, (g) => `### ${categoryLabel(g.category)}\n${g.rules.map((r) => `- ${r.title ? `${r.title}: ` : ''}${r.rule}`).join('\n')}`)
 }
 
 function researchText(article: Article): string | null {

@@ -20,7 +20,8 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
 ## How it works
 
 1. **Clients.** Every client is a separate data space (guidelines, queue, articles). All approved staff see all clients;
-   anyone can add one from the sidebar switcher, and it starts with a **copy** of the agency Universal guidelines.
+   anyone can add one from the sidebar switcher. Every client follows the **live Universal guidelines** first, then its own
+   rules; a client rule wins where they conflict, and a client can switch an individual Universal rule off (D-003).
 2. **Import** (`/c/[client]/import`). Upload a CSV/XLSX/XLS content calendar with `title`, `brief`, `keywords`,
    `wordcount` (target words). Column matching, per-row validation and duplicate detection happen before rows are
    appended to the client's ordered queue. No dates: the queue order is the calendar.
@@ -40,7 +41,7 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    hooks, checks. Create from the Standard preset, duplicate, or copy from another client; every save is a revision
    (History: diff + restore). The editor's dry run previews the prompt, link picks or a full draft without saving.
    **Client facts** (tribe keywords, CTA styles, host cities, product-page settings) feed the hooks.
-6. **Admin** (super admin only): **Users** (approve/deny/disable, promote), **Universal guidelines** (the template), **Settings**
+6. **Admin** (super admin only): **Users** (approve/deny/disable, promote), **Universal guidelines** (agency-wide, live for every client), **Settings**
    (provider keys, test, models per role).
 
 **Auth.** Google OAuth only. Only verified `@growth-rocket.com` accounts may sign in; they are `pending` until a super admin
@@ -69,12 +70,13 @@ components/   shell, home, import, workspace, templates, sources, guidelines, se
 lib/
   db/schema/*       Drizzle schema by domain (tenants = clients, heuristics = guidelines)
   auth/ api/        guards (withRoute, requireUser…), {error, code} helpers, apiFetch
-  tenancy/ clients/ client lookup + creation (copies the Universal template)
+  tenancy/ clients/ client lookup + creation
   articles/         repo, shared zod schemas (FROZEN contract), text helpers
   ai/               provider contract (FROZEN), providers/*, roles, secrets, SSE, mock provider
   pipeline/ prompts/ research + generation (prompt builders, persistence)
   optimize/         keyword coverage, guideline-check prompt/parse
-  guidelines/       repo, schemas, categories, Universal template, extraction
+  guidelines/       repo, schemas, categories, Universal rules, extraction; prompt.ts merges live Universal (minus the
+                    client's off switches) + client rules; render.ts prints them Universal-first for every prompt
   import/           sheet parsing + column mapping
   templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks),
                     execute.ts (hooks → link selectors → writer → checks → one retry), run.ts (server run on the
@@ -110,15 +112,15 @@ docker/ Dockerfile docker-compose.yml   production stack (Caddy on 443)
 ## Data model (tables)
 
 `tenants` (a client) · `users` (role `super_admin|member`, status `pending|active|disabled`) · `heuristics` (a client's guidelines:
-category, title, rule, weight 1–10, active, source `manual|ingested|template_copy`, sort order) · `universal_guidelines` (the
-template) · `guidelines` (raw ingested source documents) · `articles` (queue item and article in one row: status
+category, title, rule, weight 1–10, active, source `manual|ingested|template_copy`, sort order) · `universal_guidelines` (agency-wide,
+live) · `client_universal_overrides` (a client's off switch for one Universal rule) · `guidelines` (raw ingested source documents) · `articles` (queue item and article in one row: status
 `queued|draft|in_review|done`, brief, `keywords[]`, primary keyword, target word count, `research` jsonb, draft HTML, last optimize)
 · `article_versions` · `article_events` (activity) · `import_batches` · `ai_provider_credentials` (encrypted keys) ·
 `ai_model_roles` · `ai_usage` · D-002 templates: `content_templates` (per-client presets, soft delete) ·
 `content_template_revisions` · `template_events` · `link_inventories` + `link_inventory_items` · `sheet_sources` ·
 `google_credentials` (encrypted service-account key). `articles` also has `template_id`, `template_inputs`,
 `generation_meta` and `source_row_key`; `heuristics.content_template_id` scopes a guideline to one template
-(`heuristics.template_id` is the Universal rule it was copied from).
+(`heuristics.template_id` is legacy: copies were removed by migration 0008).
 
 ---
 

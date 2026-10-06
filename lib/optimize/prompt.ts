@@ -1,5 +1,6 @@
 // Prompts for the guideline check and for rewriting a single suggestion.
 import type { GuidelineGroup } from '@/lib/pipeline/guidelines'
+import { renderGuidelineTiers } from '@/lib/guidelines/render'
 
 export interface OptimizePromptInput {
   title: string
@@ -17,13 +18,12 @@ export const OPTIMIZE_SYSTEM =
 const MAX_DRAFT_CHARS = 60_000
 
 export function buildOptimizePrompt(i: OptimizePromptInput): string {
-  const rules = i.guidelines
-    .map(
-      (g) =>
-        `## ${g.category.toUpperCase()}\n` +
-        g.rules.map((r, n) => `${n + 1}. ${r.title ? `${r.title}: ` : ''}${r.rule} (weight ${r.weight}/10)`).join('\n'),
-    )
-    .join('\n\n')
+  const rules = renderGuidelineTiers(
+    i.guidelines,
+    (g) =>
+      `## ${g.category.toUpperCase()}\n` +
+      g.rules.map((r, n) => `${n + 1}. ${r.title ? `${r.title}: ` : ''}${r.rule} (weight ${r.weight}/10)`).join('\n'),
+  )
 
   return `Check this article draft against the guidelines below.
 
@@ -32,7 +32,7 @@ Primary keyword: ${i.primaryKeyword ?? '(none)'}
 Other keywords: ${i.keywords.filter((k) => k !== i.primaryKeyword).join(', ') || '(none)'}
 Target length: ${i.targetWordCount ? `${i.targetWordCount} words` : '(none)'}
 
-GUIDELINES (grouped by category; the BLACKLIST category lists phrases and patterns that make writing sound machine-written, so flag every occurrence):
+GUIDELINES (agency-wide rules first, then the client's own; grouped by category; the BLACKLIST category lists phrases and patterns that make writing sound machine-written, so flag every occurrence). Where a client rule contradicts an agency-wide rule, the client rule wins: never flag text for breaking an agency-wide rule that a client rule overrides.
 ${rules || '(no guidelines configured)'}
 
 For each guideline that the draft violates or could clearly improve on:
@@ -47,7 +47,7 @@ Return ONLY this JSON (no prose, no code fences):
   "dimensionScores": [{"category": "SEO", "score": 0-100, "passCount": 0, "failCount": 0}],
   "suggestions": [{"category": "SEO", "severity": "high|medium|low", "title": "short issue", "original": "exact text", "suggested": "replacement", "reason": "why"}]
 }
-Give one dimension score per guideline category above.
+Give one dimension score per guideline category above (a category under both headings gets one score).
 
 DRAFT:
 ---

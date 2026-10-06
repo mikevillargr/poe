@@ -7,7 +7,7 @@ import { reviseBodySchema } from '@/lib/pipeline/schemas'
 import { createMockProvider } from '@/lib/ai/providers/mock'
 
 const article = { title: 'Best Running Shoes', brief: 'A guide.', primaryKeyword: 'running shoes', keywords: ['running shoes', 'trail'], targetWordCount: 800 }
-const groups = [{ category: 'blacklist', rules: [{ title: null, rule: 'Never say delve', weight: 1 }] }] as never
+const groups = [{ category: 'blacklist', tier: 'client', rules: [{ title: null, rule: 'Never say delve', weight: 1 }] }] as never
 
 test('revise prompt carries feedback, draft, guidelines, keywords and word band', () => {
   const p = buildRevisionPrompt({ ...article, draftHtml: '<h1>Best Running Shoes</h1><p>Hello world.</p>' }, { clientName: 'Acme', guidelines: groups, feedback: '  Make the intro punchier  ' })

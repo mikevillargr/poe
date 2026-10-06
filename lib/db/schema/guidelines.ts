@@ -7,6 +7,7 @@ import {
   integer,
   doublePrecision,
   index,
+  primaryKey,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import { guidelineSource } from './enums'
@@ -23,7 +24,8 @@ export const guidelineSources = pgTable('guidelines', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
-// Agency-level template. A new client starts with a copy of these rows.
+// Agency-wide rules (D-003): every client follows the live set first, then its own rules (client rules win on
+// conflict). A client can switch an individual rule off (`client_universal_overrides`).
 export const universalGuidelines = pgTable('universal_guidelines', {
   id: uuid('id').primaryKey().defaultRandom(),
   category: text('category').notNull(),
@@ -51,7 +53,7 @@ export const heuristics = pgTable(
     weight: integer('weight').notNull(),
     active: boolean('active').notNull().default(true),
     source: guidelineSource('source').notNull().default('manual'),
-    // The Universal-template rule this was copied from (not a content template).
+    // Before D-003: the Universal rule this was copied from. No longer written; migration 0008 removed the copies.
     templateId: uuid('template_id').references(() => universalGuidelines.id, { onDelete: 'set null' }),
     // D-002: set = the rule applies only to articles made with this content template; null = whole client.
     contentTemplateId: uuid('content_template_id').references((): AnyPgColumn => contentTemplates.id, { onDelete: 'set null' }),
@@ -65,3 +67,18 @@ export const heuristics = pgTable(
 )
 
 export const guidelines = heuristics
+
+// D-003: a client's switch for one Universal rule. No row = on (the Universal rule's own `active` still applies).
+export const clientUniversalOverrides = pgTable(
+  'client_universal_overrides',
+  {
+    tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+    universalGuidelineId: uuid('universal_guideline_id')
+      .notNull()
+      .references(() => universalGuidelines.id, { onDelete: 'cascade' }),
+    active: boolean('active').notNull(),
+    updatedBy: uuid('updated_by').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.universalGuidelineId] })],
+)

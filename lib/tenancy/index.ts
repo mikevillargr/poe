@@ -44,7 +44,7 @@ export async function requireClient(clientId: string, opts: { write?: boolean } 
   return row
 }
 
-/** Creates a client and copies the active Universal guidelines into it, in one transaction. */
+/** Creates a client. It follows the live Universal guidelines (D-003), so nothing is copied. */
 export async function createClient(input: CreateClientInput, user: AppUser) {
   return db.transaction(async (tx) => {
     const [existing] = await tx.select({ id: tenants.id }).from(tenants).where(eq(tenants.slug, input.slug)).limit(1)
@@ -61,31 +61,10 @@ export async function createClient(input: CreateClientInput, user: AppUser) {
       })
       .returning()
 
-    const template = await tx
-      .select()
-      .from(universalGuidelines)
-      .where(eq(universalGuidelines.active, true))
-      .orderBy(asc(universalGuidelines.sortOrder))
+    // D-003: no copy. The client follows the live Universal rules; report how many are on.
+    const [{ n }] = await tx.select({ n: count() }).from(universalGuidelines).where(eq(universalGuidelines.active, true))
 
-    if (template.length) {
-      await tx.insert(heuristics).values(
-        template.map((g, i) => ({
-          tenantId: client.id,
-          category: g.category,
-          title: g.title,
-          rule: g.rule,
-          weight: g.weight,
-          active: true,
-          source: 'template_copy' as const,
-          templateId: g.id,
-          sortOrder: (i + 1) * 1024,
-          createdBy: user.id,
-          updatedBy: user.id,
-        })),
-      )
-    }
-
-    return { client, copiedGuidelines: template.length }
+    return { client, universalRules: n }
   })
 }
 
