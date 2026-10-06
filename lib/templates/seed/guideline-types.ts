@@ -17,7 +17,6 @@ export interface ClientGuidelineSet {
   /** Client slug (NCH already exists as `nch`). */
   slug: string
   name: string
-  /** Only where the doc names the site (it doesn't for LFP or SPP). */
   website?: string
   /** Template slugs this client gets; `template` on a rule must be one of these. */
   templates: string[]

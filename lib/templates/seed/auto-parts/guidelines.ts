@@ -6,6 +6,7 @@ import { NO_LINK_LEAD_INS, type ClientGuidelineSet } from '../guideline-types'
 interface AutoPartsBrand {
   slug: string
   name: string
+  website: string
   make: string
   /** "2024 Mustang GT Spoiler"-style examples from the prompt. */
   exampleQuestion: string
@@ -16,6 +17,7 @@ function autoPartsGuidelines(b: AutoPartsBrand): ClientGuidelineSet {
   return {
     slug: b.slug,
     name: b.name,
+    website: b.website,
     templates: ['product-faq'],
     guidelines: [
       {
@@ -92,6 +94,7 @@ function autoPartsGuidelines(b: AutoPartsBrand): ClientGuidelineSet {
 export const LFP_GUIDELINES = autoPartsGuidelines({
   slug: 'levittown-ford-parts',
   name: 'Levittown Ford Parts',
+  website: 'https://levittownfordparts.com',
   make: 'Ford',
   exampleQuestion: 'Will this 2024 Ford Mustang GT Spoiler fit my Premium Fastback trim?',
   genericQuestion: 'Will this part fit my vehicle?',
@@ -100,6 +103,7 @@ export const LFP_GUIDELINES = autoPartsGuidelines({
 export const SPP_GUIDELINES = autoPartsGuidelines({
   slug: 'subaru-parts-pros',
   name: 'Subaru Parts Pros',
+  website: 'https://subarupartspros.com',
   make: 'Subaru',
   exampleQuestion: 'Will this 2024 Subaru WRX Spoiler fit my Premium trim?',
   genericQuestion: 'Will this part fit my vehicle?',
