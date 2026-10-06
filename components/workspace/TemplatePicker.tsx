@@ -14,7 +14,7 @@ export interface TemplateOption {
   kind: 'faq' | 'blog' | 'page'
   enabled: boolean
   revisionNo: number
-  inputs: { key: string; label: string; required?: boolean }[]
+  inputs: { key: string; label: string; required?: boolean; aliases?: string[] }[]
 }
 
 const ARTICLE_FIELDS = new Set(['title', 'brief', 'keywords', 'wordcount'])
