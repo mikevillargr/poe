@@ -5,8 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FilePlus2, X, Loader2 } from 'lucide-react'
 import { apiFetch, ApiFetchError } from '@/lib/api/fetch'
 import { splitKeywords, type ArticleSummary } from '@/lib/articles/schemas'
+import { useClientTemplates } from '@/components/workspace/TemplatePicker'
 
-// DR-003 "New Article": single manual add to the end of the queue.
+// DR-003 "New Article": single manual add to the end of the queue. DR-012: optionally made from a
+// content template, whose own fields (e.g. Item URL) appear and whose unused fields are hidden.
 export function NewArticleModal({
   isOpen,
   clientId,
@@ -22,6 +24,14 @@ export function NewArticleModal({
   const [brief, setBrief] = useState('')
   const [keywords, setKeywords] = useState('')
   const [words, setWords] = useState('')
+  const [templateId, setTemplateId] = useState('')
+  const [inputs, setInputs] = useState<Record<string, string>>({})
+  const templates = useClientTemplates(clientId)
+  const template = templates?.find((t) => t.id === templateId) ?? null
+  const uses = (key: string) => !template || template.inputs.some((f) => f.key === key)
+  const rowFields = template?.inputs.filter((f) => !['title', 'brief', 'keywords', 'wordcount'].includes(f.key)) ?? []
+  const titleLabel = template?.inputs.find((f) => f.key === 'title')?.label ?? 'Title'
+  const missingInput = rowFields.find((f) => f.required && !inputs[f.key]?.trim())
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const titleRef = useRef<HTMLInputElement>(null)
@@ -33,13 +43,15 @@ export function NewArticleModal({
     setBrief('')
     setKeywords('')
     setWords('')
+    setTemplateId('')
+    setInputs({})
     setErrors({})
     setTimeout(() => titleRef.current?.focus(), 50)
   }, [isOpen])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!title.trim() || submitting) return
+    if (!title.trim() || submitting || missingInput) return
     setSubmitting(true)
     setErrors({})
     try {
@@ -53,6 +65,14 @@ export function NewArticleModal({
           targetWordCount: words ? Number(words) : null,
         },
       })
+      if (template) {
+        const rowInputs = Object.fromEntries(rowFields.map((f) => [f.key, inputs[f.key]?.trim() || null]))
+        await apiFetch(`/api/clients/${clientId}/articles/${article.id}/template`, {
+          method: 'PUT',
+          body: { templateId: template.id, inputs: rowInputs },
+          errorTitle: 'Added, but couldn’t set the template',
+        }).catch(() => {})
+      }
       onCreated(article)
     } catch (err) {
       if (err instanceof ApiFetchError && err.details?.fieldErrors) {
@@ -107,42 +127,80 @@ export function NewArticleModal({
             </div>
 
             <div className="p-6 space-y-4">
+              {templates && templates.some((t) => t.enabled) && (
+                <div>
+                  <label htmlFor="na-template" className="block text-sm font-medium text-heading mb-1.5">
+                    Template
+                  </label>
+                  <select id="na-template" value={templateId} onChange={(e) => setTemplateId(e.target.value)} className={inputCls}>
+                    <option value="">Standard article (no template)</option>
+                    {templates
+                      .filter((t) => t.enabled)
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} · {t.kind === 'faq' ? 'FAQ' : t.kind === 'blog' ? 'Blog' : 'Page'}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label htmlFor="na-title" className="block text-sm font-medium text-heading mb-1.5">
-                  Title
+                  {titleLabel}
                 </label>
-                <input id="na-title" ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} className={inputCls} placeholder="e.g. How to Form an LLC in Nevada" />
+                <input id="na-title" ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} className={inputCls} placeholder={template ? undefined : 'e.g. How to Form an LLC in Nevada'} />
                 {errors.title && <p className="mt-1 text-xs text-red-400">{errors.title}</p>}
               </div>
-              <div>
-                <label htmlFor="na-brief" className="block text-sm font-medium text-heading mb-1.5">
-                  Brief <span className="text-muted font-normal">(optional)</span>
-                </label>
-                <textarea id="na-brief" value={brief} onChange={(e) => setBrief(e.target.value)} rows={3} className={`${inputCls} resize-y`} placeholder="What the article should cover, for whom, and any angle the client approved." />
-              </div>
-              <div>
-                <label htmlFor="na-keywords" className="block text-sm font-medium text-heading mb-1.5">
-                  SEO keywords
-                </label>
-                <input id="na-keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} className={inputCls} placeholder="Comma-separated. The first one is the primary keyword." />
-                {chips.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {chips.map((k, i) => (
-                      <span key={k} className={`px-2 py-0.5 rounded-full text-xs border ${i === 0 ? 'border-accent/40 text-accent bg-accent/10' : 'border-border text-body bg-surface'}`}>
-                        {k}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {errors.keywords && <p className="mt-1 text-xs text-red-400">{errors.keywords}</p>}
-              </div>
-              <div>
-                <label htmlFor="na-words" className="block text-sm font-medium text-heading mb-1.5">
-                  Target word count
-                </label>
-                <input id="na-words" type="number" min={50} max={20000} step={50} value={words} onChange={(e) => setWords(e.target.value)} className={`${inputCls} font-mono tabular-nums max-w-[180px]`} placeholder="1500" />
-                {errors.targetWordCount && <p className="mt-1 text-xs text-red-400">{errors.targetWordCount}</p>}
-              </div>
+              {rowFields.map((f) => (
+                <div key={f.key}>
+                  <label htmlFor={`na-input-${f.key}`} className="block text-sm font-medium text-heading mb-1.5">
+                    {f.label}
+                    {!f.required && <span className="text-muted font-normal"> (optional)</span>}
+                  </label>
+                  <input
+                    id={`na-input-${f.key}`}
+                    value={inputs[f.key] ?? ''}
+                    onChange={(e) => setInputs((v) => ({ ...v, [f.key]: e.target.value }))}
+                    className={inputCls}
+                    placeholder={/url/i.test(f.key) ? 'https://…' : undefined}
+                  />
+                </div>
+              ))}
+              {uses('brief') && (
+                <div>
+                  <label htmlFor="na-brief" className="block text-sm font-medium text-heading mb-1.5">
+                    Brief <span className="text-muted font-normal">(optional)</span>
+                  </label>
+                  <textarea id="na-brief" value={brief} onChange={(e) => setBrief(e.target.value)} rows={3} className={`${inputCls} resize-y`} placeholder="What the article should cover, for whom, and any angle the client approved." />
+                </div>
+              )}
+              {uses('keywords') && (
+                <div>
+                  <label htmlFor="na-keywords" className="block text-sm font-medium text-heading mb-1.5">
+                    SEO keywords
+                  </label>
+                  <input id="na-keywords" value={keywords} onChange={(e) => setKeywords(e.target.value)} className={inputCls} placeholder="Comma-separated. The first one is the primary keyword." />
+                  {chips.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {chips.map((k, i) => (
+                        <span key={k} className={`px-2 py-0.5 rounded-full text-xs border ${i === 0 ? 'border-accent/40 text-accent bg-accent/10' : 'border-border text-body bg-surface'}`}>
+                          {k}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {errors.keywords && <p className="mt-1 text-xs text-red-400">{errors.keywords}</p>}
+                </div>
+              )}
+              {uses('wordcount') && (
+                <div>
+                  <label htmlFor="na-words" className="block text-sm font-medium text-heading mb-1.5">
+                    Target word count
+                  </label>
+                  <input id="na-words" type="number" min={50} max={20000} step={50} value={words} onChange={(e) => setWords(e.target.value)} className={`${inputCls} font-mono tabular-nums max-w-[180px]`} placeholder="1500" />
+                  {errors.targetWordCount && <p className="mt-1 text-xs text-red-400">{errors.targetWordCount}</p>}
+                </div>
+              )}
               {errors.form && <p className="text-sm text-red-400">{errors.form}</p>}
             </div>
 
@@ -152,7 +210,8 @@ export function NewArticleModal({
               </button>
               <button
                 type="submit"
-                disabled={!title.trim() || submitting}
+                disabled={!title.trim() || submitting || !!missingInput}
+                title={missingInput ? `${missingInput.label} is required for this template` : undefined}
                 className="bg-accent hover:bg-accent/90 text-white px-6 py-2 rounded-input text-sm font-medium transition-all shadow-glow-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}

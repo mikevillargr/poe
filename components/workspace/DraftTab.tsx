@@ -207,7 +207,9 @@ export function DraftTab({
           <PenLine className="w-8 h-8 text-accent mx-auto" />
           <h2 className="text-xl font-display text-heading">No draft yet</h2>
           <p className="text-sm text-muted max-w-md mx-auto">
-            Generate a first draft from the brief, keywords{hasResearch(article) ? ' and research' : ''}. You can edit it freely afterwards.
+            {article.templateId
+              ? 'Generate a first draft with this article’s template: it picks internal links, writes, checks the result and fixes failures once. You can edit it freely afterwards.'
+              : `Generate a first draft from the brief, keywords${hasResearch(article) ? ' and research' : ''}. You can edit it freely afterwards.`}
           </p>
           <button
             type="button"
@@ -221,7 +223,7 @@ export function DraftTab({
             ) : null}
           </button>
           <p className="text-xs text-muted font-mono">{models.generation ?? 'No generation model configured'}</p>
-          {!hasResearch(article) && (
+          {!hasResearch(article) && !article.templateId && (
             <p className="text-xs text-muted">No research yet. The draft will rely on the model’s own knowledge.</p>
           )}
         </div>

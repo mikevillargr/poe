@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatDistanceToNowStrict } from 'date-fns'
-import { ArrowLeft, Check, Download, FileSpreadsheet, Loader2, RotateCcw, AlertTriangle, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Check, Download, FileSpreadsheet, Loader2, RotateCcw, AlertTriangle, AlertCircle, LayoutTemplate } from 'lucide-react'
 import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -19,6 +19,7 @@ import {
   type ImportRow,
 } from '@/lib/import/mapping'
 import type { RecentImport } from '@/lib/import/repo'
+import { useClientTemplates } from '@/components/workspace/TemplatePicker'
 
 interface Parsed {
   filename: string
@@ -33,8 +34,16 @@ const itemVariants = {
   show: { opacity: 1, y: 0, transition: { type: 'spring' as const, stiffness: 300, damping: 30 } },
 }
 const nf = new Intl.NumberFormat('en-US')
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
 
-// DR-004 option A: Upload → Match & review → Confirm.
+interface PagePreview {
+  file: File
+  rows: { row: number; title: string }[]
+  skipped: { row: number; title: string; reason: string }[]
+}
+
+// DR-004 option A: Upload → Match & review → Confirm. DR-012: optionally into a content template, whose own
+// columns (e.g. Item URL) are matched too and whose rows arrive set to that template.
 export function ImportView({
   client,
   existingTitles,
@@ -54,23 +63,63 @@ export function ImportView({
   const [mapping, setMapping] = useState<ColumnMapping>({ title: null, brief: null, keywords: null, wordcount: null })
   const [includeOverride, setIncludeOverride] = useState<Record<number, boolean>>({})
   const [importing, setImporting] = useState(false)
+  const templates = useClientTemplates(client.id)
+  const [templateId, setTemplateId] = useState('')
+  const template = templates?.find((t) => t.id === templateId) ?? null
+  const extraFields = template?.inputs.filter((f) => !(IMPORT_FIELDS as readonly string[]).includes(f.key)) ?? []
+  const usesField = (f: ImportField) => f === 'title' || !template || template.inputs.some((i) => i.key === f)
+  const [extraMap, setExtraMap] = useState<Record<string, number | null>>({})
+  const [fromRow, setFromRow] = useState('')
+  const [toRow, setToRow] = useState('')
+  const [pagePreview, setPagePreview] = useState<PagePreview | null>(null)
 
   const headers = parsed?.grid[headerRow] ?? []
   const rows: ImportRow[] = useMemo(
     () => (parsed && mapping.title !== null ? buildRows(parsed.grid, headerRow, mapping, existingTitles) : []),
     [parsed, headerRow, mapping, existingTitles],
   )
-  const included = (r: ImportRow) => r.errors.length === 0 && (includeOverride[r.sheetRow] ?? !r.duplicate)
+  const cellAt = (r: ImportRow, col: number | null | undefined) => (col === null || col === undefined ? '' : String(parsed?.grid[r.sheetRow - 1]?.[col] ?? '').trim())
+  const extraErrors = (r: ImportRow) => extraFields.filter((f) => f.required && !cellAt(r, extraMap[f.key])).map((f) => `Missing ${f.label}`)
+  const inRange = (r: ImportRow) => (!fromRow || r.sheetRow >= Number(fromRow)) && (!toRow || r.sheetRow <= Number(toRow))
+  const included = (r: ImportRow) =>
+    r.errors.length === 0 && extraErrors(r).length === 0 && inRange(r) && (includeOverride[r.sheetRow] ?? !r.duplicate)
   const selected = rows.filter(included)
-  const errorCount = rows.filter((r) => r.errors.length).length
+  const errorCount = rows.filter((r) => r.errors.length || extraErrors(r).length).length
   const dupCount = rows.filter((r) => r.duplicate && !r.errors.length).length
   const ignored = headers
     .map((h, i) => ({ h, i }))
-    .filter(({ h, i }) => h && !Object.values(mapping).includes(i))
+    .filter(({ h, i }) => h && !Object.values(mapping).includes(i) && !Object.values(extraMap).includes(i))
+
+  /** Template columns matched by their label or the template's aliases (the n8n column names). */
+  function autoMapExtras(headers: string[]) {
+    return Object.fromEntries(
+      extraFields.map((f) => {
+        const names = [f.label, ...(f.aliases ?? [])].map(norm)
+        const i = headers.findIndex((h) => names.includes(norm(h ?? '')))
+        return [f.key, i >= 0 ? i : null]
+      }),
+    )
+  }
+
+  /** Tribe community pages use their own sheet layout: the server reads it (dry run) for the preview. */
+  async function previewPageTemplate(file: File) {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('dryRun', 'true')
+    const res = await apiFetch<{ rows: PagePreview['rows']; skipped: PagePreview['skipped'] }>(
+      `/api/clients/${client.id}/templates/${templateId}/import`,
+      { method: 'POST', body: form, errorTitle: `Could not read ${file.name}` },
+    )
+    setPagePreview({ file, rows: res.rows ?? [], skipped: res.skipped ?? [] })
+  }
 
   async function handleFile(file: File) {
     setParsing(true)
     try {
+      if (template?.kind === 'page') {
+        await previewPageTemplate(file)
+        return
+      }
       const form = new FormData()
       form.append('file', file)
       const res = await apiFetch<Parsed>(`/api/clients/${client.id}/articles/import/parse`, {
@@ -86,6 +135,7 @@ export function ImportView({
       setParsed(res)
       setHeaderRow(hr)
       setMapping(autoMap(res.grid[hr] ?? []))
+      setExtraMap(autoMapExtras(res.grid[hr] ?? []))
       setIncludeOverride({})
     } catch {
       // apiFetch already toasted
@@ -95,28 +145,62 @@ export function ImportView({
     }
   }
 
+  async function confirmPage() {
+    if (!pagePreview || !template) return
+    setImporting(true)
+    try {
+      const form = new FormData()
+      form.append('file', pagePreview.file)
+      const { added } = await apiFetch<{ added: number }>(`/api/clients/${client.id}/templates/${template.id}/import`, {
+        method: 'POST',
+        body: form,
+        errorTitle: 'Import failed',
+      })
+      toast.success(`${added} ${added === 1 ? 'page' : 'pages'} added from ${pagePreview.file.name}`, template.name)
+      router.push(`/c/${client.slug}`)
+      router.refresh()
+    } catch {
+      setImporting(false)
+    }
+  }
+
+  /** Per-row template inputs: the template's own columns, plus the sheet's word-count text for the prompt. */
+  function rowInputs(r: ImportRow): Record<string, string> | undefined {
+    if (!template) return undefined
+    const out: Record<string, string> = {}
+    for (const f of extraFields) {
+      const v = cellAt(r, extraMap[f.key])
+      if (v) out[f.key] = v
+    }
+    const wc = cellAt(r, mapping.wordcount).replace(/^=+/, '')
+    if (wc && r.targetWordCount) out.wordCount = wc
+    return out
+  }
+
   async function confirm() {
     if (!parsed || !selected.length) return
     setImporting(true)
     try {
-      const { count } = await apiFetch<{ batchId: string; count: number }>(`/api/clients/${client.id}/articles/import`, {
+      const { count } = await apiFetch<{ batchId?: string; count: number }>(`/api/clients/${client.id}/articles/import`, {
         method: 'POST',
         errorTitle: 'Import failed',
         body: {
           filename: parsed.filename,
+          templateId: template?.id,
           rows: selected.map((r) => ({
             sheetRow: r.sheetRow,
             title: r.title,
             brief: r.brief,
             keywords: r.keywords,
             targetWordCount: r.targetWordCount,
+            inputs: rowInputs(r),
           })),
           skipped: rows
             .filter((r) => !included(r))
-            .map((r) => ({ row: r.sheetRow, message: r.errors[0] ?? 'Duplicate title (skipped)' })),
+            .map((r) => ({ row: r.sheetRow, message: r.errors[0] ?? extraErrors(r)[0] ?? (inRange(r) ? 'Duplicate title (skipped)' : 'Outside the chosen rows') })),
         },
       })
-      toast.success(`${count} ${count === 1 ? 'article' : 'articles'} added from ${parsed.filename}`)
+      toast.success(`${count} ${count === 1 ? 'article' : 'articles'} added from ${parsed.filename}`, template ? template.name : undefined)
       router.push(`/c/${client.slug}`)
       router.refresh()
     } catch {
@@ -126,6 +210,7 @@ export function ImportView({
 
   function reset() {
     setParsed(null)
+    setPagePreview(null)
     setIncludeOverride({})
   }
 
@@ -141,11 +226,26 @@ export function ImportView({
           </Link>
           <h1 className="text-3xl font-display text-heading">Import content calendar</h1>
           <p className="text-sm text-muted mt-1">
-            Columns: <span className="font-mono">title</span>, <span className="font-mono">brief</span>,{' '}
-            <span className="font-mono">keywords</span>, <span className="font-mono">wordcount</span>. Rows are added to the end of the queue in sheet order.
+            {template ? (
+              <>
+                Into <span className="text-heading">{template.name}</span>: columns{' '}
+                {template.inputs.map((f, i) => (
+                  <span key={f.key}>
+                    {i > 0 && ', '}
+                    <span className="font-mono">{f.aliases?.[0] ?? f.label}</span>
+                  </span>
+                ))}
+                . Rows are added to the end of the queue in sheet order, set to this template.
+              </>
+            ) : (
+              <>
+                Columns: <span className="font-mono">title</span>, <span className="font-mono">brief</span>,{' '}
+                <span className="font-mono">keywords</span>, <span className="font-mono">wordcount</span>. Rows are added to the end of the queue in sheet order.
+              </>
+            )}
           </p>
         </div>
-        {parsed && (
+        {(parsed || pagePreview) && (
           <button type="button" onClick={reset} className="px-4 py-2 rounded-input text-sm border border-border text-body hover:text-heading hover:bg-surface-hover flex items-center gap-2 shrink-0">
             <RotateCcw className="w-4 h-4" /> Choose another file
           </button>
@@ -161,8 +261,75 @@ export function ImportView({
       />
 
       <AnimatePresence mode="wait">
-        {!parsed ? (
+        {pagePreview && template ? (
+          <motion.div key="page" variants={itemVariants} initial="hidden" animate="show" exit={{ opacity: 0 }} className="space-y-6">
+            <div className="glass-card p-6">
+              <h2 className="text-lg font-display text-heading truncate">{pagePreview.file.name}</h2>
+              <p className="text-xs text-muted">
+                {template.name}: one page per community-page URL; keywords are the cells with a search volume in brackets.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="px-3 py-1 rounded-full bg-success/10 text-green-500 border border-success/20 font-mono tabular-nums">{pagePreview.rows.length} ready</span>
+              {pagePreview.skipped.length > 0 && (
+                <span className="px-3 py-1 rounded-full bg-danger/10 text-red-400 border border-danger/20 font-mono tabular-nums">{pagePreview.skipped.length} skipped</span>
+              )}
+            </div>
+            <div className="glass-card p-0 overflow-hidden">
+              <div className="max-h-[560px] overflow-y-auto custom-scrollbar divide-y divide-border">
+                {pagePreview.rows.map((r) => (
+                  <div key={r.row} className="flex items-center gap-4 px-4 py-2.5 text-sm">
+                    <span className="text-muted font-mono tabular-nums w-12">{r.row}</span>
+                    <span className="text-heading">{r.title}</span>
+                  </div>
+                ))}
+                {pagePreview.skipped.map((r) => (
+                  <div key={`s${r.row}`} className="flex items-center gap-4 px-4 py-2.5 text-sm bg-danger/5">
+                    <span className="text-muted font-mono tabular-nums w-12">{r.row}</span>
+                    <span className="text-body">{r.title}</span>
+                    <span className="text-xs text-red-400">{r.reason}</span>
+                  </div>
+                ))}
+                {pagePreview.rows.length === 0 && <div className="px-4 py-10 text-center text-sm text-muted">No community-page URLs found in this sheet.</div>}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3">
+              <button type="button" onClick={reset} className="px-4 py-2 text-sm font-medium text-muted hover:text-heading transition-colors">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmPage}
+                disabled={!pagePreview.rows.length || importing}
+                className="bg-accent hover:bg-accent/90 text-white px-6 py-2.5 rounded-input text-sm font-medium transition-all shadow-glow-accent disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {importing && <Loader2 className="w-4 h-4 animate-spin" />}
+                Add {pagePreview.rows.length} {pagePreview.rows.length === 1 ? 'page' : 'pages'} to the queue
+              </button>
+            </div>
+          </motion.div>
+        ) : !parsed ? (
           <motion.div key="upload" variants={itemVariants} initial="hidden" animate="show" exit={{ opacity: 0 }} className="space-y-8">
+            {templates && templates.some((t) => t.enabled) && (
+              <div className="glass-card p-5 flex flex-col md:flex-row md:items-center gap-3">
+                <label htmlFor="imp-template" className="text-sm font-medium text-heading flex items-center gap-2 shrink-0">
+                  <LayoutTemplate className="w-4 h-4 text-accent" /> Template
+                </label>
+                <select id="imp-template" value={templateId} onChange={(e) => setTemplateId(e.target.value)} className={`${selectCls} md:max-w-sm`}>
+                  <option value="">Standard articles (no template)</option>
+                  {templates
+                    .filter((t) => t.enabled)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} · {t.kind === 'faq' ? 'FAQ' : t.kind === 'blog' ? 'Blog' : 'Page'}
+                      </option>
+                    ))}
+                </select>
+                <p className="text-xs text-muted">
+                  {template ? 'Rows arrive set to this template; Generate uses its prompt, link steps and checks.' : 'Each row becomes a standard article (research, then draft).'}
+                </p>
+              </div>
+            )}
             {/* Step 1: Upload */}
             <div
               role="button"
@@ -249,6 +416,7 @@ export function ImportView({
                       const hr = Number(e.target.value)
                       setHeaderRow(hr)
                       setMapping(autoMap(parsed.grid[hr] ?? []))
+                      setExtraMap(autoMapExtras(parsed.grid[hr] ?? []))
                     }}
                     className="px-2 py-1 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-input text-heading font-mono"
                   >
@@ -262,7 +430,7 @@ export function ImportView({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {IMPORT_FIELDS.map((f: ImportField) => (
+                {IMPORT_FIELDS.filter(usesField).map((f: ImportField) => (
                   <div key={f}>
                     <label className="flex items-center justify-between text-sm font-medium text-heading mb-1.5">
                       <span>
@@ -274,6 +442,29 @@ export function ImportView({
                     <select
                       value={mapping[f] ?? ''}
                       onChange={(e) => setMapping((m) => ({ ...m, [f]: e.target.value === '' ? null : Number(e.target.value) }))}
+                      className={selectCls}
+                    >
+                      <option value="">— Not in this sheet —</option>
+                      {headers.map((h, i) => (
+                        <option key={i} value={i}>
+                          {h || `Column ${i + 1}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+                {extraFields.map((f) => (
+                  <div key={f.key}>
+                    <label className="flex items-center justify-between text-sm font-medium text-heading mb-1.5">
+                      <span>
+                        {f.label}
+                        {f.required && <span className="text-accent"> *</span>}
+                      </span>
+                      {extraMap[f.key] !== null && extraMap[f.key] !== undefined && <Check className="w-4 h-4 text-green-500" />}
+                    </label>
+                    <select
+                      value={extraMap[f.key] ?? ''}
+                      onChange={(e) => setExtraMap((m) => ({ ...m, [f.key]: e.target.value === '' ? null : Number(e.target.value) }))}
                       className={selectCls}
                     >
                       <option value="">— Not in this sheet —</option>
@@ -314,6 +505,27 @@ export function ImportView({
                       {dupCount} possible {dupCount === 1 ? 'duplicate' : 'duplicates'}
                     </span>
                   )}
+                  <span className="flex-1" />
+                  <label className="flex items-center gap-2 text-sm text-muted">
+                    Only rows
+                    <input
+                      inputMode="numeric"
+                      value={fromRow}
+                      onChange={(e) => setFromRow(e.target.value.replace(/[^\d]/g, ''))}
+                      placeholder="from"
+                      aria-label="First sheet row to import"
+                      className="w-20 px-2 py-1 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-input text-heading font-mono text-sm"
+                    />
+                    –
+                    <input
+                      inputMode="numeric"
+                      value={toRow}
+                      onChange={(e) => setToRow(e.target.value.replace(/[^\d]/g, ''))}
+                      placeholder="to"
+                      aria-label="Last sheet row to import"
+                      className="w-20 px-2 py-1 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-input text-heading font-mono text-sm"
+                    />
+                  </label>
                 </div>
 
                 <div className="glass-card p-0 overflow-hidden">
@@ -330,7 +542,7 @@ export function ImportView({
                       </thead>
                       <tbody className="divide-y divide-border">
                         {rows.map((r) => {
-                          const hasError = r.errors.length > 0
+                          const hasError = r.errors.length > 0 || extraErrors(r).length > 0
                           const on = included(r)
                           return (
                             <tr
@@ -342,7 +554,7 @@ export function ImportView({
                                   type="checkbox"
                                   aria-label={`Include row ${r.sheetRow}`}
                                   checked={on}
-                                  disabled={hasError}
+                                  disabled={hasError || !inRange(r)}
                                   onChange={(e) => setIncludeOverride((o) => ({ ...o, [r.sheetRow]: e.target.checked }))}
                                   className="w-4 h-4 rounded border-border accent-[#E8450A] disabled:opacity-40"
                                 />
@@ -350,9 +562,16 @@ export function ImportView({
                               <td className="px-4 py-3 text-sm text-muted font-mono tabular-nums w-14">{r.sheetRow}</td>
                               <td className="px-4 py-3 text-sm min-w-[220px]">
                                 <div className={r.title ? 'text-heading font-medium' : 'text-muted italic'}>{r.title || 'No title'}</div>
+                                {extraFields.map((f) =>
+                                  cellAt(r, extraMap[f.key]) ? (
+                                    <div key={f.key} className="text-xs text-muted mt-0.5 truncate max-w-[360px]">
+                                      {f.label}: {cellAt(r, extraMap[f.key])}
+                                    </div>
+                                  ) : null,
+                                )}
                                 {hasError && (
                                   <div className="text-xs text-red-400 mt-0.5 flex items-center gap-1">
-                                    <AlertCircle className="w-3 h-3" /> {r.errors.join(' · ')}
+                                    <AlertCircle className="w-3 h-3" /> {[...r.errors, ...extraErrors(r)].join(' · ')}
                                   </div>
                                 )}
                                 {!hasError && r.duplicate && (

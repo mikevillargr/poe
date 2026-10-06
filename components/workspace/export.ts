@@ -25,6 +25,11 @@ export function buildExportDocument(title: string, bodyHtml: string): string {
     h3 { margin: 1.2em 0 0.5em 0; line-height: 1.4; }
     ul, ol { margin: 0.5em 0 1em 0; padding-left: 2em; }
     li { margin: 0.3em 0; line-height: 1.6; }
+    /* Tables, styled like the n8n-era Google Docs formatter: bold grey header, light borders, padded cells. */
+    table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    th, td { border: 1px solid #cccccc; padding: 8px 12px; vertical-align: top; }
+    th { background: #f0f0f0; font-weight: bold; text-align: center; }
+    th p, td p { margin: 0; }
   </style>
 </head>
 <body>

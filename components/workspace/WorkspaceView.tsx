@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BookOpen, PenLine, X } from 'lucide-react'
+import { AlertTriangle, BookOpen, PenLine, X } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
@@ -18,6 +18,7 @@ import { BriefPanel, type BriefPatch } from './BriefPanel'
 import { ResearchTab } from './ResearchTab'
 import { DraftTab } from './DraftTab'
 import { OptimizePanel } from './OptimizePanel'
+import { TemplateRunPanel, type RunStep } from './TemplateRunPanel'
 import { useEditorApi } from './useEditorApi'
 import { useDebouncedPatch } from './useDebouncedPatch'
 import { exportDocx, exportToGoogleDrive } from './export'
@@ -75,7 +76,7 @@ export function WorkspaceView({
   const base = `/api/clients/${client.id}/articles/${initialArticle.id}`
 
   const [article, setArticle] = useState(initialArticle)
-  const [tab, setTab] = useState<Tab>(hasDraft(initialArticle) ? 'draft' : 'research')
+  const [tab, setTab] = useState<Tab>(hasDraft(initialArticle) || initialArticle.templateId ? 'draft' : 'research')
   const [editorGen, setEditorGen] = useState(0)
   const [liveHtml, setLiveHtml] = useState(initialArticle.draftHtml ?? '')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
@@ -89,6 +90,7 @@ export function WorkspaceView({
   const wide = useMediaQuery(WIDE_QUERY, true)
   const [briefOpen, setBriefOpen] = useState(true)
   const [optimizeOpen, setOptimizeOpen] = useState(true)
+  const [rightTab, setRightTab] = useState<'template' | 'optimize'>(initialArticle.templateId ? 'template' : 'optimize')
   useEffect(() => {
     setBriefOpen(wide)
     setOptimizeOpen(wide)
@@ -176,7 +178,9 @@ export function WorkspaceView({
   const research = useAIStream({ onEvent: (ev) => onResearchEvent.current(ev) })
 
   // ── generation stream ─────────────────────────────────────────────────────────────────────
+  const [runSteps, setRunSteps] = useState<RunStep[]>([])
   const onGenerateEvent = useLatest((ev: AIStreamEvent) => {
+    if (ev.type === 'step') setRunSteps((s) => [...s, { step: ev.step, label: ev.label }])
     if (ev.type === 'saved') {
       handledLocally.current.generation = Date.now()
       refetch()
@@ -185,7 +189,12 @@ export function WorkspaceView({
           setEditorGen((g) => g + 1)
           const target = a.targetWordCount
           const words = a.wordCount ?? 0
-          if (target && (words < target * 0.9 || words > target * 1.1)) {
+          const failing = a.generationMeta?.needsReview ? a.generationMeta.checks.filter((c) => !c.ok).length : 0
+          if (failing) {
+            toast.warning('Draft generated, needs review', `${failing} template ${failing === 1 ? 'check' : 'checks'} still failing. See Template run.`)
+            setRightTab('template')
+            setOptimizeOpen(true)
+          } else if (target && (words < target * 0.9 || words > target * 1.1)) {
             toast.warning('Draft generated, off target length', `${nf.format(words)} words vs. a target of ${nf.format(target)}.`)
           } else {
             toast.success('Draft generated', `${nf.format(words)} words · saved as v${ev.versionNo ?? '?'}`)
@@ -355,6 +364,11 @@ export function WorkspaceView({
     }
     setActiveSuggestionId(null)
     setTab('draft')
+    setRunSteps([])
+    if (article.templateId) {
+      setRightTab('template')
+      setOptimizeOpen(true)
+    }
     void generation.start(`${base}/generate`, { useResearch })
   }
 
@@ -483,9 +497,10 @@ export function WorkspaceView({
       isSuperAdmin={isSuperAdmin}
       disabled={streaming}
       onChange={patchFields}
+      onTemplateSaved={(next) => setArticle((a) => ({ ...a, ...next }))}
     />
   )
-  const optimize = (
+  const optimizePanel = (
     <OptimizePanel
       clientId={client.id}
       articleId={article.id}
@@ -497,6 +512,43 @@ export function WorkspaceView({
       activeSuggestionId={activeSuggestionId}
       onActiveSuggestionChange={setActiveSuggestionId}
     />
+  )
+  // DR-012: templated articles get a "Template run" tab next to Optimize.
+  const optimize = article.templateId ? (
+    <div className="h-full flex flex-col">
+      <div role="tablist" className="shrink-0 border-b border-border px-3 flex items-center gap-1">
+        {(['template', 'optimize'] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={rightTab === t}
+            onClick={() => setRightTab(t)}
+            className={`relative px-3 py-2.5 text-xs font-medium transition-colors ${rightTab === t ? 'text-heading' : 'text-muted hover:text-heading'}`}
+          >
+            {t === 'template' ? 'Template run' : 'Optimize'}
+            {t === 'template' && article.generationMeta?.needsReview && <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-orange-400 align-middle" />}
+            {rightTab === t && <motion.div layoutId="ws-right-tab" className="absolute left-2 right-2 -bottom-px h-0.5 bg-accent rounded-full" />}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+        {rightTab === 'template' ? (
+          <TemplateRunPanel
+            clientId={client.id}
+            articleId={article.id}
+            meta={article.generationMeta}
+            running={generationActive && !revising}
+            steps={runSteps}
+            onMetaChange={(generationMeta) => setArticle((a) => ({ ...a, generationMeta }))}
+          />
+        ) : (
+          optimizePanel
+        )}
+      </div>
+    </div>
+  ) : (
+    optimizePanel
   )
 
   const tabBtn = (t: Tab, label: string, Icon: typeof BookOpen, badge?: string) => (
@@ -600,42 +652,60 @@ export function WorkspaceView({
               />
             </div>
           ) : (
-            <div className="flex-1 min-h-0">
-              <DraftTab
-                article={article}
-                models={models}
-                editorKey={`${article.id}:${editorGen}`}
-                editorRef={editorRef}
-                streaming={generationActive}
-                remote={generationRemote}
-                streamText={revising ? revision.text : generation.text}
-                activeSuggestionId={activeSuggestionId}
-                onClearSuggestion={() => {
-                  setActiveSuggestionId(null)
-                  editorApi.highlight([])
-                }}
-                onSave={saveDraft}
-                onContentChange={(html) => {
-                  draftDirty.current = true
-                  setLiveHtml(html)
-                }}
-                onEditorReady={(e) => setLiveHtml(e.getHTML())}
-                onSaveVersion={() => void saveVersion().catch(() => {})}
-                onOpenVersions={() => {
-                  setVersionsOpen(true)
-                  void loadVersions()
-                }}
-                onRegenerate={() => requestGenerate(true)}
-                onGenerate={() => requestGenerate(true)}
-                onStop={() => void stopRun('generation')}
-                revising={revising}
-                reviseOpen={reviseOpen}
-                onReviseOpenChange={setReviseOpen}
-                feedback={reviseFeedback}
-                onFeedback={setReviseFeedback}
-                onRevise={() => void runRevise()}
-                aiEditUrl={`${base}/ai-edit`}
-              />
+            <div className="flex-1 min-h-0 flex flex-col">
+              {article.generationMeta?.needsReview && !generationActive && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRightTab('template')
+                    setOptimizeOpen(true)
+                  }}
+                  className="shrink-0 w-full px-5 py-2 bg-warning/10 border-b border-warning/30 text-left text-sm text-orange-400 flex items-center gap-2 hover:bg-warning/15 transition-colors"
+                >
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  {(() => {
+                    const n = article.generationMeta.checks.filter((c) => !c.ok).length
+                    return `Needs review: ${n} template ${n === 1 ? 'check still fails' : 'checks still fail'} after the rewrite. See Template run.`
+                  })()}
+                </button>
+              )}
+              <div className="flex-1 min-h-0">
+                <DraftTab
+                  article={article}
+                  models={models}
+                  editorKey={`${article.id}:${editorGen}`}
+                  editorRef={editorRef}
+                  streaming={generationActive}
+                  remote={generationRemote}
+                  streamText={revising ? revision.text : generation.text}
+                  activeSuggestionId={activeSuggestionId}
+                  onClearSuggestion={() => {
+                    setActiveSuggestionId(null)
+                    editorApi.highlight([])
+                  }}
+                  onSave={saveDraft}
+                  onContentChange={(html) => {
+                    draftDirty.current = true
+                    setLiveHtml(html)
+                  }}
+                  onEditorReady={(e) => setLiveHtml(e.getHTML())}
+                  onSaveVersion={() => void saveVersion().catch(() => {})}
+                  onOpenVersions={() => {
+                    setVersionsOpen(true)
+                    void loadVersions()
+                  }}
+                  onRegenerate={() => requestGenerate(true)}
+                  onGenerate={() => requestGenerate(true)}
+                  onStop={() => void stopRun('generation')}
+                  revising={revising}
+                  reviseOpen={reviseOpen}
+                  onReviseOpenChange={setReviseOpen}
+                  feedback={reviseFeedback}
+                  onFeedback={setReviseFeedback}
+                  onRevise={() => void runRevise()}
+                  aiEditUrl={`${base}/ai-edit`}
+                />
+              </div>
             </div>
           )}
         </main>

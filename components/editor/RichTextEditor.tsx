@@ -23,6 +23,15 @@ import {
   Trash2,
   Link2,
   Sparkles,
+  Table as TableIcon,
+  BetweenHorizontalStart,
+  BetweenHorizontalEnd,
+  BetweenVerticalStart,
+  BetweenVerticalEnd,
+  Rows3,
+  Columns3,
+  PanelTop,
+  Grid2x2X,
 } from 'lucide-react'
 import { countWords } from '@/lib/articles/text'
 import {
@@ -377,6 +386,60 @@ export function RichTextEditor({
         >
           <Quote className="w-4 h-4" />
         </ToolbarButton>
+
+        <ToolbarButton
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          disabled={!editor.can().chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          active={editor.isActive('table')}
+          title="Insert table"
+        >
+          <TableIcon className="w-4 h-4" />
+        </ToolbarButton>
+
+        {editor.isActive('table') && (
+          <>
+            <Divider />
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted px-1">Table</span>
+            <ToolbarButton onClick={() => editor.chain().focus().addRowBefore().run()} title="Add row above">
+              <BetweenHorizontalStart className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().addRowAfter().run()} title="Add row below">
+              <BetweenHorizontalEnd className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add column left">
+              <BetweenVerticalStart className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().addColumnAfter().run()} title="Add column right">
+              <BetweenVerticalEnd className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().deleteRow().run()}
+              disabled={!editor.can().deleteRow()}
+              title="Delete row"
+            >
+              <Rows3 className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().deleteColumn().run()}
+              disabled={!editor.can().deleteColumn()}
+              title="Delete column"
+            >
+              <Columns3 className="w-4 h-4" />
+            </ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().toggleHeaderRow().run()} title="Toggle header row">
+              <PanelTop className="w-4 h-4" />
+            </ToolbarButton>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().deleteTable().run()}
+              className="p-2 rounded transition-colors text-muted hover:text-danger hover:bg-danger/10"
+              title="Delete table"
+              aria-label="Delete table"
+            >
+              <Grid2x2X className="w-4 h-4" />
+            </button>
+          </>
+        )}
 
         <Divider />
 

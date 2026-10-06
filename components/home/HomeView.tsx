@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Plus, Upload, Search, ExternalLink, FileText } from 'lucide-react'
+import { Plus, Upload, Search, ExternalLink, FileText, Sparkles, AlertTriangle, Loader2 } from 'lucide-react'
 import { arrayMove } from '@dnd-kit/sortable'
 import {
   ARTICLE_STATUSES,
@@ -18,9 +18,10 @@ import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import { StatusCards } from './StatusCards'
-import { QueueTable, type Person } from './QueueTable'
+import { QueueTable, type BatchState, type Person } from './QueueTable'
 import { ActivityRail } from './ActivityRail'
 import { NewArticleModal } from './NewArticleModal'
+import { useClientTemplates } from '@/components/workspace/TemplatePicker'
 
 const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } }
 const itemVariants = {
@@ -35,7 +36,16 @@ export interface HomeClient {
   website: string | null
 }
 
-// DR-003 option A: status cards + ordered content queue + activity rail.
+interface BatchStatus {
+  startedAt: string
+  startedBy: string
+  finished: boolean
+  counts: Record<BatchState, number>
+  items: { articleId: string; title: string; state: BatchState; message?: string }[]
+}
+
+// DR-003 option A: status cards + ordered content queue + activity rail. DR-012: template chips and
+// filter, "N need review", and "Generate queued" (templated articles, two at a time) with live progress.
 export function HomeView({
   client,
   initialArticles,
@@ -54,8 +64,68 @@ export function HomeView({
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [deleting, setDeleting] = useState<ArticleSummary | null>(null)
+  const [templateFilter, setTemplateFilter] = useState<string>('')
+  const [reviewOnly, setReviewOnly] = useState(false)
+  const [confirmBatch, setConfirmBatch] = useState(false)
+  const [batch, setBatch] = useState<BatchStatus | null>(null)
+  const templates = useClientTemplates(client.id)
+  const templateNames = useMemo(() => new Map((templates ?? []).map((t) => [t.id, t.name])), [templates])
 
   useEffect(() => setArticles(initialArticles), [initialArticles])
+
+  // ── "Generate queued" (DR-012) ──────────────────────────────────────────────────────────────
+  const generatable = useMemo(
+    () => articles.filter((a) => a.templateId && a.status === 'queued' && a.generationStatus !== 'running'),
+    [articles],
+  )
+  const needsReview = useMemo(() => articles.filter((a) => a.needsReview).length, [articles])
+  const batchRunning = !!batch && !batch.finished
+  const batchMap = useMemo(
+    () => (batch && !batch.finished ? new Map(batch.items.map((i) => [i.articleId, { state: i.state, message: i.message }])) : undefined),
+    [batch],
+  )
+
+  const pollBatch = useCallback(async () => {
+    try {
+      const d = await apiFetch<{ batch: BatchStatus | null }>(`/api/clients/${client.id}/articles/generate-batch`, { silent: true })
+      setBatch((prev) => {
+        if (prev && !prev.finished && d.batch?.finished) {
+          const c = d.batch.counts
+          const done = c.done + c['needs-review']
+          if (c.failed) toast.error(`Batch finished: ${c.failed} failed`, `${done} of ${d.batch.items.length} generated${c['needs-review'] ? `, ${c['needs-review']} need review` : ''}.`)
+          else if (c['needs-review']) toast.warning('Batch finished', `${done} generated, ${c['needs-review']} need review.`)
+          else toast.success('Batch complete', `${done} of ${d.batch.items.length} generated.`)
+          router.refresh()
+        }
+        return d.batch
+      })
+    } catch {
+      // silent: the strip just stops updating
+    }
+  }, [client.id, router, toast])
+
+  useEffect(() => {
+    void pollBatch()
+  }, [pollBatch])
+  useEffect(() => {
+    if (!batchRunning) return
+    const t = setInterval(() => void pollBatch(), 2000)
+    return () => clearInterval(t)
+  }, [batchRunning, pollBatch])
+
+  async function startBatch() {
+    setConfirmBatch(false)
+    try {
+      await apiFetch(`/api/clients/${client.id}/articles/generate-batch`, {
+        method: 'POST',
+        body: { articleIds: generatable.map((a) => a.id) },
+        errorTitle: 'Couldn’t start generating',
+      })
+      await pollBatch()
+    } catch {
+      // toasted
+    }
+  }
 
   const peopleMap = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
   const counts = useMemo(() => {
@@ -69,10 +139,12 @@ export function HomeView({
     return articles.filter(
       (a) =>
         (!status || a.status === status) &&
+        (!templateFilter || (templateFilter === 'none' ? !a.templateId : a.templateId === templateFilter)) &&
+        (!reviewOnly || a.needsReview) &&
         (!q || a.title.toLowerCase().includes(q) || a.keywords.some((k) => k.toLowerCase().includes(q))),
     )
-  }, [articles, status, query])
-  const filtered = !!status || !!query.trim()
+  }, [articles, status, query, templateFilter, reviewOnly])
+  const filtered = !!status || !!query.trim() || !!templateFilter || reviewOnly
 
   async function reorder(activeId: string, overId: string) {
     const from = articles.findIndex((a) => a.id === activeId)
@@ -120,6 +192,18 @@ export function HomeView({
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {(generatable.length > 0 || batchRunning) && (
+            <button
+              type="button"
+              onClick={() => setConfirmBatch(true)}
+              disabled={batchRunning}
+              className="px-4 py-2 rounded-input text-sm font-medium flex items-center gap-2 border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-60"
+              title="Generate every queued article that has a template, two at a time"
+            >
+              {batchRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {batchRunning ? 'Generating…' : `Generate queued (${generatable.length})`}
+            </button>
+          )}
           <Link
             href={`/c/${client.slug}/import`}
             className="px-4 py-2 rounded-input text-sm font-medium flex items-center gap-2 border border-border text-body hover:text-heading hover:bg-surface-hover transition-colors"
@@ -145,11 +229,42 @@ export function HomeView({
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-8 items-start">
         <motion.section variants={itemVariants} className="min-w-0">
           <div className="flex items-center justify-between gap-4 mb-4">
-            <h2 className="text-xl font-display text-heading">
-              Content queue
-              {status && <span className="text-muted text-base font-sans"> · {ARTICLE_STATUS_LABELS[status]}</span>}
-            </h2>
+            <div className="flex items-center gap-3 min-w-0">
+              <h2 className="text-xl font-display text-heading">
+                Content queue
+                {status && <span className="text-muted text-base font-sans"> · {ARTICLE_STATUS_LABELS[status]}</span>}
+              </h2>
+              {needsReview > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setReviewOnly((v) => !v)}
+                  aria-pressed={reviewOnly}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors ${
+                    reviewOnly ? 'border-warning bg-warning/20 text-orange-400' : 'border-warning/40 bg-warning/10 text-orange-400 hover:bg-warning/20'
+                  }`}
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  <span className="font-mono tabular-nums">{needsReview}</span> {needsReview === 1 ? 'needs' : 'need'} review
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-3">
+              {templates && templates.length > 0 && (
+                <select
+                  value={templateFilter}
+                  onChange={(e) => setTemplateFilter(e.target.value)}
+                  aria-label="Filter by template"
+                  className="px-3 py-2 bg-[var(--color-input-bg)] border border-[var(--color-input-border)] rounded-input text-sm text-heading focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
+                >
+                  <option value="">All templates</option>
+                  <option value="none">No template</option>
+                  {templates.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <span className="text-xs text-muted font-mono tabular-nums whitespace-nowrap">
                 {visible.length} of {articles.length}
               </span>
@@ -183,10 +298,34 @@ export function HomeView({
             <div className="glass-card p-8 text-center text-sm text-muted">No articles match these filters.</div>
           ) : (
             <div className="glass-card p-0 overflow-hidden">
+              {batch && batchRunning && (
+                <div className="px-4 py-3 border-b border-border bg-accent/5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-heading flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin text-accent" />
+                      Generating {batch.counts.running + batch.counts.done + batch.counts['needs-review'] + batch.counts.failed} of {batch.items.length}
+                    </span>
+                    <span className="text-xs text-muted font-mono tabular-nums">
+                      {batch.counts.done} done · {batch.counts['needs-review']} need review · {batch.counts.failed} failed
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1 rounded-full bg-[var(--color-gauge-bg)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all"
+                      style={{
+                        width: `${((batch.counts.done + batch.counts['needs-review'] + batch.counts.failed) / Math.max(batch.items.length, 1)) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted mt-1.5">Two at a time. You can leave this page; drafts are saved as they finish.</p>
+                </div>
+              )}
               <QueueTable
                 articles={visible}
                 people={peopleMap}
                 draggable={!filtered}
+                templateNames={templateNames}
+                batch={batchMap}
                 onOpen={(a) => router.push(`/c/${client.slug}/articles/${a.id}`)}
                 onDelete={setDeleting}
                 onReorder={reorder}
@@ -214,6 +353,16 @@ export function HomeView({
           toast.success('Article added to the queue', a.title)
           router.refresh()
         }}
+      />
+
+      <ConfirmModal
+        isOpen={confirmBatch}
+        title={`Generate ${generatable.length} ${generatable.length === 1 ? 'article' : 'articles'}?`}
+        message={`Each queued article with a template gets a draft from its template (link selection, writing, checks, one rewrite if needed), two at a time. This uses the configured AI models for every article. You can leave this page while it runs.`}
+        confirmLabel={`Generate ${generatable.length}`}
+        confirmVariant="warning"
+        onConfirm={startBatch}
+        onCancel={() => setConfirmBatch(false)}
       />
 
       <ConfirmModal

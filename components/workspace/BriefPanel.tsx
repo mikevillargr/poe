@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Star, X, Plus, Cpu, Search as SearchIcon, PenLine, Settings2 } from 'lucide-react'
 import { splitKeywords } from '@/lib/articles/schemas'
 import type { ModelsInUse, WorkspaceArticle, WorkspacePerson } from './types'
+import { TemplatePicker } from './TemplatePicker'
 
 // DR-005 left panel: brief, SEO keywords (primary starred), target words, owner, models. Every
 // field autosaves through the workspace's debounced PATCH.
@@ -55,6 +56,7 @@ export function BriefPanel({
   isSuperAdmin,
   disabled,
   onChange,
+  onTemplateSaved,
 }: {
   article: WorkspaceArticle
   people: WorkspacePerson[]
@@ -63,6 +65,7 @@ export function BriefPanel({
   /** While research/generation is streaming, the brief is read-only. */
   disabled?: boolean
   onChange: (patch: BriefPatch) => void
+  onTemplateSaved: (next: Pick<WorkspaceArticle, 'templateId' | 'templateInputs'>) => void
 }) {
   const [brief, setBrief] = useState(article.brief ?? '')
   const [target, setTarget] = useState(article.targetWordCount ? String(article.targetWordCount) : '')
@@ -102,6 +105,15 @@ export function BriefPanel({
 
   return (
     <div className="p-5 space-y-6">
+      <TemplatePicker
+        clientId={article.tenantId}
+        articleId={article.id}
+        templateId={article.templateId}
+        inputs={article.templateInputs}
+        disabled={disabled}
+        onSaved={onTemplateSaved}
+      />
+
       <div>
         <label htmlFor="ws-brief" className={labelCls}>
           Brief

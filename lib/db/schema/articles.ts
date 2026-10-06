@@ -58,6 +58,9 @@ export interface GenerationMeta {
   ctaStyle?: string
   models?: { utility?: string; generation?: string }
   generatedAt: string
+  /** Set when someone clears "needs review" after reading the failing checks. */
+  reviewedBy?: string
+  reviewedAt?: string
 }
 
 export const importBatches = pgTable('import_batches', {
