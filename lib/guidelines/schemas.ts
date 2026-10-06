@@ -12,10 +12,12 @@ export const guidelineInputSchema = z.object({
   rule: z.string().trim().min(1).max(2000),
   weight: z.number().int().min(1).max(10).default(5),
   active: z.boolean().default(true),
+  // Rules confirmed from "Import from document" are `ingested`; template copies are only made server-side.
+  source: z.enum(['manual', 'ingested']).default('manual'),
 })
 export type GuidelineInput = z.output<typeof guidelineInputSchema>
 
-export const guidelineUpdateSchema = guidelineInputSchema.partial()
+export const guidelineUpdateSchema = guidelineInputSchema.omit({ source: true }).partial()
 export type GuidelineUpdate = z.output<typeof guidelineUpdateSchema>
 
 export const reorderSchema = z.object({

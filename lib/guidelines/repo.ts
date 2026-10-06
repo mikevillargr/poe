@@ -48,7 +48,7 @@ export async function createGuideline(tenantId: string, input: GuidelineInput, u
       rule: input.rule,
       weight: input.weight,
       active: input.active,
-      source: 'manual',
+      source: input.source,
       sortOrder,
       createdBy: userId,
       updatedBy: userId,
