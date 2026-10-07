@@ -1,19 +1,24 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { format, formatDistanceToNowStrict } from 'date-fns'
-import { BookOpen, ChevronDown, Feather, History, ListChecks, X } from 'lucide-react'
+import { BookOpen, ChevronDown, Feather, History, ListChecks, MessageSquare, MessageSquarePlus, X } from 'lucide-react'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { categoryShortLabel } from '@/lib/guidelines/categories'
 import { StatusPill } from '@/components/home/StatusPill'
 import { EventAvatar } from '@/components/home/ActivityRail'
 import type { ArticleStatus } from '@/lib/articles/schemas'
-import { describeHistoryEvent, groupByDay, historyMeta } from '@/lib/articles/history-format'
+import { describeHistoryEvent, groupByDay, historyActor, historyMeta } from '@/lib/articles/history-format'
 import type { SharedArticle } from '@/lib/shares/public'
 import { BrandMark } from './BrandMark'
 import { StoryTimeline } from './StoryTimeline'
 import { ArticleReader } from './ArticleReader'
+import { CommentsRail } from './CommentsRail'
+import { ApprovalBar } from './ApprovalBar'
+import { guestFetch, useGuest } from './useGuest'
+import { anchorFromSelection, buildTextIndex, indexAtPoint, paintHighlights, rangeForAnchor } from '@/lib/shares/text-index'
+import type { CommentAnchor, Decision, ThreadDTO } from '@/lib/comments/types'
 
 // DR-021 (amendment A, reading first): brand bar, then the title, a one-line byline and the article straight away.
 // "Behind this article" (score, how it was made, rules, full history) sits in a sticky side rail on wide screens
@@ -40,6 +45,148 @@ export function SharedArticleView({ token, data }: { token: string; data: Shared
       // storage unavailable (private mode): no banner
     }
   }, [token, article.updatedAt])
+
+  // ── Comments + sign-off (DR-021 part 2) ─────────────────────────────────────────────────────────────
+  const commentsOn = data.share.showComments
+  const { guest, update: updateGuest } = useGuest()
+  const [threads, setThreads] = useState<ThreadDTO[]>([])
+  const [threadsLoading, setThreadsLoading] = useState(commentsOn)
+  const [decision, setDecision] = useState<Decision | null>(null)
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [pending, setPending] = useState<CommentAnchor | null>(null)
+  const [railTab, setRailTab] = useState<'about' | 'comments'>('about')
+  const [mobileComments, setMobileComments] = useState(false)
+  const [selection, setSelection] = useState<{ anchor: CommentAnchor; x: number; y: number } | null>(null)
+  const [readerReady, setReaderReady] = useState(false)
+  const [orphaned, setOrphaned] = useState<Set<string>>(new Set())
+  const readerRef = useRef<HTMLDivElement>(null)
+  const rangesRef = useRef<Map<string, Range>>(new Map())
+  const base = `/api/public/shares/${token}`
+
+  const loadComments = useCallback(async () => {
+    if (!guest.key) return
+    try {
+      const r = await guestFetch<{ threads: ThreadDTO[]; decision: Decision | null }>(`${base}/comments`, guest.key)
+      setThreads(r.threads)
+      setDecision(r.decision)
+    } catch {
+      // the page still works without comments
+    } finally {
+      setThreadsLoading(false)
+    }
+  }, [base, guest.key])
+
+  useEffect(() => {
+    void loadComments()
+  }, [loadComments])
+
+  // Selecting text in the article offers "Comment" next to the selection.
+  useEffect(() => {
+    if (!commentsOn) return
+    let t: ReturnType<typeof setTimeout>
+    const check = () => {
+      clearTimeout(t)
+      t = setTimeout(() => {
+        const root = readerRef.current
+        const anchor = root ? anchorFromSelection(root) : null
+        const sel = window.getSelection()
+        if (!anchor || !sel?.rangeCount) return setSelection(null)
+        const rect = sel.getRangeAt(0).getBoundingClientRect()
+        setSelection({ anchor, x: rect.left + rect.width / 2, y: rect.top })
+      }, 120)
+    }
+    document.addEventListener('selectionchange', check)
+    const clear = () => setSelection(null)
+    window.addEventListener('scroll', clear, { passive: true })
+    return () => {
+      clearTimeout(t)
+      document.removeEventListener('selectionchange', check)
+      window.removeEventListener('scroll', clear)
+    }
+  }, [commentsOn])
+
+  // Highlight every open passage comment (and the active one, open or not).
+  useEffect(() => {
+    const root = readerRef.current
+    if (!readerReady || !root || !commentsOn) return
+    const idx = buildTextIndex(root)
+    const map = new Map<string, Range>()
+    const lost = new Set<string>()
+    for (const t of threads) {
+      if (!t.anchor) continue
+      const r = rangeForAnchor(idx, t.anchor)
+      if (r) map.set(t.id, r)
+      else lost.add(t.id)
+    }
+    rangesRef.current = map
+    setOrphaned(lost)
+    paintHighlights(
+      threads.filter((t) => t.status === 'open' && map.has(t.id)).map((t) => map.get(t.id)!),
+      activeId ? (map.get(activeId) ?? null) : null,
+    )
+  }, [threads, activeId, readerReady, commentsOn])
+
+  function openComments() {
+    setRailTab('comments')
+    if (window.matchMedia('(max-width: 1023px)').matches) setMobileComments(true)
+  }
+
+  function commentOnSelection() {
+    if (!selection) return
+    setPending(selection.anchor)
+    setSelection(null)
+    window.getSelection()?.removeAllRanges()
+    openComments()
+  }
+
+  function onReaderClick(e: React.MouseEvent) {
+    const root = readerRef.current
+    if (!root || !commentsOn || !window.getSelection()?.isCollapsed) return
+    const idx = buildTextIndex(root)
+    const at = indexAtPoint(idx, e.clientX, e.clientY)
+    if (at < 0) return
+    const node = idx.pos[at]
+    if (!node) return
+    for (const [id, r] of rangesRef.current) {
+      if (r.isPointInRange(node.node, node.offset)) {
+        setActiveId(id)
+        openComments()
+        return
+      }
+    }
+  }
+
+  async function post(body: string, opts: { anchor?: CommentAnchor | null; parentId?: string | null }) {
+    await guestFetch(`${base}/comments`, guest.key, {
+      method: 'POST',
+      body: { name: guest.name, email: guest.email, body, anchor: opts.anchor ?? null, parentId: opts.parentId ?? null },
+    })
+    await loadComments()
+  }
+
+  const rail = commentsOn ? (
+    <CommentsRail
+      threads={threads}
+      loading={threadsLoading}
+      orphaned={orphaned}
+      activeId={activeId}
+      onActivate={setActiveId}
+      pending={pending}
+      onClearPending={() => setPending(null)}
+      guest={guest}
+      onGuest={updateGuest}
+      onPost={post}
+      onEdit={async (id, body) => {
+        await guestFetch(`${base}/comments/${id}`, guest.key, { method: 'PATCH', body: { body } })
+        await loadComments()
+      }}
+      onDelete={async (id) => {
+        await guestFetch(`${base}/comments/${id}`, guest.key, { method: 'DELETE' })
+        await loadComments()
+      }}
+    />
+  ) : null
+  const openCount = threads.filter((t) => t.status === 'open').length
 
   const keywords = [article.primaryKeyword, ...article.keywords.filter((k) => k !== article.primaryKeyword)].filter(Boolean) as string[]
 
@@ -133,9 +280,9 @@ export function SharedArticleView({ token, data }: { token: string; data: Shared
               </AnimatePresence>
             </div>
 
-            <div className="mt-8 pt-8 border-t border-border">
+            <div className="mt-8 pt-8 border-t border-border" onClick={onReaderClick}>
               {article.html ? (
-                <ArticleReader html={article.html} />
+                <ArticleReader ref={readerRef} html={article.html} onReady={() => setReaderReady(true)} />
               ) : (
                 <p className="text-center text-muted py-16">The draft hasn’t been written yet. This page updates as soon as it is.</p>
               )}
@@ -144,8 +291,31 @@ export function SharedArticleView({ token, data }: { token: string; data: Shared
         </main>
 
         <aside className="hidden lg:block" aria-label="Behind this article">
-          <div className="sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto custom-scrollbar rounded-xl">
-            <BehindRail data={data} onOpen={setDrawer} />
+          <div className="sticky top-20 max-h-[calc(100vh-7rem)] overflow-y-auto custom-scrollbar rounded-xl pb-16">
+            {commentsOn && (
+              <div role="tablist" aria-label="Side panel" className="mb-3 grid grid-cols-2 gap-1 p-1 rounded-input bg-surface border border-border text-sm">
+                {(['about', 'comments'] as const).map((t) => (
+                  <button
+                    key={t}
+                    role="tab"
+                    type="button"
+                    aria-selected={railTab === t}
+                    onClick={() => setRailTab(t)}
+                    className={`py-1.5 rounded-md transition-colors inline-flex items-center justify-center gap-1.5 ${railTab === t ? 'bg-accent/10 text-accent font-medium' : 'text-muted hover:text-heading'}`}
+                  >
+                    {t === 'about' ? (
+                      'About this article'
+                    ) : (
+                      <>
+                        <MessageSquare className="w-3.5 h-3.5" /> Comments
+                        {openCount > 0 && <span className="font-mono tabular-nums text-xs">{openCount}</span>}
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {railTab === 'comments' && rail ? rail : <BehindRail data={data} onOpen={setDrawer} />}
           </div>
         </aside>
       </div>
@@ -170,7 +340,36 @@ export function SharedArticleView({ token, data }: { token: string; data: Shared
         </div>
       </section>
 
-      <footer className="border-t border-border">
+      {/* Floating "Comment" next to a selection */}
+      <AnimatePresence>
+        {selection && (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={commentOnSelection}
+            style={{ left: selection.x, top: Math.max(64, selection.y - 44) }}
+            className="fixed z-40 -translate-x-1/2 inline-flex items-center gap-1.5 bg-heading text-surface rounded-full px-3 py-1.5 text-sm font-medium shadow-lg"
+          >
+            <MessageSquarePlus className="w-4 h-4" /> Comment
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <ApprovalBar
+        token={token}
+        decision={decision}
+        onDecision={setDecision}
+        guest={guest}
+        onGuest={updateGuest}
+        ownerName={article.owner?.name ?? null}
+        commentCount={commentsOn ? openCount : null}
+        onOpenComments={() => setMobileComments(true)}
+      />
+
+      <footer className="border-t border-border pb-20">
         <div className="max-w-6xl mx-auto px-5 py-6 flex flex-wrap items-center gap-4 text-xs text-muted">
           <BrandMark branding={branding} className="h-5" />
           {branding.website && (
@@ -184,6 +383,9 @@ export function SharedArticleView({ token, data }: { token: string; data: Shared
 
       <SideDrawer open={drawer === 'rules'} onClose={() => setDrawer(null)} title="Guidelines this article is checked against" icon={BookOpen}>
         <RulesList rules={data.rules ?? []} clientName={client.name} />
+      </SideDrawer>
+      <SideDrawer open={mobileComments} onClose={() => setMobileComments(false)} title="Comments" icon={MessageSquare}>
+        {rail}
       </SideDrawer>
       <SideDrawer open={drawer === 'history'} onClose={() => setDrawer(null)} title="Full history" icon={History}>
         {data.history && <PublicHistory events={data.history} people={data.people} />}
@@ -296,9 +498,9 @@ function PublicHistory({ events, people }: { events: NonNullable<SharedArticle['
               const meta = historyMeta(e)
               return (
                 <li key={e.id} className="flex items-start gap-3 text-sm">
-                  <EventAvatar name={e.userName} image={e.userImage} />
+                  <EventAvatar name={historyActor(e)} image={e.userImage} />
                   <p className="flex-1 min-w-0">
-                    <span className="text-heading font-medium">{e.userName ?? 'Poe'}</span> {describeHistoryEvent(e, people)}
+                    <span className="text-heading font-medium">{historyActor(e)}</span> {describeHistoryEvent(e, people)}
                     {meta && <span className="block text-xs text-muted">{meta}</span>}
                   </p>
                   <time dateTime={e.at} className="text-xs text-muted font-mono tabular-nums shrink-0">

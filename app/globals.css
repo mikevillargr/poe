@@ -344,3 +344,11 @@ h1, h2, h3, h4, h5, h6 {
   background-color: rgba(232, 69, 10, 0.3);
   border-bottom-color: rgba(232, 69, 10, 1);
 }
+
+/* DR-021: comment highlights on shared article pages (CSS Custom Highlight API; no DOM changes). */
+::highlight(poe-comment) {
+  background-color: rgba(232, 69, 10, 0.14);
+}
+::highlight(poe-comment-active) {
+  background-color: rgba(232, 69, 10, 0.34);
+}

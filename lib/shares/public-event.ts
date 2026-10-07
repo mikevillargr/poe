@@ -3,7 +3,7 @@
 import type { HistoryEvent } from '@/lib/articles/history-format'
 
 // Payload keys that may hold internal notes or draft text; the public timeline shows sentences and numbers only.
-const PRIVATE_KEYS = ['feedback', 'instruction', 'original', 'suggested', 'replacement', 'inputs', 'url', 'reason']
+const PRIVATE_KEYS = ['feedback', 'instruction', 'original', 'suggested', 'replacement', 'inputs', 'url', 'reason', 'note', 'excerpt']
 export const HIDDEN_TYPES = new Set(['shared'])
 
 export function publicEvent(e: HistoryEvent): HistoryEvent {

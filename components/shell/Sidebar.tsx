@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Feather, Sun, Moon, LogOut } from 'lucide-react'
+import { NotificationBell } from './NotificationBell'
 import { signOut } from 'next-auth/react'
 import { useTheme } from '@/components/ThemeProvider'
 import { ADMIN_NAV, clientNav, type NavItem } from '@/lib/nav'
@@ -136,6 +137,7 @@ export function Sidebar({
               <div className="text-xs text-[#64748B] truncate">{user.email}</div>
             </div>
           </div>
+          <NotificationBell />
           <button
             onClick={() => signOut({ redirectTo: '/login' })}
             className="text-[#64748B] hover:text-danger transition-colors shrink-0"

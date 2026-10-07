@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Unlink, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2, History } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Unlink, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2, History, MessageSquare } from 'lucide-react'
 import { StatusPill } from '@/components/home/StatusPill'
 import { SharePopover } from './SharePopover'
 import { ARTICLE_STATUS_LABELS, ARTICLE_STATUSES, canTransition, type ArticleStatus } from '@/lib/articles/schemas'
@@ -45,6 +45,9 @@ export function WorkspaceHeader({
   historyOpen,
   onOpenHistory,
   shareBase,
+  commentsOpen,
+  commentCount,
+  onOpenComments,
   onTitleChange,
   onPrimary,
   onMoveBack,
@@ -72,6 +75,10 @@ export function WorkspaceHeader({
   onOpenHistory: () => void
   /** DR-021: `/api/clients/:id/articles/:id` for the Share popover. */
   shareBase: string
+  /** DR-021: comments from the share link (open thread count on the button). */
+  commentsOpen: boolean
+  commentCount: number
+  onOpenComments: () => void
   onTitleChange: (title: string) => void
   onPrimary: (action: Exclude<PrimaryAction, null>) => void
   onMoveBack: (to: ArticleStatus) => void
@@ -234,6 +241,20 @@ export function WorkspaceHeader({
       )}
 
       <SharePopover base={shareBase} />
+
+      <button
+        type="button"
+        onClick={onOpenComments}
+        aria-pressed={commentsOpen}
+        className={`relative p-2 rounded-input transition-colors flex items-center gap-1.5 text-sm ${commentsOpen ? 'bg-accent/10 text-accent' : 'text-muted hover:text-heading hover:bg-surface-hover'}`}
+        title={commentCount ? `Comments: ${commentCount} open` : 'Comments'}
+      >
+        <MessageSquare className="w-4 h-4" />
+        <span className="hidden min-[1200px]:inline">Comments</span>
+        {commentCount > 0 && (
+          <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-mono tabular-nums flex items-center justify-center">{commentCount}</span>
+        )}
+      </button>
 
       <button
         type="button"

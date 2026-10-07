@@ -8,6 +8,8 @@ import { ARTICLE_STATUS_LABELS, type ArticleEventDTO, type ArticleStatus } from 
 import { apiFetch } from '@/lib/api/fetch'
 
 const PAGE_SIZE = 12
+// DR-021: comments and sign-offs from people outside Poe (shared links) have no Poe account.
+const FEEDBACK_EVENTS = new Set(['comment_added', 'comment_reply', 'client_approved', 'changes_requested'])
 
 function describe(e: ArticleEventDTO): string {
   switch (e.type) {
@@ -47,6 +49,16 @@ function describe(e: ArticleEventDTO): string {
       return 'reviewed the checks of'
     case 'shared':
       return 'shared'
+    case 'comment_added':
+      return 'commented on'
+    case 'comment_reply':
+      return 'replied on'
+    case 'comment_resolved':
+      return 'resolved a comment on'
+    case 'client_approved':
+      return 'approved'
+    case 'changes_requested':
+      return 'requested changes to'
     default:
       return e.type.replace(/_/g, ' ')
   }
@@ -125,7 +137,7 @@ export function ActivityRail({
             <li key={e.id} className="flex items-start gap-3 text-sm leading-snug">
               <EventAvatar name={e.userName} image={e.userImage} />
               <div className="min-w-0">
-                <span className="text-heading font-medium">{e.userName ?? 'Someone'}</span>{' '}
+                <span className="text-heading font-medium">{e.userName ?? (FEEDBACK_EVENTS.has(e.type) ? 'A reviewer' : 'Someone')}</span>{' '}
                 <span className="text-muted">{describe(e)}</span>{' '}
                 <Link href={`/c/${clientSlug}/articles/${e.articleId}`} className="text-body hover:text-accent transition-colors">
                   {e.articleTitle}

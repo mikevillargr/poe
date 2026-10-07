@@ -45,6 +45,11 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
      the article, its guideline score and the rules behind it, and "How this article was made" (Brief → Research → AI
      draft → Human editing → Guideline check → Review, with the people and human-in-the-loop numbers, plus the full
      history without internal notes). Reset or turn off the link anytime; views are counted. Never indexed.
+     Viewers can comment on the article or a selected passage (highlighted; a thread whose text was edited away stays,
+     marked as changed) and **Approve / Request changes** (recorded in History; status never changes by itself).
+   - *Comments* (header): the share link's threads inside Poe: jump to the passage, reply as the team, resolve/reopen.
+   - **Notifications** (sidebar bell): comments, replies and sign-offs on articles you own. Each row is also an email
+     outbox entry (`email_status`); no email sender is configured yet (`lib/notifications/email.ts`).
 5. **Guidelines** (`/c/[client]/guidelines`). Manual-first, categorized rules (SEO, structure, readability, sourcing,
    brand, agency, client, blacklist). Import-from-document is secondary. The **blacklist** holds "sounds AI-written"
    words and patterns that generation avoids and Optimize flags. A rule applies to the whole client or to one template
