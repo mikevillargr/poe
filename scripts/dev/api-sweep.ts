@@ -1,7 +1,9 @@
 // Access sweep over every app/api/**/route.ts (Phase 0 exit criterion; run before every merge).
 //   npx tsx scripts/dev/api-sweep.ts [baseUrl]        (dev server must be running)
 // Checks: (1) without a session every non-public route/method → 401;
-//         (2) with a pending user's session nothing returns 2xx.
+//         (2) with a pending user's session nothing returns 2xx;
+//         (3) DR-021: `/api/public/*` (share links) never returns 2xx for an unknown token, except the
+//             agency logo, and an unknown `/s/<token>` page says the link isn't active.
 // Needs AUTH_SECRET + DATABASE_URL (.env.local). Creates/removes a temporary pending user.
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,6 +14,8 @@ import { requireDatabaseUrl } from '../db/env'
 
 const BASE = process.argv[2] ?? 'http://localhost:3002'
 const PUBLIC = [/^\/api\/auth(\/|$)/, /^\/api\/health$/]
+const SHARE_PUBLIC = /^\/api\/public\//
+const TRULY_PUBLIC = [/^\/api\/public\/branding\/logo$/]
 const METHODS = ['GET', 'POST', 'PATCH', 'DELETE'] as const
 const DUMMY = '00000000-0000-0000-0000-000000000000'
 
@@ -50,6 +54,15 @@ async function main() {
     for (const file of routes('app/api').sort()) {
       const path = toUrlPath(file)
       if (PUBLIC.some((re) => re.test(path))) continue
+      if (SHARE_PUBLIC.test(path)) {
+        if (TRULY_PUBLIC.some((re) => re.test(path))) continue
+        for (const method of METHODS) {
+          const res = await fetch(BASE + path, { method, redirect: 'manual', headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' })
+          if (res.status >= 200 && res.status < 300) failures.push(`${method} ${path}: unknown share token → ${res.status} (want non-2xx)`)
+          checked++
+        }
+        continue
+      }
       for (const method of METHODS) {
         const init = { method, redirect: 'manual' as const, headers: { 'content-type': 'application/json' }, body: method === 'GET' ? undefined : '{}' }
         const anon = await fetch(BASE + path, init)
@@ -59,6 +72,10 @@ async function main() {
         checked += 2
       }
     }
+    const page = await fetch(`${BASE}/s/${'x'.repeat(32)}`, { redirect: 'manual' })
+    const html = await page.text()
+    if (!/no longer active/i.test(html)) failures.push(`GET /s/<unknown>: ${page.status} without the "no longer active" message`)
+    checked++
   } finally {
     await db.query('DELETE FROM users WHERE id = $1', [rows[0].id])
     await db.end()

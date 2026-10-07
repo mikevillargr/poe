@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Unlink, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2, History } from 'lucide-react'
 import { StatusPill } from '@/components/home/StatusPill'
+import { SharePopover } from './SharePopover'
 import { ARTICLE_STATUS_LABELS, ARTICLE_STATUSES, canTransition, type ArticleStatus } from '@/lib/articles/schemas'
 import type { WorkspaceArticle } from './types'
 import { hasResearch } from './types'
@@ -43,6 +44,7 @@ export function WorkspaceHeader({
   onToggleOptimize,
   historyOpen,
   onOpenHistory,
+  shareBase,
   onTitleChange,
   onPrimary,
   onMoveBack,
@@ -68,6 +70,8 @@ export function WorkspaceHeader({
   /** DR-020: the History panel (Activity | Versions). */
   historyOpen: boolean
   onOpenHistory: () => void
+  /** DR-021: `/api/clients/:id/articles/:id` for the Share popover. */
+  shareBase: string
   onTitleChange: (title: string) => void
   onPrimary: (action: Exclude<PrimaryAction, null>) => void
   onMoveBack: (to: ArticleStatus) => void
@@ -228,6 +232,8 @@ export function WorkspaceHeader({
           {meta.label}
         </button>
       )}
+
+      <SharePopover base={shareBase} />
 
       <button
         type="button"

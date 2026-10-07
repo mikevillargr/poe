@@ -46,6 +46,7 @@ const GROUP: Record<string, HistoryGroup> = {
   status_changed: 'status',
   assigned: 'status',
   template_set: 'status',
+  shared: 'status',
   fields_edited: 'writing',
   draft_edited: 'writing',
   version_saved: 'writing',
@@ -109,6 +110,8 @@ export function describeHistoryEvent(e: HistoryEvent, people: Record<string, str
       if (!to) return 'removed the owner'
       return to === e.userId ? 'took ownership' : `assigned it to ${people[to] ?? 'someone'}`
     }
+    case 'shared':
+      return p.action === 'revoked' ? 'turned off the share link' : p.action === 'reset' ? 'reset the share link' : 'created a share link'
     case 'template_set':
       return str(p.templateName) ? `set the template to ${p.templateName}` : 'removed the template'
     case 'fields_edited': {
