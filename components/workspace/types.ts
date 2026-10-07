@@ -27,6 +27,8 @@ export interface WorkspaceArticle {
   templateId: string | null
   templateInputs: Record<string, string | number | null>
   generationMeta: GenerationMeta | null
+  /** DR-017: research before writing for this topic. */
+  researchEnabled: boolean
 }
 
 export interface WorkspaceClient {
@@ -82,6 +84,7 @@ export function toWorkspaceArticle(raw: Raw): WorkspaceArticle {
     assigneeId: r.assigneeId ?? null,
     updatedAt: String(raw.updatedAt),
     templateId: r.templateId ?? null,
+    researchEnabled: r.researchEnabled ?? true,
     templateInputs: (raw.templateInputs as Record<string, string | number | null> | null) ?? {},
     generationMeta: (raw.generationMeta as GenerationMeta | null) ?? null,
   }

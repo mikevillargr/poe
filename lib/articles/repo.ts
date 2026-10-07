@@ -38,6 +38,7 @@ function toSummary(a: Article): ArticleSummary {
     templateId: a.templateId,
     generationStatus: a.generationStatus,
     needsReview: !!a.generationMeta?.needsReview,
+    researchEnabled: a.researchEnabled,
   }
 }
 

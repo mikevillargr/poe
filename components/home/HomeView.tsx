@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -18,7 +18,8 @@ import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import { StatusCards } from './StatusCards'
-import { QueueTable, type BatchState, type Person } from './QueueTable'
+import { QueueTable, type BatchRow, type BatchState, type Person } from './QueueTable'
+import { BulkBar } from './BulkBar'
 import { ActivityRail } from './ActivityRail'
 import { NewArticleModal } from './NewArticleModal'
 import { useClientTemplates } from '@/components/workspace/TemplatePicker'
@@ -41,11 +42,12 @@ interface BatchStatus {
   startedBy: string
   finished: boolean
   counts: Record<BatchState, number>
-  items: { articleId: string; title: string; state: BatchState; message?: string }[]
+  items: ({ articleId: string; title: string; research: boolean } & BatchRow)[]
 }
 
 // DR-003 option A: status cards + ordered content queue + activity rail. DR-012: template chips and
-// filter, "N need review", and "Generate queued" (templated articles, two at a time) with live progress.
+// filter, "N need review", and "Generate queued" with live progress. DR-017: research on/off per topic
+// (chip + bulk bar); the batch researches the topics that have it on, then drafts, three at a time.
 export function HomeView({
   client,
   initialArticles,
@@ -68,41 +70,58 @@ export function HomeView({
   const [reviewOnly, setReviewOnly] = useState(false)
   const [confirmBatch, setConfirmBatch] = useState(false)
   const [batch, setBatch] = useState<BatchStatus | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [batchIds, setBatchIds] = useState<string[] | null>(null)
+  const [bulkBusy, setBulkBusy] = useState(false)
   const templates = useClientTemplates(client.id)
   const templateNames = useMemo(() => new Map((templates ?? []).map((t) => [t.id, t.name])), [templates])
 
   useEffect(() => setArticles(initialArticles), [initialArticles])
 
   // ── "Generate queued" (DR-012) ──────────────────────────────────────────────────────────────
-  const generatable = useMemo(
-    () => articles.filter((a) => a.templateId && a.status === 'queued' && a.generationStatus !== 'running'),
-    [articles],
-  )
+  const canGenerate = (a: ArticleSummary) => a.status === 'queued' && a.generationStatus !== 'running' && a.researchStatus !== 'running'
+  const generatable = useMemo(() => articles.filter(canGenerate), [articles])
+  /** Queued topics that will be researched first: research on and no brief yet (DR-017). */
+  const willResearch = (list: ArticleSummary[]) => list.filter((a) => a.researchEnabled !== false && a.researchStatus !== 'ready').length
+  const queuedCount = useMemo(() => articles.filter((a) => a.status === 'queued').length, [articles])
+  const researchCount = useMemo(() => willResearch(articles.filter((a) => a.status === 'queued')), [articles])
+  const selectedRows = useMemo(() => articles.filter((a) => selected.has(a.id)), [articles, selected])
+  const batchTargets = useMemo(() => (batchIds ? articles.filter((a) => batchIds.includes(a.id)) : []), [articles, batchIds])
   const needsReview = useMemo(() => articles.filter((a) => a.needsReview).length, [articles])
   const batchRunning = !!batch && !batch.finished
   const batchMap = useMemo(
-    () => (batch && !batch.finished ? new Map(batch.items.map((i) => [i.articleId, { state: i.state, message: i.message }])) : undefined),
+    () => (batch && !batch.finished ? new Map(batch.items.map((i) => [i.articleId, { state: i.state, step: i.step, message: i.message }])) : undefined),
     [batch],
   )
 
+  // The last batch status seen, so the "finished" toast fires once, outside any state update. Toast and
+  // router live in refs: useToast() returns a new object each render, which would re-create pollBatch and
+  // re-run the mount effect below on every render (a polling loop).
+  const lastBatch = useRef<BatchStatus | null>(null)
+  const toastRef = useRef(toast)
+  toastRef.current = toast
+  const routerRef = useRef(router)
+  routerRef.current = router
   const pollBatch = useCallback(async () => {
+    const toast = toastRef.current
+    const router = routerRef.current
     try {
       const d = await apiFetch<{ batch: BatchStatus | null }>(`/api/clients/${client.id}/articles/generate-batch`, { silent: true })
-      setBatch((prev) => {
-        if (prev && !prev.finished && d.batch?.finished) {
-          const c = d.batch.counts
-          const done = c.done + c['needs-review']
-          if (c.failed) toast.error(`Batch finished: ${c.failed} failed`, `${done} of ${d.batch.items.length} generated${c['needs-review'] ? `, ${c['needs-review']} need review` : ''}.`)
-          else if (c['needs-review']) toast.warning('Batch finished', `${done} generated, ${c['needs-review']} need review.`)
-          else toast.success('Batch complete', `${done} of ${d.batch.items.length} generated.`)
-          router.refresh()
-        }
-        return d.batch
-      })
+      const prev = lastBatch.current
+      lastBatch.current = d.batch
+      setBatch(d.batch)
+      if (prev && !prev.finished && d.batch?.finished) {
+        const c = d.batch.counts
+        const done = c.done + c['needs-review']
+        if (c.failed) toast.error(`Batch finished: ${c.failed} failed`, `${done} of ${d.batch.items.length} generated${c['needs-review'] ? `, ${c['needs-review']} need review` : ''}. Open a failed topic to see why.`)
+        else if (c['needs-review']) toast.warning('Batch finished', `${done} generated, ${c['needs-review']} need review.`)
+        else toast.success('Batch complete', `${done} of ${d.batch.items.length} generated.`)
+        router.refresh()
+      }
     } catch {
       // silent: the strip just stops updating
     }
-  }, [client.id, router, toast])
+  }, [client.id])
 
   useEffect(() => {
     void pollBatch()
@@ -114,17 +133,66 @@ export function HomeView({
   }, [batchRunning, pollBatch])
 
   async function startBatch() {
+    const ids = batchIds ?? []
     setConfirmBatch(false)
+    setBatchIds(null)
     try {
       await apiFetch(`/api/clients/${client.id}/articles/generate-batch`, {
         method: 'POST',
-        body: { articleIds: generatable.map((a) => a.id) },
+        body: { articleIds: ids },
         errorTitle: 'Couldn’t start generating',
       })
+      setSelected(new Set())
       await pollBatch()
     } catch {
       // toasted
     }
+  }
+
+  function askBatch(list: ArticleSummary[]) {
+    const ids = list.filter(canGenerate).map((a) => a.id)
+    if (!ids.length) return
+    setBatchIds(ids)
+    setConfirmBatch(true)
+  }
+
+  /** DR-017: switch research on/off for one or many topics; optimistic, rolled back on failure. */
+  async function setResearch(ids: string[], on: boolean) {
+    const targets = articles.filter((a) => ids.includes(a.id) && a.status === 'queued' && a.researchStatus !== 'ready')
+    if (!targets.length) return
+    const previous = articles
+    const targetIds = new Set(targets.map((a) => a.id))
+    setArticles((list) => list.map((a) => (targetIds.has(a.id) ? { ...a, researchEnabled: on } : a)))
+    setBulkBusy(true)
+    try {
+      const { skipped } = await apiFetch<{ updated: string[]; skipped: string[] }>(`/api/clients/${client.id}/articles/research-setting`, {
+        method: 'PATCH',
+        body: { articleIds: [...targetIds], on },
+        errorTitle: 'Couldn’t change research',
+      })
+      if (skipped.length) {
+        const back = new Set(skipped)
+        setArticles((list) => list.map((a) => (back.has(a.id) ? (previous.find((p) => p.id === a.id) ?? a) : a)))
+        toast.warning(`${skipped.length} not changed`, 'They’re being researched or written right now.')
+      } else if (targets.length > 1) {
+        toast.success(`Research ${on ? 'on' : 'off'} for ${targets.length} topics`)
+      }
+    } catch {
+      setArticles(previous)
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
+  function selectRows(ids: string[], checked: boolean) {
+    setSelected((cur) => {
+      const next = new Set(cur)
+      for (const id of ids) {
+        if (checked) next.add(id)
+        else next.delete(id)
+      }
+      return next
+    })
   }
 
   const peopleMap = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
@@ -195,10 +263,10 @@ export function HomeView({
           {(generatable.length > 0 || batchRunning) && (
             <button
               type="button"
-              onClick={() => setConfirmBatch(true)}
+              onClick={() => askBatch(generatable)}
               disabled={batchRunning}
               className="px-4 py-2 rounded-input text-sm font-medium flex items-center gap-2 border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-60"
-              title="Generate every queued article that has a template, two at a time"
+              title="Research (where it’s on) and draft every queued article, three at a time"
             >
               {batchRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
               {batchRunning ? 'Generating…' : `Generate queued (${generatable.length})`}
@@ -280,6 +348,14 @@ export function HomeView({
             </div>
           </div>
 
+          {queuedCount > 0 && !batchRunning && (
+            <p className="text-xs text-muted -mt-2 mb-3" aria-live="polite">
+              <span className="font-mono tabular-nums">{queuedCount}</span> queued ·{' '}
+              <span className="font-mono tabular-nums">{researchCount}</span> will be researched first. Click a topic’s Research chip to change it, or select
+              several.
+            </p>
+          )}
+
           {articles.length === 0 ? (
             <div className="glass-card p-10 text-center space-y-3">
               <FileText className="w-8 h-8 text-accent mx-auto" />
@@ -317,7 +393,7 @@ export function HomeView({
                       }}
                     />
                   </div>
-                  <p className="text-xs text-muted mt-1.5">Two at a time. You can leave this page; drafts are saved as they finish.</p>
+                  <p className="text-xs text-muted mt-1.5">Three at a time; topics with research on are researched first. You can leave this page; drafts are saved as they finish.</p>
                 </div>
               )}
               <QueueTable
@@ -326,6 +402,9 @@ export function HomeView({
                 draggable={!filtered}
                 templateNames={templateNames}
                 batch={batchMap}
+                selected={selected}
+                onSelect={selectRows}
+                onResearch={(a, on) => void setResearch([a.id], on)}
                 onOpen={(a) => router.push(`/c/${client.slug}/articles/${a.id}`)}
                 onDelete={setDeleting}
                 onReorder={reorder}
@@ -342,6 +421,15 @@ export function HomeView({
         </motion.div>
       </div>
 
+      <BulkBar
+        count={selectedRows.length}
+        generatable={selectedRows.filter(canGenerate).length}
+        busy={bulkBusy || batchRunning}
+        onResearch={(on) => void setResearch([...selected], on)}
+        onGenerate={() => askBatch(selectedRows)}
+        onClear={() => setSelected(new Set())}
+      />
+
       <NewArticleModal
         isOpen={adding}
         clientId={client.id}
@@ -357,12 +445,19 @@ export function HomeView({
 
       <ConfirmModal
         isOpen={confirmBatch}
-        title={`Generate ${generatable.length} ${generatable.length === 1 ? 'article' : 'articles'}?`}
-        message={`Each queued article with a template gets a draft from its template (link selection, writing, checks, one rewrite if needed), two at a time. This uses the configured AI models for every article. You can leave this page while it runs.`}
-        confirmLabel={`Generate ${generatable.length}`}
+        title={`Generate ${batchTargets.length} ${batchTargets.length === 1 ? 'article' : 'articles'}?`}
+        message={`${
+          willResearch(batchTargets)
+            ? `${willResearch(batchTargets)} of them ${willResearch(batchTargets) === 1 ? 'is' : 'are'} researched first (live web search). `
+            : 'None are researched first. '
+        }Each then gets a draft, from its template when it has one, three at a time. This uses the configured AI models for every article. You can leave this page while it runs.`}
+        confirmLabel={`Generate ${batchTargets.length}`}
         confirmVariant="warning"
         onConfirm={startBatch}
-        onCancel={() => setConfirmBatch(false)}
+        onCancel={() => {
+          setConfirmBatch(false)
+          setBatchIds(null)
+        }}
       />
 
       <ConfirmModal

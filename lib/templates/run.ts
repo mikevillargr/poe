@@ -143,10 +143,11 @@ export async function startTemplateGeneration(client: ClientLike, article: Artic
           inventories,
           facts,
           guidelines,
-          research: template.config.researchEnabled ? researchText(article) : null,
+          // DR-017: the topic's own switch decides, for every template (the n8n ones included).
+          research: article.researchEnabled ? researchText(article) : null,
         })
         const saved = await persistGeneratedDraft(client.id, article.id, result.html, models.generation ?? 'unknown', user, {
-          usedResearch: template.config.researchEnabled && !!article.research,
+          usedResearch: article.researchEnabled && !!researchText(article),
           snapshotVersionNo: snapshot?.versionNo ?? null,
         })
         await saveGenerationMeta(client.id, article.id, {

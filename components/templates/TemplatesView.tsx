@@ -299,7 +299,6 @@ export function TemplatesView({ client }: { client: { id: string; name: string; 
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     <span className="px-1.5 py-0.5 rounded text-[11px] border border-border text-muted">{KIND[t.kind]}</span>
                     {!t.enabled && <span className="px-1.5 py-0.5 rounded text-[11px] border border-warning/40 text-orange-400 bg-warning/10">Disabled</span>}
-                    {t.researchEnabled && <span className="px-1.5 py-0.5 rounded text-[11px] border border-border text-muted">Research on</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

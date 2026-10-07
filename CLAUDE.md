@@ -26,7 +26,9 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    `wordcount` (target words). Column matching, per-row validation and duplicate detection happen before rows are
    appended to the client's ordered queue. No dates: the queue order is the calendar.
 3. **Client Home** (`/c/[client]`). Status cards (Queued · Draft · In Review · Done), the ordered queue (drag to
-   reorder), activity feed, **New Article**.
+   reorder), activity feed, **New Article**. Each queued topic has a **Research** chip (on by default; DR-017) and
+   rows can be selected for bulk research on/off or **Generate selected**; **Generate queued** researches the topics
+   that have it on, then drafts every queued topic, 3 at a time.
 4. **Article Workspace** (`/c/[client]/articles/[id]`). Brief + keywords (left) · **Research | Draft** tabs (centre) ·
    **Optimize** (right).
    - *Research* streams live web research into an editable summary, outline and numbered sources.
@@ -73,7 +75,8 @@ lib/
   tenancy/ clients/ client lookup + creation
   articles/         repo, shared zod schemas (FROZEN contract), text helpers
   ai/               provider contract (FROZEN), providers/*, roles, secrets, SSE, mock provider
-  pipeline/ prompts/ research + generation (prompt builders, persistence)
+  pipeline/ prompts/ research + generation (prompt builders, persistence); research-run.ts / generation-run.ts start
+                    the detached runs used by the routes and the batch
   optimize/         keyword coverage, guideline-check prompt/parse
   guidelines/       repo, schemas, categories, Universal rules, extraction; prompt.ts merges live Universal (minus the
                     client's off switches) + client rules; render.ts prints them Universal-first for every prompt
@@ -82,14 +85,14 @@ lib/
   templates/        D-002 content templates (n8n port): pure engine (placeholders, markers, assembly, checks, hooks),
                     execute.ts (hooks → link selectors → writer → checks → one retry), run.ts (server run on the
                     generation slot; Generate uses it when articles.template_id is set), batch.ts ("Generate
-                    queued", 2 at a time), repo/schema/facts, manage.ts (create from preset/duplicate/
+                    queued": every queued topic, research first where it's on (DR-017), 3 at a time), repo/schema/facts, manage.ts (create from preset/duplicate/
                     copy, save as revision, restore, delete) + dry-run.ts + diff.ts (History), rows.ts + inputs.ts (sheet/file → queue rows
                     or link inventories; sheet-source sync); seed/ holds the 10 verbatim prompts, template
                     configs, each client's imported rules and the Google Sheet sources
   google/           service-account credential (encrypted; GOOGLE_SERVICE_ACCOUNT_JSON fallback) + read-only
                     Sheets client (self-signed JWT, no googleapis)
 drizzle/            versioned migrations (never db:push against real data)
-scripts/            db (migrate, baseline, fixtures, seed-universal, seed-n8n), dev (api-sweep, smokes, template-e2e),
+scripts/            db (migrate, baseline, fixtures, seed-universal, seed-n8n), dev (api-sweep, smokes, template-e2e, inputs-e2e, batch-e2e),
                     ai-smoke, release
 docker/ Dockerfile docker-compose.yml   production stack (Caddy on 443)
 ```

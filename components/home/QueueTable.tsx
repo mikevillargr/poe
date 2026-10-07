@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState } from 'react'
+import { ResearchChip } from './ResearchChip'
 import { formatDistanceToNowStrict } from 'date-fns'
 import { GripVertical, Eye, Trash2, LayoutTemplate, AlertTriangle, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import {
@@ -27,6 +28,12 @@ const nf = new Intl.NumberFormat('en-US')
 
 /** Live state of an article in a running "Generate queued" batch (DR-012). */
 export type BatchState = 'queued' | 'running' | 'done' | 'needs-review' | 'failed'
+/** A row's batch state, with the pipeline step while running (research, then writing). */
+export interface BatchRow {
+  state: BatchState
+  step?: 'researching' | 'writing'
+  message?: string
+}
 
 const BATCH_PILL: Record<BatchState, { label: string; cls: string; Icon: typeof Clock }> = {
   queued: { label: 'Waiting', cls: 'border-border text-muted', Icon: Clock },
@@ -36,12 +43,13 @@ const BATCH_PILL: Record<BatchState, { label: string; cls: string; Icon: typeof 
   failed: { label: 'Failed', cls: 'border-danger/40 text-red-400 bg-danger/10', Icon: XCircle },
 }
 
-function BatchPill({ state, message }: { state: BatchState; message?: string }) {
+function BatchPill({ state, step, message }: BatchRow) {
   const p = BATCH_PILL[state]
+  const label = state === 'running' ? (step === 'researching' ? 'Researching' : 'Writing') : p.label
   return (
     <span title={message} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${p.cls}`}>
       <p.Icon className={`w-3 h-3 ${state === 'running' ? 'animate-spin' : ''}`} />
-      {p.label}
+      {label}
     </span>
   )
 }
@@ -100,6 +108,10 @@ function Row({
   templateName,
   batch,
   cols,
+  selected,
+  anySelected,
+  onSelect,
+  onResearch,
   onOpen,
   onDelete,
 }: {
@@ -108,8 +120,12 @@ function Row({
   people: Map<string, Person>
   draggable: boolean
   templateName?: string
-  batch?: { state: BatchState; message?: string }
+  batch?: BatchRow
   cols: Cols
+  selected: boolean
+  anySelected: boolean
+  onSelect: (checked: boolean) => void
+  onResearch: (on: boolean) => void
   onOpen: () => void
   onDelete: () => void
 }) {
@@ -127,8 +143,19 @@ function Row({
         isDragging ? 'z-10 bg-surface shadow-xl opacity-90' : ''
       }`}
     >
-      <td className="pl-3 pr-1 py-4 w-8 relative">
+      <td className="pl-3 pr-0 py-4 relative" onClick={(e) => e.stopPropagation()}>
         <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-accent opacity-0 group-hover:opacity-100 transition-opacity shadow-glow-accent" />
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(e) => onSelect(e.target.checked)}
+          aria-label={`Select ${article.title}`}
+          className={`w-4 h-4 accent-[#E8450A] cursor-pointer transition-opacity focus-visible:opacity-100 ${
+            selected || anySelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+          }`}
+        />
+      </td>
+      <td className="pl-1 pr-1 py-4 w-8">
         <button
           ref={setActivatorNodeRef}
           type="button"
@@ -156,8 +183,9 @@ function Row({
                 {article.keywords.length > 3 && ` +${article.keywords.length - 3}`}
               </div>
             )}
-        {(templateName || article.needsReview) && (
+        {(templateName || article.needsReview || article.status === 'queued') && (
           <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
+            <ResearchChip article={article} researching={batch?.state === 'running' && batch.step === 'researching'} disabled={batch?.state === 'running'} onToggle={onResearch} />
             {templateName && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border border-border text-muted bg-surface truncate max-w-[200px]">
                 <LayoutTemplate className="w-3 h-3 shrink-0" />
@@ -188,7 +216,7 @@ function Row({
       <td className="px-4 py-4">
         <WordsCell actual={article.wordCount} target={article.targetWordCount} />
       </td>
-      <td className="px-4 py-4">{batch ? <BatchPill state={batch.state} message={batch.message} /> : <StatusPill status={article.status} />}</td>
+      <td className="px-4 py-4">{batch ? <BatchPill {...batch} /> : <StatusPill status={article.status} />}</td>
       {cols.meta && (
         <>
           <td className="px-4 py-4">
@@ -238,6 +266,9 @@ export function QueueTable({
   draggable,
   templateNames,
   batch,
+  selected,
+  onSelect,
+  onResearch,
   onOpen,
   onDelete,
   onReorder,
@@ -248,7 +279,11 @@ export function QueueTable({
   /** Template id → name, for the template chip. */
   templateNames?: Map<string, string>
   /** Article id → live batch state while "Generate queued" runs. */
-  batch?: Map<string, { state: BatchState; message?: string }>
+  batch?: Map<string, BatchRow>
+  /** DR-017: selected rows (bulk bar) and the per-topic research switch. */
+  selected: Set<string>
+  onSelect: (ids: string[], checked: boolean) => void
+  onResearch: (a: ArticleSummary, on: boolean) => void
   onOpen: (a: ArticleSummary) => void
   onDelete: (a: ArticleSummary) => void
   onReorder: (activeId: string, overId: string) => void
@@ -274,7 +309,10 @@ export function QueueTable({
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
-  const cols: Cols = { keywords: width === null || width >= 1120, meta: width === null || width >= 900 }
+  const cols: Cols = { keywords: width === null || width >= 1152, meta: width === null || width >= 932 }
+
+  const allSelected = articles.length > 0 && articles.every((a) => selected.has(a.id))
+  const someSelected = articles.some((a) => selected.has(a.id))
 
   const th = 'px-4 py-3 text-xs font-medium text-muted uppercase tracking-wider border-b border-border'
   return (
@@ -282,7 +320,8 @@ export function QueueTable({
       <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <table className="w-full table-fixed text-left border-collapse">
           <colgroup>
-            <col className="w-10" />
+            <col className="w-9" />
+            <col className="w-9" />
             <col className="w-10" />
             <col />
             {cols.keywords && <col className="w-[200px]" />}
@@ -294,7 +333,19 @@ export function QueueTable({
           </colgroup>
           <thead>
             <tr>
-              <th className={`${th} pl-3 w-8`} />
+              <th className={`${th} pl-3 pr-0`}>
+                <input
+                  type="checkbox"
+                  aria-label="Select all shown"
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected && !allSelected
+                  }}
+                  onChange={(e) => onSelect(articles.map((a) => a.id), e.target.checked)}
+                  className="w-4 h-4 accent-[#E8450A] cursor-pointer"
+                />
+              </th>
+              <th className={`${th} pl-1 pr-1`} />
               <th className={`${th} px-2 w-10`}>#</th>
               <th className={th}>Article</th>
               {cols.keywords && <th className={th}>Keywords</th>}
@@ -317,6 +368,10 @@ export function QueueTable({
                   templateName={a.templateId ? templateNames?.get(a.templateId) : undefined}
                   cols={cols}
                   batch={batch?.get(a.id)}
+                  selected={selected.has(a.id)}
+                  anySelected={selected.size > 0}
+                  onSelect={(checked) => onSelect([a.id], checked)}
+                  onResearch={(on) => onResearch(a, on)}
                   onOpen={() => onOpen(a)}
                   onDelete={() => onDelete(a)}
                 />

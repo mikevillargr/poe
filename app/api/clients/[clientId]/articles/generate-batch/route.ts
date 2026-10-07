@@ -10,8 +10,8 @@ type P = { clientId: string }
 
 const bodySchema = z.object({ articleIds: z.array(z.string().uuid()).max(500).optional() })
 
-// POST { articleIds? } → { queued, skipped[], alreadyRunning } — generates the client's queued templated
-// articles, two at a time (D-002). GET → { batch: status | null }.
+// POST { articleIds? } → { queued, skipped[], alreadyRunning } — researches (per topic, DR-017) and drafts the client's queued
+// articles, three at a time. GET → { batch: status | null }.
 export const POST = withRoute<P>(async ({ req, params, user }) => {
   const client = await requireClient(params.clientId, { write: true })
   const body = bodySchema.parse(await req.json().catch(() => ({})))

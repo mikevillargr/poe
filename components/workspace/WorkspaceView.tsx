@@ -418,6 +418,24 @@ export function WorkspaceView({
     }
   }
 
+  /** DR-017: research before writing for this topic (optimistic; rolled back if the save fails). */
+  async function setResearchEnabled(on: boolean) {
+    setArticle((a) => ({ ...a, researchEnabled: on }))
+    try {
+      const { skipped } = await apiFetch<{ updated: string[]; skipped: string[] }>(`/api/clients/${client.id}/articles/research-setting`, {
+        method: 'PATCH',
+        body: { articleIds: [article.id], on },
+        errorTitle: 'Couldn’t change research',
+      })
+      if (skipped.length) {
+        setArticle((a) => ({ ...a, researchEnabled: !on }))
+        toast.warning('Not changed', 'This article is being researched or written right now.')
+      }
+    } catch {
+      setArticle((a) => ({ ...a, researchEnabled: !on }))
+    }
+  }
+
   function onPrimary(action: Exclude<PrimaryAction, null>) {
     if (action === 'research') void runResearch()
     else if (action === 'generate') requestGenerate(true)
@@ -494,6 +512,7 @@ export function WorkspaceView({
       disabled={streaming}
       onChange={patchFields}
       onTemplateSaved={(next) => setArticle((a) => ({ ...a, ...next }))}
+      onResearchEnabled={(on) => void setResearchEnabled(on)}
     />
   )
   const optimizePanel = (
