@@ -67,3 +67,44 @@ test('publicEvent drops internal text but keeps what sentences need', () => {
   const s = publicEvent(ev('suggestion_accepted', { title: 'Tone', original: 'a', suggested: 'b', category: 'brand' }))
   assert.deepEqual(s.payload, { title: 'Tone', category: 'brand' })
 })
+
+test('work done before per-action history still shows as done (score saved, draft changed, article done)', () => {
+  const legacy: HistoryEvent[] = [
+    ev('imported', { importBatchId: 'b' }),
+    ev('researched', { citations: 7 }),
+    ev('generated', { wordCount: 1200 }),
+    ev('status_changed', null, 'ana', { fromStatus: 'queued', toStatus: 'draft' }),
+    ev('status_changed', null, 'ana', { fromStatus: 'draft', toStatus: 'in_review' }),
+    ev('status_changed', null, 'ana', { fromStatus: 'in_review', toStatus: 'done' }),
+  ]
+  const steps = buildStory({
+    events: legacy,
+    researchEnabled: true,
+    status: 'done',
+    score: 91,
+    wordCount: 1310,
+    check: { ranAt: '2026-10-06T10:00:00.000Z', rules: { universal: 46, client: 9 }, applied: 3, dismissed: 1 },
+  })
+  const by = Object.fromEntries(steps.map((s) => [s.key, s]))
+  assert.equal(by.editing!.state, 'done')
+  assert.deepEqual(by.editing!.stats, ['Draft changed by +110 words after the AI draft', '3 guideline suggestions applied by an editor'])
+  assert.deepEqual(by.editing!.people.map((p) => p.name), ['Ana Cruz'])
+  assert.equal(by.check!.state, 'done')
+  assert.equal(by.check!.at, '2026-10-06T10:00:00.000Z')
+  assert.deepEqual(by.check!.stats, ['Score 91/100', '55 rules checked', '4 suggestions reviewed by an editor · 3 applied'])
+})
+
+test('an article that was only reviewed (no word change, no check) still credits the editors', () => {
+  const steps = buildStory({
+    events: [ev('generated', { wordCount: 900 }), ev('status_changed', null, 'ana', { fromStatus: 'draft', toStatus: 'done' })],
+    researchEnabled: false,
+    status: 'done',
+    score: null,
+    wordCount: 900,
+    check: null,
+  })
+  const by = Object.fromEntries(steps.map((s) => [s.key, s]))
+  assert.equal(by.editing!.state, 'done')
+  assert.deepEqual(by.editing!.stats, ['Reviewed and edited by the team before sign-off'])
+  assert.equal(by.check!.state, 'pending')
+})

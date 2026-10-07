@@ -16,7 +16,7 @@ const ICONS: Record<StoryStepKey, LucideIcon> = {
   review: CheckCircle2,
 }
 
-const ACTOR_LABEL = { human: 'People', ai: 'AI', both: 'AI + people' } as const
+const ACTOR_LABEL = { human: 'Human', ai: 'AI', both: 'AI + human' } as const
 
 export function StoryTimeline({ steps }: { steps: StoryStep[] }) {
   return (

@@ -93,7 +93,21 @@ export async function loadSharedArticle(token: string, opts: { countView?: boole
       owner: row.ownerName ? { name: row.ownerName, image: row.ownerImage } : null,
     },
     score: { overall: score, rules: opt?.rules ?? null, ranAt: opt?.ranAt ?? null },
-    story: buildStory({ events, researchEnabled: a.researchEnabled, status: a.status, score }),
+    story: buildStory({
+      events,
+      researchEnabled: a.researchEnabled,
+      status: a.status,
+      score,
+      wordCount: a.wordCount ?? undefined,
+      check: opt
+        ? {
+            ranAt: opt.ranAt ?? null,
+            rules: opt.rules ?? null,
+            applied: opt.suggestions?.filter((x) => x.status === 'accepted').length ?? 0,
+            dismissed: opt.suggestions?.filter((x) => x.status === 'dismissed').length ?? 0,
+          }
+        : null,
+    }),
     totals: storyTotals(events),
     history: share.showHistory ? events.map(publicEvent) : null,
     people: history.people,
