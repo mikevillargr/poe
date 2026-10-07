@@ -41,6 +41,10 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    - *History* (header button, DR-020): **Activity**, the article's life by person (status and owner moves, brief edits
      From → To, draft editing sessions with **Show changes**, AI drafts/revisions/edits, guideline checks and each
      suggestion applied or dismissed, research, exports), grouped by day and filterable; **Versions** (save, restore).
+   - *Share* (header popover, DR-021): a private link per article (any status) to a branded public page `/s/[token]`:
+     the article, its guideline score and the rules behind it, and "How this article was made" (Brief → Research → AI
+     draft → Human editing → Guideline check → Review, with the people and human-in-the-loop numbers, plus the full
+     history without internal notes). Reset or turn off the link anytime; views are counted. Never indexed.
 5. **Guidelines** (`/c/[client]/guidelines`). Manual-first, categorized rules (SEO, structure, readability, sourcing,
    brand, agency, client, blacklist). Import-from-document is secondary. The **blacklist** holds "sounds AI-written"
    words and patterns that generation avoids and Optimize flags. A rule applies to the whole client or to one template
@@ -50,11 +54,12 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    (History: diff + restore). The editor's dry run previews the prompt, link picks or a full draft without saving.
    **Client facts** (tribe keywords, CTA styles, host cities, product-page settings) feed the hooks.
 6. **Admin** (super admin only): **Users** (approve/deny/disable, promote), **Universal guidelines** (agency-wide, live for every client), **Settings**
-   (provider keys, test, models per role).
+   (provider keys, test, models per role, Google Sheets, **Branding** for shared pages: logo, agency name, website, About Poe).
 
 **Auth.** Google OAuth only. Only verified `@growth-rocket.com` accounts may sign in; they are `pending` until a super admin
 (`mike@growth-rocket.com`) approves them. Account status is read from the DB on every request (approvals/disables apply
-immediately). Every page and API route requires an active user.
+immediately). Every page and API route requires an active user, except shared article links (`/s/*`, `/api/public/*`,
+DR-021), which check the share token themselves.
 
 ---
 
@@ -63,6 +68,7 @@ immediately). Every page and API route requires an active user.
 ```
 app/
   (auth)/login, (auth)/pending          Google login + waiting/disabled screens
+  (public)/s/[token]                    shared article page (no session; token-checked, noindex)
   (main)/                               sidebar layout (requirePageUser)
     c/[clientSlug]/{page,import,sources,templates(+[templateId]),guidelines,sheet-format,articles/[articleId]}
     admin/{users,universal-guidelines}, settings        super admin only
@@ -71,7 +77,8 @@ app/
                                         articles/generate-batch, templates/[id] (+ import, revisions, restore, dry-run),
                                         facts, inventories (+ upload),
                                         sheet-sources (+ [id], [id]/sync) (all tenant-scoped)
-  api/admin/…                           users, providers (keys), model-roles, universal-guidelines
+  api/admin/…                           users, providers (keys), model-roles, universal-guidelines, branding (+ logo)
+  api/public/…                          shared-page endpoints (DR-021) and the agency logo; no session
   api/content/{parse,fetch-gdoc}        file/URL/Google Doc text extraction (guideline import)
   api/health, api/auth/…
 components/   shell, home, import, workspace, runs (RunActivity, ThinkingPeek, ActivityFeed; DR-016), templates, sources, guidelines, settings, admin, editor, feedback, auth
@@ -132,7 +139,8 @@ live) · `client_universal_overrides` (a client's off switch for one Universal r
 payload; frequent edits coalesce per person per burst, `lib/articles/provenance.ts`) · `import_batches` · `ai_provider_credentials` (encrypted keys) ·
 `ai_model_roles` · `ai_usage` · D-002 templates: `content_templates` (per-client presets, soft delete) ·
 `content_template_revisions` · `template_events` · `link_inventories` + `link_inventory_items` · `sheet_sources` ·
-`google_credentials` (encrypted service-account key) · `user_google_drive` (a person's Drive connection for Docs export, encrypted). `articles` also has `template_id`, `template_inputs`,
+`google_credentials` (encrypted service-account key) · `user_google_drive` (a person's Drive connection for Docs export, encrypted) · DR-021: `article_shares` (one active link per article),
+`share_comments`, `notifications` (in-app, with an email outbox column), `app_settings` (branding), `app_assets` (logo), `article_exports`. `articles` also has `template_id`, `template_inputs`,
 `generation_meta` and `source_row_key`; `heuristics.content_template_id` scopes a guideline to one template
 (`heuristics.template_id` is legacy: copies were removed by migration 0008).
 

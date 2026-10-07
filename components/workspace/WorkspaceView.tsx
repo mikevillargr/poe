@@ -655,6 +655,7 @@ export function WorkspaceView({
         onToggleBrief={() => setBriefOpen((o) => !o)}
         onToggleOptimize={() => setOptimizeOpen((o) => !o)}
         historyOpen={versionsOpen}
+        shareBase={base}
         onOpenHistory={() => {
           if (versionsOpen) return setVersionsOpen(false)
           setHistoryTab('activity')

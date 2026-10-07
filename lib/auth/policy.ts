@@ -18,7 +18,8 @@ export function isSuperAdminEmail(email: string): boolean {
 }
 
 // Reachable without a session.
-export const PUBLIC_PATHS = ['/login', '/pending', '/api/auth', '/api/health']
+// DR-021: `/s/<token>` shared article pages and their `/api/public/*` endpoints check the share token themselves.
+export const PUBLIC_PATHS = ['/login', '/pending', '/api/auth', '/api/health', '/s', '/api/public']
 
 export function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))

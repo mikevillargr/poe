@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api/fetch'
 import { useToast } from '@/hooks/useToast'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import { GoogleSheetsCard } from './GoogleSheetsCard'
+import { BrandingCard } from './BrandingCard'
 import { MODEL_ROLES, PROVIDER_LABELS, ROLE_LABELS, type ModelInfo, type ModelRole, type ProviderId } from '@/lib/ai/types'
 
 interface ProviderStatus {
@@ -382,6 +383,8 @@ export function SettingsView({ initialProviders }: { initialProviders: ProviderS
       </motion.div>
 
       <GoogleSheetsCard />
+
+      <BrandingCard />
 
       <ConfirmModal
         isOpen={!!removing}

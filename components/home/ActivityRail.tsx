@@ -45,6 +45,8 @@ function describe(e: ArticleEventDTO): string {
       return 'changed the template of'
     case 'checks_reviewed':
       return 'reviewed the checks of'
+    case 'shared':
+      return 'shared'
     default:
       return e.type.replace(/_/g, ' ')
   }
