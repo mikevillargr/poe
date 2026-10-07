@@ -32,7 +32,8 @@ export function createAnthropicProvider(loadCredentials: CredentialsLoader, opts
       (c) => new Anthropic({ apiKey: c.apiKey, ...(c.baseUrl ? { baseURL: c.baseUrl } : {}), maxRetries: 2, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
     ))
 
-  function baseParams(model: string, p: GenerateParams): MessageCreateParamsStreaming {
+  /** `think`: DR-016 visible thinking, only for the streamed research and drafts (not background calls). */
+  function baseParams(model: string, p: GenerateParams, think = false): MessageCreateParamsStreaming {
     const maxTokens = isModernClaude(model)
       ? reasoningFloor(p.maxTokens, DEFAULT_MAX_TOKENS)
       : (p.maxTokens ?? DEFAULT_MAX_TOKENS)
@@ -44,6 +45,8 @@ export function createAnthropicProvider(loadCredentials: CredentialsLoader, opts
       messages: p.messages.map((m): BetaMessageParam => ({ role: m.role, content: m.content })),
       ...(p.temperature !== undefined && acceptsSampling(model) ? { temperature: p.temperature } : {}),
       ...(usesServerFallback(model) ? { betas: [SERVER_FALLBACK_BETA], fallbacks: 'default' as const } : {}),
+      // DR-016: adaptive thinking with a readable summary, shown as the live "thinking" peek.
+      ...(think && isModernClaude(model) ? { thinking: { type: 'adaptive' as const, display: 'summarized' as const } } : {}),
     }
   }
 
@@ -100,7 +103,7 @@ export function createAnthropicProvider(loadCredentials: CredentialsLoader, opts
 
     async *streamText(model, params) {
       const mapper = new AnthropicStreamMapper()
-      yield* run(baseParams(model, params), params.signal, mapper)
+      yield* run(baseParams(model, params, true), params.signal, mapper)
       yield { type: 'done', text: mapper.text }
     },
 
@@ -123,7 +126,7 @@ export function createAnthropicProvider(loadCredentials: CredentialsLoader, opts
         ...(params.maxSearches ? { max_uses: params.maxSearches } : {}),
       } as BetaToolUnion
       const mapper = new AnthropicStreamMapper()
-      yield* run({ ...baseParams(model, params), tools: [tool] }, params.signal, mapper)
+      yield* run({ ...baseParams(model, params, true), tools: [tool] }, params.signal, mapper)
       yield { type: 'done', text: mapper.text, citations: mapper.citationList() }
     },
 

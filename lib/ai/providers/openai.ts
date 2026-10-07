@@ -18,7 +18,8 @@ export function createOpenAIProvider(loadCredentials: CredentialsLoader, opts: P
       (c) => new OpenAI({ apiKey: c.apiKey, ...(c.baseUrl ? { baseURL: c.baseUrl } : {}), maxRetries: 2, ...(opts.fetch ? { fetch: opts.fetch } : {}) }),
     ))
 
-  function baseParams(model: string, p: GenerateParams): ResponseCreateParamsStreaming {
+  /** `think`: DR-016 reasoning summary, only for the streamed research and drafts. */
+  function baseParams(model: string, p: GenerateParams, think = false): ResponseCreateParamsStreaming {
     return {
       model,
       stream: true,
@@ -27,6 +28,8 @@ export function createOpenAIProvider(loadCredentials: CredentialsLoader, opts: P
       input: p.messages.map((m) => ({ role: m.role, content: m.content })),
       max_output_tokens: isReasoningModel(model) ? reasoningFloor(p.maxTokens, DEFAULT_MAX_TOKENS) : (p.maxTokens ?? DEFAULT_MAX_TOKENS),
       ...(p.temperature !== undefined && acceptsTemperature(model) ? { temperature: p.temperature } : {}),
+      // DR-016: reasoning models stream a summary of their reasoning for the live "thinking" peek.
+      ...(think && isReasoningModel(model) ? { reasoning: { summary: 'auto' as const } } : {}),
     }
   }
 
@@ -63,7 +66,7 @@ export function createOpenAIProvider(loadCredentials: CredentialsLoader, opts: P
 
     async *streamText(model, params) {
       const mapper = new OpenAIStreamMapper()
-      yield* run(baseParams(model, params), params.signal, mapper)
+      yield* run(baseParams(model, params, true), params.signal, mapper)
       yield { type: 'done', text: mapper.text }
     },
 
@@ -82,7 +85,7 @@ export function createOpenAIProvider(loadCredentials: CredentialsLoader, opts: P
       }
       const mapper = new OpenAIStreamMapper()
       const p: ResponseCreateParamsStreaming = {
-        ...baseParams(model, params),
+        ...baseParams(model, params, true),
         tools: [{ type: 'web_search' }],
         include: ['web_search_call.action.sources'],
         ...(params.maxSearches ? { max_tool_calls: params.maxSearches } : {}),

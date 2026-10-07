@@ -11,12 +11,15 @@ const base = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] b
 export function ResearchChip({
   article,
   researching,
+  researched,
   disabled,
   onToggle,
 }: {
   article: ArticleSummary
   /** True while a batch is researching this row. */
   researching?: boolean
+  /** True once a batch has researched this row (the article list refreshes when the batch ends). */
+  researched?: boolean
   disabled?: boolean
   onToggle: (on: boolean) => void
 }) {
@@ -28,7 +31,7 @@ export function ResearchChip({
       </span>
     )
   }
-  if (article.researchStatus === 'ready') {
+  if (researched || article.researchStatus === 'ready') {
     return (
       <span className={`${base} border-success/40 text-green-500 bg-success/10`} title="Research is done; the draft will use it.">
         <Check className="w-3 h-3" /> Researched

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { withRoute, json } from '@/lib/auth/guards'
 import { requireClient } from '@/lib/tenancy'
-import { batchStatus, startBatch } from '@/lib/templates/batch'
+import { batchStatus, cancelWaiting, startBatch } from '@/lib/templates/batch'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,4 +22,10 @@ export const POST = withRoute<P>(async ({ req, params, user }) => {
 export const GET = withRoute<P>(async ({ params }) => {
   const client = await requireClient(params.clientId)
   return json({ batch: batchStatus(client.id) })
+})
+
+// DELETE → { cancelled }. "Stop remaining": topics still waiting are cancelled; running ones finish and are saved.
+export const DELETE = withRoute<P>(async ({ params }) => {
+  const client = await requireClient(params.clientId, { write: true })
+  return json({ cancelled: cancelWaiting(client.id) })
 })

@@ -22,15 +22,16 @@ interface ClientLike {
   website: string | null
 }
 
-export type BatchItemState = 'queued' | 'running' | 'done' | 'needs-review' | 'failed'
+export type BatchItemState = 'queued' | 'running' | 'done' | 'needs-review' | 'failed' | 'cancelled'
 export type BatchStep = 'researching' | 'writing'
 
 interface BatchItem {
   articleId: string
   title: string
   state: BatchItemState
-  /** While running: which part of the pipeline it's in. */
+  /** While running: which part of the pipeline it's in, and since when (ISO). */
   step?: BatchStep
+  stepStartedAt?: string
   /** Whether this item is researched first (decided when the batch starts). */
   research: boolean
   message?: string
@@ -103,9 +104,24 @@ export async function startBatch(client: ClientLike, user: AppUser, articleIds?:
 export function batchStatus(tenantId: string) {
   const b = state.batches.get(tenantId)
   if (!b) return null
-  const counts = { queued: 0, running: 0, done: 0, 'needs-review': 0, failed: 0 } as Record<BatchItemState, number>
+  const counts = { queued: 0, running: 0, done: 0, 'needs-review': 0, failed: 0, cancelled: 0 } as Record<BatchItemState, number>
   for (const i of b.items) counts[i.state]++
   return { startedAt: b.startedAt, startedBy: b.startedBy, finished: isFinished(b), counts, items: b.items }
+}
+
+/** "Stop remaining": topics still waiting are cancelled; the ones already running finish and are saved. */
+export function cancelWaiting(tenantId: string): number {
+  const b = state.batches.get(tenantId)
+  if (!b) return 0
+  let n = 0
+  for (const item of b.items) {
+    if (item.state !== 'queued') continue
+    item.state = 'cancelled'
+    item.message = 'Stopped before it started'
+    n++
+  }
+  state.queue = state.queue.filter((j) => j.item.state === 'queued')
+  return n
 }
 
 function pump() {
@@ -134,6 +150,7 @@ async function runJob({ client, item, user }: Job) {
   item.state = 'running'
   if (item.research) {
     item.step = 'researching'
+    item.stepStartedAt = new Date().toISOString()
     const research = await startResearch(client, await getArticle(client.id, item.articleId), user)
     await research.whenDone()
     const err = runError(research)
@@ -144,6 +161,7 @@ async function runJob({ client, item, user }: Job) {
     }
   }
   item.step = 'writing'
+  item.stepStartedAt = new Date().toISOString()
   const article = await getArticle(client.id, item.articleId)
   const run = article.templateId ? await startTemplateGeneration(client, article, user) : await startStandardGeneration(client, article, user)
   await run.whenDone()

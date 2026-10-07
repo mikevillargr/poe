@@ -169,6 +169,16 @@ function mockArticle(prompt: string): string {
   ].join('\n')
 }
 
+/** A few paced "thoughts", so the live thinking peek can be built and tested without a real model. */
+async function* thinking(lines: string[], signal?: AbortSignal): AsyncGenerator<AIStreamEvent> {
+  for (const line of lines) {
+    for (const piece of `${line} `.match(/[\s\S]{1,18}/g) ?? []) {
+      await sleep(20 + MOCK_DELAY_MS(), signal)
+      yield { type: 'thinking', text: piece }
+    }
+  }
+}
+
 async function* chunked(text: string, signal?: AbortSignal): AsyncGenerator<AIStreamEvent> {
   for (const piece of text.match(/[\s\S]{1,24}/g) ?? []) {
     await sleep(15 + MOCK_DELAY_MS(), signal)
@@ -187,6 +197,7 @@ export function createMockProvider(id: ProviderId): AIProvider {
     },
     async *streamText(_model, params) {
       const text = mockArticle(lastUserText(params))
+      yield* thinking(['Reading the brief and the keywords.', 'The primary keyword should lead the H1 and the first paragraph.', 'Planning two H2 sections before writing.'], params.signal)
       yield* chunked(text, params.signal)
       yield { type: 'usage', usage: { inputTokens: 100, outputTokens: text.length / 4 } }
       yield { type: 'done', text }
@@ -199,10 +210,15 @@ export function createMockProvider(id: ProviderId): AIProvider {
         { id: '1', url: 'https://example.com/guide', title: 'Example guide', snippet: 'Mock snippet one.' },
         { id: '2', url: 'https://example.org/stats', title: 'Example statistics', snippet: 'Mock snippet two.' },
       ]
+      yield* thinking(['Working out what a reader searching this topic needs.', 'I should check current figures before outlining.'], params.signal)
       await sleep(MOCK_DELAY_MS(), params.signal)
       yield { type: 'search', query: lastUserText(params).slice(0, 60) }
-      await sleep(50, params.signal)
-      for (const c of citations) yield { type: 'citation', citation: c }
+      await sleep(50 + MOCK_DELAY_MS(), params.signal)
+      yield { type: 'citation', citation: citations[0] }
+      yield* thinking(['The first source covers the basics; looking for numbers next.'], params.signal)
+      yield { type: 'search', query: `${lastUserText(params).slice(0, 40)} statistics` }
+      await sleep(50 + MOCK_DELAY_MS(), params.signal)
+      yield { type: 'citation', citation: citations[1] }
       const text =
         '<h2>Summary</h2><p>Mock research summary [1][2].</p><h2>Outline</h2><ul><li>Intro</li><li>Section A</li><li>Section B</li><li>Conclusion</li></ul>'
       yield* chunked(text, params.signal)

@@ -23,6 +23,7 @@ import { useEditorApi } from './useEditorApi'
 import { useDebouncedPatch } from './useDebouncedPatch'
 import { exportDocx } from './export'
 import { useDriveExport, type DriveState } from './useDriveExport'
+import { useRunEstimates } from '@/components/runs/useRunEstimates'
 import {
   hasDraft,
   hasResearch,
@@ -80,7 +81,11 @@ export function WorkspaceView({
   const base = `/api/clients/${client.id}/articles/${initialArticle.id}`
 
   const [article, setArticle] = useState(initialArticle)
-  const [tab, setTab] = useState<Tab>(hasDraft(initialArticle) || initialArticle.templateId ? 'draft' : 'research')
+  const estimates = useRunEstimates()
+  // A draft being written right now (e.g. by a batch) opens on the Draft tab, where its live activity shows.
+  const [tab, setTab] = useState<Tab>(
+    hasDraft(initialArticle) || initialArticle.templateId || initialArticle.generationStatus === 'running' ? 'draft' : 'research',
+  )
   const [editorGen, setEditorGen] = useState(0)
   const [liveHtml, setLiveHtml] = useState(initialArticle.draftHtml ?? '')
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
@@ -284,6 +289,27 @@ export function WorkspaceView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [research.status, generation.status, revision.status])
+
+  // DR-016: a run going on the server without a stream here (we left and came back, or a batch started it):
+  // attach to it once so its live activity shows. 204 means it isn't in this server process; keep polling.
+  const attachTried = useRef({ research: false, generation: false })
+  // Allow a new attach only once the server says the previous run is over (a 204 must not cause retries).
+  useEffect(() => {
+    if (article.researchStatus !== 'running') attachTried.current.research = false
+    if (article.generationStatus !== 'running') attachTried.current.generation = false
+  }, [article.researchStatus, article.generationStatus])
+  useEffect(() => {
+    if (!researchRemote || attachTried.current.research) return
+    attachTried.current.research = true
+    void research.attach(`${base}/runs/research`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchRemote])
+  useEffect(() => {
+    if (!generationRemote || attachTried.current.generation) return
+    attachTried.current.generation = true
+    void generation.attach(`${base}/runs/generation`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generationRemote])
 
   // Poll while the server reports a run we have no live stream for; pick up the result when it ends.
   useEffect(() => {
@@ -656,6 +682,8 @@ export function WorkspaceView({
                 stream={{
                   active: researchActive,
                   remote: researchRemote,
+                  activity: research.activity,
+                  estimateMs: estimates.research,
                   searches: research.searches,
                   citations: research.citations,
                   text: research.text,
@@ -695,6 +723,8 @@ export function WorkspaceView({
                   streaming={generationActive}
                   remote={generationRemote}
                   streamText={revising ? revision.text : generation.text}
+                  activity={revising ? revision.activity : generation.activity}
+                  estimateMs={estimates.generation}
                   activeSuggestionId={activeSuggestionId}
                   onClearSuggestion={() => {
                     setActiveSuggestionId(null)

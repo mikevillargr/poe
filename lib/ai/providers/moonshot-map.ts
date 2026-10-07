@@ -78,7 +78,10 @@ export class ChatTurnAccumulator {
     if (u) this.usage = { inputTokens: u.prompt_tokens ?? 0, outputTokens: u.completion_tokens ?? 0 }
     for (const choice of chunk.choices ?? []) {
       const d = choice.delta
-      if (d?.reasoning_content) this.reasoning += d.reasoning_content
+      if (d?.reasoning_content) {
+        this.reasoning += d.reasoning_content
+        out.push({ type: 'thinking', text: d.reasoning_content })
+      }
       if (d?.content) {
         this.content += d.content
         out.push({ type: 'delta', text: d.content })
