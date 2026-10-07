@@ -48,7 +48,7 @@ async function configuredRole(role: ModelRole): Promise<ResolvedRole | null> {
   return null
 }
 
-async function logUsage(resolved: ResolvedRole, usage: Usage, ctx: AICallContext) {
+async function logUsage(resolved: ResolvedRole, usage: Usage, ctx: AICallContext, durationMs?: number) {
   try {
     await db.insert(aiUsage).values({
       role: resolved.role,
@@ -59,6 +59,7 @@ async function logUsage(resolved: ResolvedRole, usage: Usage, ctx: AICallContext
       userId: ctx.userId ?? null,
       inputTokens: Math.round(usage.inputTokens),
       outputTokens: Math.round(usage.outputTokens),
+      durationMs: durationMs === undefined ? null : Math.round(durationMs),
     })
   } catch (err) {
     console.error('ai_usage insert failed', err)
@@ -70,8 +71,9 @@ async function* withUsage(
   source: AsyncIterable<AIStreamEvent>,
   ctx: AICallContext,
 ): AsyncGenerator<AIStreamEvent> {
+  const startedAt = Date.now()
   for await (const ev of source) {
-    if (ev.type === 'usage') await logUsage(resolved, ev.usage, ctx)
+    if (ev.type === 'usage') await logUsage(resolved, ev.usage, ctx, Date.now() - startedAt)
     yield ev
   }
 }
@@ -103,8 +105,9 @@ export async function researchForRole(params: ResearchParams, ctx: AICallContext
 export async function generateForRole(role: ModelRole, params: GenerateParams, ctx: AICallContext = {}) {
   const resolved = await resolveRole(role)
   const provider = await getProvider(resolved.provider)
+  const startedAt = Date.now()
   const result = await provider.generateText(resolved.modelId, withDefaults(resolved, params))
-  if (result.usage) await logUsage(resolved, result.usage, ctx)
+  if (result.usage) await logUsage(resolved, result.usage, ctx, Date.now() - startedAt)
   return { resolved, ...result }
 }
 

@@ -36,5 +36,7 @@ export const aiUsage = pgTable('ai_usage', {
   userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
   inputTokens: integer('input_tokens'),
   outputTokens: integer('output_tokens'),
+  // DR-016: wall-clock time of the call, for "usually ~N min" estimates.
+  durationMs: integer('duration_ms'),
   at: timestamp('at').notNull().defaultNow(),
 })

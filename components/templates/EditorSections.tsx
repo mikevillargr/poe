@@ -64,7 +64,8 @@ export function BasicsSection({ config, patch }: { config: TemplateConfig; patch
           <NumberInput value={config.writerMaxTokens} onChange={(n) => patch({ writerMaxTokens: n ?? 2000 })} />
         </Field>
       </div>
-      <Toggle checked={config.researchEnabled} onChange={(researchEnabled) => patch({ researchEnabled })} label="Add the article’s research brief to the prompt (when it has research)" />
+      {/* DR-017: research is chosen per topic (Home queue); when a topic has it, its brief is appended to this prompt. */}
+      <p className="text-xs text-muted">Research is chosen per topic on the Home queue. When a topic is researched, its brief is added to this prompt.</p>
     </Section>
   )
 }

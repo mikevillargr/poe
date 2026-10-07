@@ -94,6 +94,8 @@ export interface ArticleSummary {
   templateId?: string | null
   generationStatus?: 'idle' | 'running' | 'ready' | 'error'
   needsReview?: boolean
+  /** DR-017 (additive): research before writing for this topic. */
+  researchEnabled?: boolean
 }
 
 export type StatusCounts = Record<ArticleStatus, number>

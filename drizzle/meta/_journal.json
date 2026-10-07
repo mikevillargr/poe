@@ -71,6 +71,13 @@
       "when": 1791291521573,
       "tag": "0009_user_google_drive",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791351521073,
+      "tag": "0010_research_enabled_duration",
+      "breakpoints": true
     }
   ]
 }

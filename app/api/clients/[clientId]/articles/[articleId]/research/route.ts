@@ -1,12 +1,10 @@
 import { withRoute, json } from '@/lib/auth/guards'
 import { requireClient } from '@/lib/tenancy'
 import { getArticle } from '@/lib/articles/repo'
-import { researchForRole, modelRef } from '@/lib/ai/roles'
 import { toSSEResponse } from '@/lib/ai/sse'
-import { buildResearchPrompt } from '@/lib/prompts/research'
-import { parseResearchOutput, readResearch, writeResearch } from '@/lib/pipeline/research'
-import { drive, reserveRun, setRunState, stopRun } from '@/lib/pipeline/runs'
-import { logArticleEvent, tapStream, toApiError } from '@/lib/pipeline/stream'
+import { readResearch, writeResearch } from '@/lib/pipeline/research'
+import { startResearch } from '@/lib/pipeline/research-run'
+import { stopRun } from '@/lib/pipeline/runs'
 import { researchEditSchema } from '@/lib/pipeline/schemas'
 
 export const runtime = 'nodejs'
@@ -23,45 +21,7 @@ type P = { clientId: string; articleId: string }
 export const POST = withRoute<P>(async ({ req, params, user }) => {
   const client = await requireClient(params.clientId, { write: true })
   const article = await getArticle(client.id, params.articleId)
-  const run = reserveRun('research', article.id)
-  try {
-    const previousState = article.research ? 'ready' : 'idle'
-    const prompt = buildResearchPrompt(article)
-    let started: Awaited<ReturnType<typeof researchForRole>>
-    try {
-      started = await researchForRole(
-        { system: prompt.system, messages: prompt.messages, maxTokens: prompt.maxTokens, maxSearches: prompt.maxSearches, signal: run.ac.signal },
-        { tenantId: client.id, articleId: article.id, userId: user.id },
-      )
-    } catch (err) {
-      throw toApiError(err)
-    }
-    const model = modelRef(started.resolved)
-    await setRunState('research', client.id, article.id, 'running')
-
-    const { events, tap } = tapStream(started.events, {
-      onFailed: () => setRunState('research', client.id, article.id, 'error'),
-      onIncomplete: () => setRunState('research', client.id, article.id, previousState),
-    })
-
-    drive(run, events, {
-      onPersistError: () => setRunState('research', client.id, article.id, 'error'),
-      onDone: async (done) => {
-        const research = parseResearchOutput(done.text, done.citations?.length ? done.citations : tap.citations, tap.queries)
-        await writeResearch(client.id, article.id, research, user.id)
-        await setRunState('research', client.id, article.id, 'ready', { researchModel: model })
-        await logArticleEvent(client.id, article.id, 'researched', user.id, {
-          model,
-          citations: research.citations.length,
-          queries: research.queries.length,
-        })
-        return [{ type: 'saved', articleId: article.id }]
-      },
-    })
-  } catch (err) {
-    run.release()
-    throw err
-  }
+  const run = await startResearch(client, article, user)
   return toSSEResponse(run.subscribe(req.signal), { signal: req.signal })
 })
 

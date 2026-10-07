@@ -1,4 +1,5 @@
 import {
+  boolean,
   pgTable,
   text,
   timestamp,
@@ -108,6 +109,8 @@ export const articles = pgTable(
     generationMeta: jsonb('generation_meta').$type<GenerationMeta>(),
     // `<sheet source id>:<sheet row number>` for rows synced from a Google Sheet; dedupes re-syncs.
     sourceRowKey: text('source_row_key'),
+    // DR-017: research before writing, per topic. Every new topic starts on; the batch researches only these.
+    researchEnabled: boolean('research_enabled').notNull().default(true),
 
     assigneeId: uuid('assignee_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     importBatchId: uuid('import_batch_id').references(() => importBatches.id, { onDelete: 'set null' }),

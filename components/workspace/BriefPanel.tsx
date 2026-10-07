@@ -57,6 +57,7 @@ export function BriefPanel({
   disabled,
   onChange,
   onTemplateSaved,
+  onResearchEnabled,
 }: {
   article: WorkspaceArticle
   people: WorkspacePerson[]
@@ -66,6 +67,8 @@ export function BriefPanel({
   disabled?: boolean
   onChange: (patch: BriefPatch) => void
   onTemplateSaved: (next: Pick<WorkspaceArticle, 'templateId' | 'templateInputs'>) => void
+  /** DR-017: switch research before writing for this topic. */
+  onResearchEnabled: (on: boolean) => void
 }) {
   const [brief, setBrief] = useState(article.brief ?? '')
   const [target, setTarget] = useState(article.targetWordCount ? String(article.targetWordCount) : '')
@@ -113,6 +116,36 @@ export function BriefPanel({
         disabled={disabled}
         onSaved={onTemplateSaved}
       />
+
+      {article.status === 'queued' && (
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-heading">Research before writing</div>
+            <p className="text-xs text-muted mt-0.5">
+              {article.researchStatus === 'ready'
+                ? 'Researched. The draft uses its sources.'
+                : article.researchEnabled
+                  ? 'Live web research runs first; the draft uses its sources.'
+                  : 'The draft is written from the brief alone.'}
+            </p>
+          </div>
+          {article.researchStatus !== 'ready' && (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={article.researchEnabled}
+              aria-label="Research before writing"
+              disabled={disabled || article.researchStatus === 'running'}
+              onClick={() => onResearchEnabled(!article.researchEnabled)}
+              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 mt-0.5 disabled:opacity-50 ${
+                article.researchEnabled ? 'bg-accent' : 'bg-surface-hover border border-border'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${article.researchEnabled ? 'translate-x-4' : ''}`} />
+            </button>
+          )}
+        </div>
+      )}
 
       <div>
         <label htmlFor="ws-brief" className={labelCls}>
