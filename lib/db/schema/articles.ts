@@ -176,5 +176,5 @@ export const articleEvents = pgTable(
     userId: uuid('user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
     at: timestamp('at').notNull().defaultNow(),
   },
-  (t) => [index('article_events_tenant_at_idx').on(t.tenantId, t.at)],
+  (t) => [index('article_events_tenant_at_idx').on(t.tenantId, t.at), index('article_events_article_at_idx').on(t.articleId, t.at)],
 )

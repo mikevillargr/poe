@@ -12,6 +12,8 @@ export const articleVersionKind = pgEnum('article_version_kind', [
   'restore',
   'imported',
   'revised',
+  // DR-020: the draft as it was before an editing session (for "Show changes" in History).
+  'edit_checkpoint',
 ])
 
 export const guidelineSource = pgEnum('guideline_source', ['manual', 'ingested', 'template_copy'])

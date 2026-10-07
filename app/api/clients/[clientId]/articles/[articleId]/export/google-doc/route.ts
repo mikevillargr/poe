@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { recordArticleEvent } from '@/lib/articles/provenance'
+import { db } from '@/lib/db'
 import { withRoute, json } from '@/lib/auth/guards'
 import { requireClient } from '@/lib/tenancy'
 import { getArticle } from '@/lib/articles/repo'
@@ -18,5 +20,6 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
   const { html } = bodySchema.parse(await req.json())
   const title = article.title || 'Article'
   const url = await createGoogleDoc(user.id, title, buildExportDocument(title, html))
+  await recordArticleEvent(db, { tenantId: client.id, articleId: article.id, userId: user.id, type: 'exported', payload: { format: 'google-doc', url } })
   return json({ url })
 })

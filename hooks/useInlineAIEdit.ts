@@ -7,7 +7,7 @@ import { Selection } from '@tiptap/pm/state'
 import { useAIStream } from '@/lib/ai/client/useAIStream'
 import type { AIStreamEvent } from '@/lib/ai/types'
 import { useToast } from '@/hooks/useToast'
-import { aiEditReducer, CLOSED, canAccept, type AiEditMode } from '@/lib/ai-edit/state'
+import { aiEditReducer, CLOSED, canAccept, type AiEditMode, type AiEditState } from '@/lib/ai-edit/state'
 import { DEFAULT_INSERT_INSTRUCTION, clipContext, plainToHtml, unwrapInline } from '@/lib/ai-edit/text'
 import { AI_EDIT_LIMITS, type AiEditPreset } from '@/lib/prompts/ai-edit-presets'
 import { aiEditKey, getAiRange, isEmptyParagraphSelection, setAiRange } from '@/lib/tiptap/ai-edit'
@@ -211,15 +211,32 @@ export function useInlineAIEdit(editor: Editor | null, url: string | undefined) 
       editor.view.dispatch(tr.scrollIntoView())
       dispatch({ type: 'close' })
       editor.commands.focus()
+      reportAiEdit(url, s, el.textContent ?? '')
       setTimeout(() => {
         if (!editor.isDestroyed && getAiRange(editor)?.kind === 'flash') setAiRange(editor, null)
       }, 1600)
       return true
     },
-    [editor, targetValid],
+    [editor, url, targetValid],
   )
 
   return { state, streamText: stream.text, selection, open, run, stop, adjust, accept, close }
 }
 
 export type InlineAIEdit = ReturnType<typeof useInlineAIEdit>
+
+/** DR-020: logs an applied AI edit in the article's History (best effort; never blocks the editor). */
+function reportAiEdit(url: string | undefined, s: AiEditState, replacement: string) {
+  if (!url) return
+  void fetch(url.replace(/\/ai-edit$/, '/events'), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      type: 'ai_edit_applied',
+      mode: s.mode === 'rewrite' ? 'improve' : 'insert',
+      instruction: s.instruction || undefined,
+      original: s.mode === 'rewrite' ? s.original : undefined,
+      replacement,
+    }),
+  }).catch(() => {})
+}

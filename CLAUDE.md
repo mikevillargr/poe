@@ -38,6 +38,9 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    - *Optimize* = keyword coverage (H1 / first 100 words / H2, density), length vs target, and **Check against
      guidelines** (AI) producing suggestions with in-text highlight, Accept / Adjust / Dismiss. The last check (scores, suggestions and
      what was done with each) is saved on the article (`last_optimize`), so it survives status changes and reloads.
+   - *History* (header button, DR-020): **Activity**, the article's life by person (status and owner moves, brief edits
+     From → To, draft editing sessions with **Show changes**, AI drafts/revisions/edits, guideline checks and each
+     suggestion applied or dismissed, research, exports), grouped by day and filterable; **Versions** (save, restore).
 5. **Guidelines** (`/c/[client]/guidelines`). Manual-first, categorized rules (SEO, structure, readability, sourcing,
    brand, agency, client, blacklist). Import-from-document is secondary. The **blacklist** holds "sounds AI-written"
    words and patterns that generation avoids and Optimize flags. A rule applies to the whole client or to one template
@@ -125,7 +128,8 @@ docker/ Dockerfile docker-compose.yml   production stack (Caddy on 443)
 category, title, rule, weight 1–10, active, source `manual|ingested|template_copy`, sort order) · `universal_guidelines` (agency-wide,
 live) · `client_universal_overrides` (a client's off switch for one Universal rule) · `guidelines` (raw ingested source documents) · `articles` (queue item and article in one row: status
 `queued|draft|in_review|done`, brief, `keywords[]`, primary keyword, target word count, `research` jsonb, draft HTML, last optimize)
-· `article_versions` · `article_events` (activity) · `import_batches` · `ai_provider_credentials` (encrypted keys) ·
+· `article_versions` (kinds incl. `edit_checkpoint`, the draft before an editing session) · `article_events` (provenance: who did what, with a
+payload; frequent edits coalesce per person per burst, `lib/articles/provenance.ts`) · `import_batches` · `ai_provider_credentials` (encrypted keys) ·
 `ai_model_roles` · `ai_usage` · D-002 templates: `content_templates` (per-client presets, soft delete) ·
 `content_template_revisions` · `template_events` · `link_inventories` + `link_inventory_items` · `sheet_sources` ·
 `google_credentials` (encrypted service-account key) · `user_google_drive` (a person's Drive connection for Docs export, encrypted). `articles` also has `template_id`, `template_inputs`,

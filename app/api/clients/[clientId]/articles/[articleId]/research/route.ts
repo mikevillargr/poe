@@ -6,6 +6,8 @@ import { readResearch, writeResearch } from '@/lib/pipeline/research'
 import { startResearch } from '@/lib/pipeline/research-run'
 import { stopRun } from '@/lib/pipeline/runs'
 import { researchEditSchema } from '@/lib/pipeline/schemas'
+import { recordArticleEvent } from '@/lib/articles/provenance'
+import { db } from '@/lib/db'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -50,5 +52,29 @@ export const PATCH = withRoute<P>(async ({ req, params, user }) => {
       : current.citations,
   }
   const row = await writeResearch(client.id, article.id, next, user.id)
+  // DR-020: what changed in the research (coalesced per editing burst).
+  const parts = [edit.summary !== undefined && 'summary', edit.outlineHtml !== undefined && 'outline'].filter(Boolean) as string[]
+  const nowExcluded = next.citations.filter((c) => (c as { excluded?: boolean }).excluded).length
+  if (parts.length) {
+    await recordArticleEvent(db, {
+      tenantId: client.id,
+      articleId: article.id,
+      userId: user.id,
+      type: 'research_edited',
+      payload: { parts },
+      coalesceMs: 10 * 60_000,
+      merge: (p, n) => ({ parts: [...new Set([...((p.parts as string[]) ?? []), ...((n.parts as string[]) ?? [])])] }),
+    })
+  }
+  if (excluded) {
+    await recordArticleEvent(db, {
+      tenantId: client.id,
+      articleId: article.id,
+      userId: user.id,
+      type: 'sources_changed',
+      payload: { excluded: nowExcluded, total: next.citations.length },
+      coalesceMs: 10 * 60_000,
+    })
+  }
   return json({ research: readResearch(row?.research) })
 })

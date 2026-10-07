@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Unlink, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, MoreHorizontal, Unlink, Search, Send, CheckCircle2, Undo2, FileText, Trash2, PanelLeft, PanelRight, Sparkles, Loader2, History } from 'lucide-react'
 import { StatusPill } from '@/components/home/StatusPill'
 import { ARTICLE_STATUS_LABELS, ARTICLE_STATUSES, canTransition, type ArticleStatus } from '@/lib/articles/schemas'
 import type { WorkspaceArticle } from './types'
@@ -41,6 +41,8 @@ export function WorkspaceHeader({
   optimizeOpen,
   onToggleBrief,
   onToggleOptimize,
+  historyOpen,
+  onOpenHistory,
   onTitleChange,
   onPrimary,
   onMoveBack,
@@ -63,6 +65,9 @@ export function WorkspaceHeader({
   optimizeOpen: boolean
   onToggleBrief: () => void
   onToggleOptimize: () => void
+  /** DR-020: the History panel (Activity | Versions). */
+  historyOpen: boolean
+  onOpenHistory: () => void
   onTitleChange: (title: string) => void
   onPrimary: (action: Exclude<PrimaryAction, null>) => void
   onMoveBack: (to: ArticleStatus) => void
@@ -223,6 +228,17 @@ export function WorkspaceHeader({
           {meta.label}
         </button>
       )}
+
+      <button
+        type="button"
+        onClick={onOpenHistory}
+        aria-pressed={historyOpen}
+        className={`p-2 rounded-input transition-colors flex items-center gap-1.5 text-sm ${historyOpen ? 'bg-accent/10 text-accent' : 'text-muted hover:text-heading hover:bg-surface-hover'}`}
+        title="History: who changed what, and saved versions"
+      >
+        <History className="w-4 h-4" />
+        <span className="hidden min-[1200px]:inline">History</span>
+      </button>
 
       {showOptimizeToggle && (
         <button
