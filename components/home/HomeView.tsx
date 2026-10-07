@@ -50,11 +50,13 @@ export function HomeView({
   client,
   initialArticles,
   events,
+  activityCursor,
   people,
 }: {
   client: HomeClient
   initialArticles: ArticleSummary[]
   events: ArticleEventDTO[]
+  activityCursor: string | null
   people: Person[]
 }) {
   const router = useRouter()
@@ -338,7 +340,7 @@ export function HomeView({
         </motion.section>
 
         <motion.div variants={itemVariants} className="hidden xl:block">
-          <ActivityRail events={events} clientSlug={client.slug} />
+          <ActivityRail events={events} clientId={client.id} clientSlug={client.slug} initialCursor={activityCursor} />
         </motion.div>
       </div>
 

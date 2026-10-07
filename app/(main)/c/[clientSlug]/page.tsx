@@ -14,7 +14,7 @@ export default async function ClientHomePage({ params }: { params: Promise<{ cli
   const client = await getClientBySlug(clientSlug)
   if (!client) notFound()
 
-  const [articles, events] = await Promise.all([listArticles(client.id), recentEvents(client.id, 12)])
+  const [articles, activity] = await Promise.all([listArticles(client.id), recentEvents(client.id, 12)])
   const assigneeIds = [...new Set(articles.map((a) => a.assigneeId).filter(Boolean))] as string[]
   const people = assigneeIds.length
     ? await db.select({ id: users.id, name: users.name, image: users.image }).from(users).where(inArray(users.id, assigneeIds))
@@ -24,7 +24,8 @@ export default async function ClientHomePage({ params }: { params: Promise<{ cli
     <HomeView
       client={{ id: client.id, name: client.name, slug: client.slug, website: client.website }}
       initialArticles={articles}
-      events={events}
+      events={activity.events}
+      activityCursor={activity.nextCursor}
       people={people}
     />
   )
