@@ -56,15 +56,23 @@ export function idTokenEmail(idToken: string | undefined): string | null {
   }
 }
 
-/** A Drive "multipart/related" upload body: metadata (as a Google Doc) + the HTML Drive converts. */
-export function multipartDocBody(name: string, html: string, boundary: string): string {
+/** A Drive "multipart/related" upload body: metadata (the Google file type to convert to) + the content. */
+export function multipartBody(name: string, targetMime: string, contentType: string, content: string, boundary: string): string {
   return (
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-    JSON.stringify({ name, mimeType: 'application/vnd.google-apps.document' }) +
-    `\r\n--${boundary}\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n` +
-    html +
+    JSON.stringify({ name, mimeType: targetMime }) +
+    `\r\n--${boundary}\r\nContent-Type: ${contentType}; charset=UTF-8\r\n\r\n` +
+    content +
     `\r\n--${boundary}--`
   )
+}
+
+export const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document'
+export const GOOGLE_SHEET_MIME = 'application/vnd.google-apps.spreadsheet'
+
+/** HTML that Drive converts into a Google Doc. */
+export function multipartDocBody(name: string, html: string, boundary: string): string {
+  return multipartBody(name, GOOGLE_DOC_MIME, 'text/html', html, boundary)
 }
 
 export type DriveErrorCode = 'DRIVE_NOT_CONNECTED' | 'DRIVE_API_DISABLED' | 'DRIVE_FULL' | 'DRIVE_ERROR'

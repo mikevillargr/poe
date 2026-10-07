@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { Plus, Upload, Search, ExternalLink, FileText, Sparkles, AlertTriangle, Loader2 } from 'lucide-react'
+import { Plus, Upload, Search, ExternalLink, FileText, Sparkles, AlertTriangle, Loader2, Download } from 'lucide-react'
 import { arrayMove } from '@dnd-kit/sortable'
 import {
   ARTICLE_STATUSES,
@@ -20,6 +20,7 @@ import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import { StatusCards } from './StatusCards'
 import { QueueTable, type BatchRow, type BatchState, type Person } from './QueueTable'
 import { BulkBar } from './BulkBar'
+import { ExportModal } from './ExportModal'
 import { BatchDrawer, type WatchedItem } from './BatchDrawer'
 import { ActivityRail } from './ActivityRail'
 import { NewArticleModal } from './NewArticleModal'
@@ -74,6 +75,8 @@ export function HomeView({
   const [confirmBatch, setConfirmBatch] = useState(false)
   const [batch, setBatch] = useState<BatchStatus | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  // DR-021: bulk export (links and/or Google Docs → Sheet / XLSX / CSV).
+  const [exportScope, setExportScope] = useState<'selected' | 'drafted' | null>(null)
   const [batchIds, setBatchIds] = useState<string[] | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
   const [watchingId, setWatchingId] = useState<string | null>(null)
@@ -307,6 +310,17 @@ export function HomeView({
               {batchRunning ? 'Generating…' : `Generate queued (${generatable.length})`}
             </button>
           )}
+          {articles.some((a) => a.status !== 'queued') && (
+            <button
+              type="button"
+              onClick={() => setExportScope('drafted')}
+              className="px-4 py-2 rounded-input text-sm font-medium flex items-center gap-2 border border-border text-body hover:text-heading hover:bg-surface-hover transition-colors"
+              title="Export links to the drafted articles: Poe previews and/or Google Docs, as a Sheet, Excel or CSV"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          )}
           <Link
             href={`/c/${client.slug}/import`}
             className="px-4 py-2 rounded-input text-sm font-medium flex items-center gap-2 border border-border text-body hover:text-heading hover:bg-surface-hover transition-colors"
@@ -482,7 +496,16 @@ export function HomeView({
         busy={bulkBusy || batchRunning}
         onResearch={(on) => void setResearch([...selected], on)}
         onGenerate={() => askBatch(selectedRows)}
+        onExport={() => setExportScope('selected')}
         onClear={() => setSelected(new Set())}
+      />
+      <ExportModal
+        open={exportScope !== null}
+        onClose={() => setExportScope(null)}
+        clientId={client.id}
+        articles={articles}
+        selectedIds={[...selected]}
+        initialScope={exportScope ?? 'drafted'}
       />
 
       <NewArticleModal
