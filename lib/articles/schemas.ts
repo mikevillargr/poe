@@ -108,5 +108,7 @@ export interface ArticleEventDTO {
   fromStatus: string | null
   toStatus: string | null
   userName: string | null
+  /** Google avatar URL (users.image); null for system/import events. */
+  userImage: string | null
   at: string
 }

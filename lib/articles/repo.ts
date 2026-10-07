@@ -279,7 +279,22 @@ export async function createVersion(
   })
 }
 
-export async function recentEvents(tenantId: string, limit = 20): Promise<ArticleEventDTO[]> {
+export interface ActivityPage {
+  events: ArticleEventDTO[]
+  /** Id of the oldest returned event; pass as `before` for the next page. Null when exhausted. */
+  nextCursor: string | null
+}
+
+export async function recentEvents(tenantId: string, limit = 20, before?: string): Promise<ActivityPage> {
+  const pageSize = Math.min(limit, 100)
+  const conds = [eq(articleEvents.tenantId, tenantId)]
+  if (before) {
+    // Row-value cursor against a subquery: keeps the comparison entirely in Postgres, so no
+    // JS Date/uuid serialization edge cases (timestamp ties need the id tiebreak).
+    conds.push(
+      sql`(${articleEvents.at}, ${articleEvents.id}) < (select c.at, c.id from ${articleEvents} as c where c.id = ${before} and c.tenant_id = ${tenantId})`,
+    )
+  }
   const rows = await db
     .select({
       id: articleEvents.id,
@@ -289,15 +304,19 @@ export async function recentEvents(tenantId: string, limit = 20): Promise<Articl
       fromStatus: articleEvents.fromStatus,
       toStatus: articleEvents.toStatus,
       userName: users.name,
+      userImage: users.image,
       at: articleEvents.at,
     })
     .from(articleEvents)
     .innerJoin(articles, eq(articles.id, articleEvents.articleId))
     .leftJoin(users, eq(users.id, articleEvents.userId))
-    .where(eq(articleEvents.tenantId, tenantId))
-    .orderBy(desc(articleEvents.at))
-    .limit(Math.min(limit, 100))
-  return rows.map((r) => ({ ...r, at: r.at.toISOString() }))
+    .where(and(...conds))
+    .orderBy(desc(articleEvents.at), desc(articleEvents.id))
+    .limit(pageSize)
+  return {
+    events: rows.map((r) => ({ ...r, at: r.at.toISOString() })),
+    nextCursor: rows.length === pageSize ? rows[rows.length - 1]!.id : null,
+  }
 }
 
 export { toSummary }
