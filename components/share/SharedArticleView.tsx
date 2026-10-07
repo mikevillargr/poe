@@ -14,6 +14,7 @@ import type { SharedArticle } from '@/lib/shares/public'
 import { BrandMark } from './BrandMark'
 import { StoryTimeline } from './StoryTimeline'
 import { ArticleReader } from './ArticleReader'
+import { stripLeadingTitle } from '@/lib/shares/title'
 import { CommentsRail } from './CommentsRail'
 import { ApprovalBar } from './ApprovalBar'
 import { guestFetch, useGuest } from './useGuest'
@@ -188,6 +189,9 @@ export function SharedArticleView({ token, data }: { token: string; data: Shared
   ) : null
   const openCount = threads.filter((t) => t.status === 'open').length
 
+  // The title is shown above; drop the draft's own H1 when it just repeats it.
+  const readerHtml = useMemo(() => stripLeadingTitle(article.html, article.title), [article.html, article.title])
+
   const keywords = [article.primaryKeyword, ...article.keywords.filter((k) => k !== article.primaryKeyword)].filter(Boolean) as string[]
 
   return (
@@ -282,7 +286,7 @@ export function SharedArticleView({ token, data }: { token: string; data: Shared
 
             <div className="mt-8 pt-8 border-t border-border" onClick={onReaderClick}>
               {article.html ? (
-                <ArticleReader ref={readerRef} html={article.html} onReady={() => setReaderReady(true)} />
+                <ArticleReader ref={readerRef} html={readerHtml} onReady={() => setReaderReady(true)} />
               ) : (
                 <p className="text-center text-muted py-16">The draft hasn’t been written yet. This page updates as soon as it is.</p>
               )}

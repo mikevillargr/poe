@@ -52,7 +52,9 @@ function researchKey(src: DraftInputSource): string {
 }
 
 export function draftInputs(src: DraftInputSource): DraftInputs {
-  const inputs = src.templateInputs ? JSON.stringify(Object.entries(src.templateInputs).sort(([a], [b]) => a.localeCompare(b))) : ''
+  // Empty template inputs ({} or null) are the same thing.
+  const entries = src.templateInputs ? Object.entries(src.templateInputs).sort(([a], [b]) => a.localeCompare(b)) : []
+  const inputs = entries.length ? JSON.stringify(entries) : ''
   return {
     title: hashText(norm(src.title)),
     brief: hashText(norm(src.brief)),
@@ -67,5 +69,9 @@ export function draftInputs(src: DraftInputSource): DraftInputs {
 /** Labels of the inputs that differ (empty when unchanged, or when there's no record of the draft's inputs). */
 export function changedInputs(before: Partial<DraftInputs> | null | undefined, now: DraftInputs): string[] {
   if (!before) return []
-  return (Object.keys(LABELS) as (keyof DraftInputs)[]).filter((k) => before[k] !== undefined && before[k] !== now[k]).map((k) => LABELS[k])
+  // Fingerprints saved before empty inputs were normalized hashed `{}` as "[]"; read them as empty.
+  const legacyEmpty = `:${hashText('[]')}`
+  const was = before.template?.endsWith(legacyEmpty) ? `${before.template.slice(0, -legacyEmpty.length)}:${hashText('')}` : before.template
+  const prev = { ...before, template: was }
+  return (Object.keys(LABELS) as (keyof DraftInputs)[]).filter((k) => prev[k] !== undefined && prev[k] !== now[k]).map((k) => LABELS[k])
 }
