@@ -37,6 +37,11 @@ export class OpenAIStreamMapper {
         if (!ev.delta) return []
         this.text += ev.delta
         return [{ type: 'delta', text: ev.delta }]
+      case 'response.reasoning_summary_text.delta':
+        return ev.delta ? [{ type: 'thinking', text: ev.delta }] : []
+      case 'response.reasoning_summary_part.added':
+        // A new summary paragraph: keep it readable in the trail.
+        return [{ type: 'thinking', text: '\n\n' }]
       case 'response.output_text.annotation.added':
         return this.onAnnotation(ev.annotation)
       case 'response.output_item.done':

@@ -20,6 +20,7 @@ import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import { StatusCards } from './StatusCards'
 import { QueueTable, type BatchRow, type BatchState, type Person } from './QueueTable'
 import { BulkBar } from './BulkBar'
+import { BatchDrawer, type WatchedItem } from './BatchDrawer'
 import { ActivityRail } from './ActivityRail'
 import { NewArticleModal } from './NewArticleModal'
 import { useClientTemplates } from '@/components/workspace/TemplatePicker'
@@ -73,6 +74,7 @@ export function HomeView({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchIds, setBatchIds] = useState<string[] | null>(null)
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [watchingId, setWatchingId] = useState<string | null>(null)
   const templates = useClientTemplates(client.id)
   const templateNames = useMemo(() => new Map((templates ?? []).map((t) => [t.id, t.name])), [templates])
 
@@ -86,11 +88,28 @@ export function HomeView({
   const queuedCount = useMemo(() => articles.filter((a) => a.status === 'queued').length, [articles])
   const researchCount = useMemo(() => willResearch(articles.filter((a) => a.status === 'queued')), [articles])
   const selectedRows = useMemo(() => articles.filter((a) => selected.has(a.id)), [articles, selected])
+  // DR-016: the batch row being watched in the drawer (kept while the batch status still lists it).
+  const watched: WatchedItem | null = useMemo(() => {
+    const it = watchingId ? batch?.items.find((i) => i.articleId === watchingId) : undefined
+    const a = watchingId ? articles.find((x) => x.id === watchingId) : undefined
+    if (!it || !a) return null
+    return { ...it, title: a.title, templated: !!a.templateId, targetWords: a.targetWordCount }
+  }, [watchingId, batch, articles])
   const batchTargets = useMemo(() => (batchIds ? articles.filter((a) => batchIds.includes(a.id)) : []), [articles, batchIds])
   const needsReview = useMemo(() => articles.filter((a) => a.needsReview).length, [articles])
   const batchRunning = !!batch && !batch.finished
   const batchMap = useMemo(
-    () => (batch && !batch.finished ? new Map(batch.items.map((i) => [i.articleId, { state: i.state, step: i.step, message: i.message }])) : undefined),
+    () => {
+      if (!batch || batch.finished) return undefined
+      let ahead = 0
+      return new Map(
+        batch.items.map((i) => {
+          const row = { state: i.state, step: i.step, stepStartedAt: i.stepStartedAt, message: i.message, research: i.research, ahead: i.state === 'queued' ? ahead : undefined }
+          if (i.state === 'queued') ahead++
+          return [i.articleId, row]
+        }),
+      )
+    },
     [batch],
   )
 
@@ -113,7 +132,8 @@ export function HomeView({
       if (prev && !prev.finished && d.batch?.finished) {
         const c = d.batch.counts
         const done = c.done + c['needs-review']
-        if (c.failed) toast.error(`Batch finished: ${c.failed} failed`, `${done} of ${d.batch.items.length} generated${c['needs-review'] ? `, ${c['needs-review']} need review` : ''}. Open a failed topic to see why.`)
+        if (c.cancelled) toast.info('Batch stopped', `${done} generated; ${c.cancelled} not started stay queued.`)
+        else if (c.failed) toast.error(`Batch finished: ${c.failed} failed`, `${done} of ${d.batch.items.length} generated${c['needs-review'] ? `, ${c['needs-review']} need review` : ''}. Open a failed topic to see why.`)
         else if (c['needs-review']) toast.warning('Batch finished', `${done} generated, ${c['needs-review']} need review.`)
         else toast.success('Batch complete', `${done} of ${d.batch.items.length} generated.`)
         router.refresh()
@@ -143,6 +163,19 @@ export function HomeView({
         errorTitle: 'Couldn’t start generating',
       })
       setSelected(new Set())
+      await pollBatch()
+    } catch {
+      // toasted
+    }
+  }
+
+  async function stopRemaining() {
+    try {
+      const { cancelled } = await apiFetch<{ cancelled: number }>(`/api/clients/${client.id}/articles/generate-batch`, {
+        method: 'DELETE',
+        errorTitle: 'Couldn’t stop the batch',
+      })
+      if (cancelled) toast.info(`Stopped ${cancelled} waiting ${cancelled === 1 ? 'topic' : 'topics'}`, 'The ones running now finish and are saved.')
       await pollBatch()
     } catch {
       // toasted
@@ -381,8 +414,22 @@ export function HomeView({
                       <Loader2 className="w-4 h-4 animate-spin text-accent" />
                       Generating {batch.counts.running + batch.counts.done + batch.counts['needs-review'] + batch.counts.failed} of {batch.items.length}
                     </span>
-                    <span className="text-xs text-muted font-mono tabular-nums">
-                      {batch.counts.done} done · {batch.counts['needs-review']} need review · {batch.counts.failed} failed
+                    <span className="flex items-center gap-3">
+                      <span className="text-xs text-muted font-mono tabular-nums">
+                        {batch.counts.done} done · {batch.counts.running} running · {batch.counts.queued} waiting
+                        {batch.counts['needs-review'] ? ` · ${batch.counts['needs-review']} need review` : ''}
+                        {batch.counts.failed ? ` · ${batch.counts.failed} failed` : ''}
+                      </span>
+                      {batch.counts.queued > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => void stopRemaining()}
+                          className="text-xs text-muted hover:text-heading underline underline-offset-2"
+                          title="Cancel the topics still waiting; the ones running now finish and are saved"
+                        >
+                          Stop remaining
+                        </button>
+                      )}
                     </span>
                   </div>
                   <div className="mt-2 h-1 rounded-full bg-[var(--color-gauge-bg)] overflow-hidden">
@@ -393,7 +440,10 @@ export function HomeView({
                       }}
                     />
                   </div>
-                  <p className="text-xs text-muted mt-1.5">Three at a time; topics with research on are researched first. You can leave this page; drafts are saved as they finish.</p>
+                  <p className="text-xs text-muted mt-1.5">
+                    Three at a time; topics with research on are researched first. Click a running topic’s status to watch it work. You can leave this
+                    page; drafts are saved as they finish.
+                  </p>
                 </div>
               )}
               <QueueTable
@@ -405,6 +455,7 @@ export function HomeView({
                 selected={selected}
                 onSelect={selectRows}
                 onResearch={(a, on) => void setResearch([a.id], on)}
+                onWatch={(a) => setWatchingId(a.id)}
                 onOpen={(a) => router.push(`/c/${client.slug}/articles/${a.id}`)}
                 onDelete={setDeleting}
                 onReorder={reorder}
@@ -420,6 +471,8 @@ export function HomeView({
           <ActivityRail events={events} clientSlug={client.slug} />
         </motion.div>
       </div>
+
+      <BatchDrawer clientId={client.id} clientSlug={client.slug} item={watched} onClose={() => setWatchingId(null)} />
 
       <BulkBar
         count={selectedRows.length}

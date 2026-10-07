@@ -27,12 +27,17 @@ export interface Person {
 const nf = new Intl.NumberFormat('en-US')
 
 /** Live state of an article in a running "Generate queued" batch (DR-012). */
-export type BatchState = 'queued' | 'running' | 'done' | 'needs-review' | 'failed'
+export type BatchState = 'queued' | 'running' | 'done' | 'needs-review' | 'failed' | 'cancelled'
 /** A row's batch state, with the pipeline step while running (research, then writing). */
 export interface BatchRow {
   state: BatchState
   step?: 'researching' | 'writing'
+  stepStartedAt?: string
   message?: string
+  /** For waiting rows: how many are ahead of it. */
+  ahead?: number
+  /** Whether the batch researches this row first. */
+  research?: boolean
 }
 
 const BATCH_PILL: Record<BatchState, { label: string; cls: string; Icon: typeof Clock }> = {
@@ -41,15 +46,39 @@ const BATCH_PILL: Record<BatchState, { label: string; cls: string; Icon: typeof 
   done: { label: 'Generated', cls: 'border-success/40 text-green-400 bg-success/10', Icon: CheckCircle2 },
   'needs-review': { label: 'Needs review', cls: 'border-warning/40 text-orange-400 bg-warning/10', Icon: AlertTriangle },
   failed: { label: 'Failed', cls: 'border-danger/40 text-red-400 bg-danger/10', Icon: XCircle },
+  cancelled: { label: 'Stopped', cls: 'border-border text-muted', Icon: XCircle },
 }
 
-function BatchPill({ state, step, message }: BatchRow) {
+function BatchPill({ state, step, message, ahead, onWatch }: BatchRow & { onWatch?: () => void }) {
   const p = BATCH_PILL[state]
-  const label = state === 'running' ? (step === 'researching' ? 'Researching' : 'Writing') : p.label
-  return (
-    <span title={message} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${p.cls}`}>
+  const label =
+    state === 'running' ? (step === 'researching' ? 'Researching' : 'Writing') : state === 'queued' && ahead !== undefined ? (ahead === 0 ? 'Up next' : `${ahead} ahead`) : p.label
+  const cls = `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${p.cls}`
+  const body = (
+    <>
       <p.Icon className={`w-3 h-3 ${state === 'running' ? 'animate-spin' : ''}`} />
       {label}
+    </>
+  )
+  // DR-016: a running row's status opens its live activity.
+  if (state === 'running' && onWatch) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onWatch()
+        }}
+        title="Watch it work"
+        className={`${cls} hover:bg-accent/20 underline-offset-2 hover:underline`}
+      >
+        {body}
+      </button>
+    )
+  }
+  return (
+    <span title={message} className={cls}>
+      {body}
     </span>
   )
 }
@@ -112,6 +141,7 @@ function Row({
   anySelected,
   onSelect,
   onResearch,
+  onWatch,
   onOpen,
   onDelete,
 }: {
@@ -126,6 +156,7 @@ function Row({
   anySelected: boolean
   onSelect: (checked: boolean) => void
   onResearch: (on: boolean) => void
+  onWatch: () => void
   onOpen: () => void
   onDelete: () => void
 }) {
@@ -185,7 +216,13 @@ function Row({
             )}
         {(templateName || article.needsReview || article.status === 'queued') && (
           <div className="flex items-center gap-1.5 mt-1.5 min-w-0">
-            <ResearchChip article={article} researching={batch?.state === 'running' && batch.step === 'researching'} disabled={batch?.state === 'running'} onToggle={onResearch} />
+            <ResearchChip
+              article={article}
+              researching={batch?.state === 'running' && batch.step === 'researching'}
+              researched={!!batch?.research && batch.step === 'writing'}
+              disabled={batch?.state === 'running'}
+              onToggle={onResearch}
+            />
             {templateName && (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] border border-border text-muted bg-surface truncate max-w-[200px]">
                 <LayoutTemplate className="w-3 h-3 shrink-0" />
@@ -216,7 +253,7 @@ function Row({
       <td className="px-4 py-4">
         <WordsCell actual={article.wordCount} target={article.targetWordCount} />
       </td>
-      <td className="px-4 py-4">{batch ? <BatchPill {...batch} /> : <StatusPill status={article.status} />}</td>
+      <td className="px-4 py-4">{batch ? <BatchPill {...batch} onWatch={onWatch} /> : <StatusPill status={article.status} />}</td>
       {cols.meta && (
         <>
           <td className="px-4 py-4">
@@ -269,6 +306,7 @@ export function QueueTable({
   selected,
   onSelect,
   onResearch,
+  onWatch,
   onOpen,
   onDelete,
   onReorder,
@@ -284,6 +322,8 @@ export function QueueTable({
   selected: Set<string>
   onSelect: (ids: string[], checked: boolean) => void
   onResearch: (a: ArticleSummary, on: boolean) => void
+  /** DR-016: open the live activity of a running batch row. */
+  onWatch: (a: ArticleSummary) => void
   onOpen: (a: ArticleSummary) => void
   onDelete: (a: ArticleSummary) => void
   onReorder: (activeId: string, overId: string) => void
@@ -372,6 +412,7 @@ export function QueueTable({
                   anySelected={selected.size > 0}
                   onSelect={(checked) => onSelect([a.id], checked)}
                   onResearch={(on) => onResearch(a, on)}
+                  onWatch={() => onWatch(a)}
                   onOpen={() => onOpen(a)}
                   onDelete={() => onDelete(a)}
                 />

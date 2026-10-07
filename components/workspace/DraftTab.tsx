@@ -7,7 +7,8 @@ import { Clock, Highlighter, Loader2, MoreHorizontal, RotateCcw, Save, Sparkles,
 import { RichTextEditor } from '@/components/editor/RichTextEditor'
 import { countWords } from '@/lib/articles/text'
 import { cleanGeneratedHtml } from '@/lib/pipeline/html'
-import { RunProgress } from './RunProgress'
+import { RunActivity } from '@/components/runs/RunActivity'
+import type { ActivityState } from '@/lib/ai/client/activity'
 import { RevisePanel } from './RevisePanel'
 import { StreamingPreview } from './StreamingPreview'
 import { hasDraft, hasResearch, type ModelsInUse, type WorkspaceArticle } from './types'
@@ -111,6 +112,8 @@ export function DraftTab({
   onGenerate,
   onStop,
   revising,
+  activity,
+  estimateMs,
   reviseOpen,
   onReviseOpenChange,
   feedback,
@@ -139,6 +142,10 @@ export function DraftTab({
   onStop: () => void
   /** The running generation is a revision (known only on the page that started it). */
   revising: boolean
+  /** DR-016: live phase, feed and thinking of the running draft. */
+  activity: ActivityState
+  /** Typical drafting time for the configured model (null: no estimate). */
+  estimateMs: number | null
   reviseOpen: boolean
   onReviseOpenChange: (open: boolean) => void
   feedback: string
@@ -171,12 +178,16 @@ export function DraftTab({
           </button>
         </div>
         <div className="px-4 py-3 border-b border-border bg-surface/60">
-          <RunProgress
-            kind="generation"
+          <RunActivity
+            kind={article.templateId && !revising ? 'template' : 'generation'}
+            activity={activity}
             startedAt={article.generationStartedAt}
-            activity={streamText.length}
-            status={remote ? 'Running in the background' : streamText ? `Writing · ${nf.format(words)} words so far` : 'Waiting for the first words'}
             model={models.generation}
+            estimateMs={estimateMs}
+            writtenWords={words}
+            targetWords={article.targetWordCount}
+            remote={remote}
+            showModel={false}
           />
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[var(--color-editor-bg)]">

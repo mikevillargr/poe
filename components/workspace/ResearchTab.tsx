@@ -6,7 +6,8 @@ import { Search, Loader2, BookOpen, PenLine, Sparkles, AlertCircle, RefreshCw, E
 import type { Citation } from '@/lib/ai/types'
 import type { ResearchEdit, WorkspaceResearch } from '@/lib/pipeline/schemas'
 import { OutlineEditor } from './OutlineEditor'
-import { RunProgress } from './RunProgress'
+import { RunActivity } from '@/components/runs/RunActivity'
+import type { ActivityState } from '@/lib/ai/client/activity'
 import { hasResearch, type ModelsInUse, type WorkspaceArticle } from './types'
 
 const nf = new Intl.NumberFormat('en-US')
@@ -19,6 +20,10 @@ export interface ResearchStreamState {
   saving: boolean
   /** Running on the server but not streamed to this page (we returned to it): no live detail. */
   remote: boolean
+  /** DR-016: live phase, feed and thinking. */
+  activity: ActivityState
+  /** Typical research time for the configured model (null: no estimate). */
+  estimateMs: number | null
 }
 
 function domainOf(url: string) {
@@ -82,7 +87,6 @@ export function ResearchTab({
   const busy = stream.active || generating
 
   if (stream.active) {
-    const phase = stream.saving ? 3 : stream.text ? 2 : stream.citations.length ? 1 : 0
     return (
       <div className="max-w-3xl mx-auto p-8 space-y-6">
         <div className="glass-card p-6">
@@ -99,50 +103,20 @@ export function ResearchTab({
               <Square className="w-3 h-3" /> Stop
             </button>
           </div>
-          <div className="mb-5">
-            <RunProgress
-              kind="research"
-              startedAt={article.researchStartedAt}
-              activity={stream.searches.length * 1000 + stream.citations.length * 100 + stream.text.length}
-              status={
-                stream.remote
-                  ? 'Running in the background'
-                  : stream.saving
-                    ? 'Saving research'
-                    : stream.text
-                      ? 'Writing summary and outline'
-                      : stream.citations.length
-                        ? `Reading sources · ${stream.citations.length}`
-                        : stream.searches.length
-                          ? `Searching the web · ${stream.searches.length} ${stream.searches.length === 1 ? 'search' : 'searches'}`
-                          : 'Starting research'
-              }
-              model={models.research}
-            />
-          </div>
-          {!stream.remote && (
-          <ol className="space-y-2.5 mb-6">
-            <Phase label="Searching the web" state={phase === 0 ? 'active' : 'done'} />
-            <Phase label={`Reading sources · ${stream.citations.length}`} state={phase < 1 ? 'todo' : phase === 1 ? 'active' : 'done'} />
-            <Phase label="Writing summary and outline" state={phase < 2 ? 'todo' : phase === 2 ? 'active' : 'done'} />
-            <Phase label="Saving research" state={phase < 3 ? 'todo' : 'active'} />
-          </ol>
+          <RunActivity
+            kind="research"
+            activity={stream.activity}
+            startedAt={article.researchStartedAt}
+            model={models.research}
+            estimateMs={stream.estimateMs}
+            remote={stream.remote}
+            showModel={false}
+          />
+          {stream.saving && (
+            <p className="mt-3 text-xs text-muted flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin" /> Saving research…
+            </p>
           )}
-          <div className="space-y-1.5">
-            <AnimatePresence initial={false}>
-              {stream.searches.map((q, i) => (
-                <motion.div
-                  key={`${i}-${q}`}
-                  initial={{ opacity: 0, x: -8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex items-center gap-2 text-xs text-body"
-                >
-                  <Search className="w-3 h-3 text-muted shrink-0" />
-                  <span className="truncate">“{q}”</span>
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
         </div>
         <p className="text-xs text-muted text-center">Research keeps running if you leave this page, and is saved when it finishes.</p>
       </div>

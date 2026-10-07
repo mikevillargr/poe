@@ -27,7 +27,15 @@ export class Run {
 
   constructor(readonly kind: RunKind, readonly articleId: string) {}
 
+  /** DR-016: thinking is display-only; past this many characters per run it is no longer buffered (memory guard). */
+  static readonly MAX_THINKING_CHARS = 50_000
+  private thinkingChars = 0
+
   emit(ev: AIStreamEvent) {
+    if (ev.type === 'thinking') {
+      if (this.thinkingChars >= Run.MAX_THINKING_CHARS) return
+      this.thinkingChars += ev.text.length
+    }
     this.events.push(ev)
     this.wake()
   }

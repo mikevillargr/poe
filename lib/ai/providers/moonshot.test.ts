@@ -128,7 +128,7 @@ test('streamText and listModels', async () => {
   })
   const p = createMoonshotProvider(creds(), { fetch })
   const events = await collect(p.streamText('kimi-k3', prompt))
-  assert.deepEqual([...new Set(events.map((e) => e.type))], ['delta', 'usage', 'done'])
+  assert.deepEqual([...new Set(events.map((e) => e.type))], ['thinking', 'delta', 'usage', 'done'])
   const models = await p.listModels()
   assert.deepEqual(
     models.map((m) => [m.id, m.supportsWebSearch, !!m.deprecated, m.contextWindow]),

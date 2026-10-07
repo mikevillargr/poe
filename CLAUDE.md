@@ -28,7 +28,8 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
 3. **Client Home** (`/c/[client]`). Status cards (Queued · Draft · In Review · Done), the ordered queue (drag to
    reorder), activity feed, **New Article**. Each queued topic has a **Research** chip (on by default; DR-017) and
    rows can be selected for bulk research on/off or **Generate selected**; **Generate queued** researches the topics
-   that have it on, then drafts every queued topic, 3 at a time.
+   that have it on, then drafts every queued topic, 3 at a time. Click a running topic’s status to watch it live (stepper,
+   searches and sources, a peek at the model’s thinking, words written); **Stop remaining** cancels the waiting ones.
 4. **Article Workspace** (`/c/[client]/articles/[id]`). Brief + keywords (left) · **Research | Draft** tabs (centre) ·
    **Optimize** (right).
    - *Research* streams live web research into an editable summary, outline and numbered sources.
@@ -68,13 +69,15 @@ app/
   api/admin/…                           users, providers (keys), model-roles, universal-guidelines
   api/content/{parse,fetch-gdoc}        file/URL/Google Doc text extraction (guideline import)
   api/health, api/auth/…
-components/   shell, home, import, workspace, templates, sources, guidelines, settings, admin, editor, feedback, auth
+components/   shell, home, import, workspace, runs (RunActivity, ThinkingPeek, ActivityFeed; DR-016), templates, sources, guidelines, settings, admin, editor, feedback, auth
 lib/
   db/schema/*       Drizzle schema by domain (tenants = clients, heuristics = guidelines)
   auth/ api/        guards (withRoute, requireUser…), {error, code} helpers, apiFetch
   tenancy/ clients/ client lookup + creation
   articles/         repo, shared zod schemas (FROZEN contract), text helpers
-  ai/               provider contract (FROZEN), providers/*, roles, secrets, SSE, mock provider
+  ai/               provider contract (FROZEN; `thinking` event = readable reasoning, display only), providers/*,
+                    roles (+ duration_ms), estimates, secrets, SSE, mock provider; client/activity.ts folds stream
+                    events into the live activity view (DR-016)
   pipeline/ prompts/ research + generation (prompt builders, persistence); research-run.ts / generation-run.ts start
                     the detached runs used by the routes and the batch
   optimize/         keyword coverage, guideline-check prompt/parse

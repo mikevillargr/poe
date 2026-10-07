@@ -57,6 +57,7 @@ export class AnthropicStreamMapper {
         return this.onBlockStart(ev.index, ev.content_block)
       case 'content_block_delta': {
         const d = ev.delta
+        if (d.type === 'thinking_delta') return d.thinking ? [{ type: 'thinking', text: d.thinking }] : []
         if (d.type === 'text_delta') {
           if (!d.text) return []
           this.text += d.text

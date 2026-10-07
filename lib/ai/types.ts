@@ -62,6 +62,8 @@ export interface Usage {
 
 export type AIStreamEvent =
   | { type: 'delta'; text: string }
+  /** DR-016: a piece of the model's readable reasoning (summary). Display only; never sent back as input. */
+  | { type: 'thinking'; text: string }
   | { type: 'search'; query: string }
   | { type: 'citation'; citation: Citation }
   | { type: 'usage'; usage: Usage }
