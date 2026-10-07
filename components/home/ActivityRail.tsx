@@ -23,12 +23,34 @@ function describe(e: ArticleEventDTO): string {
       return 'revised the draft of'
     case 'status_changed':
       return 'moved'
+    case 'assigned':
+      return 'changed the owner of'
+    case 'fields_edited':
+      return 'edited the brief of'
+    case 'draft_edited':
+      return 'edited the draft of'
+    case 'version_saved':
+      return 'saved a version of'
+    case 'restored':
+      return 'restored a version of'
+    case 'ai_edit_applied':
+      return 'used AI to edit'
+    case 'guidelines_checked':
+      return 'checked guidelines on'
+    case 'research_edited':
+      return 'edited the research of'
+    case 'exported':
+      return 'exported'
+    case 'template_set':
+      return 'changed the template of'
+    case 'checks_reviewed':
+      return 'reviewed the checks of'
     default:
       return e.type.replace(/_/g, ' ')
   }
 }
 
-function EventAvatar({ name, image }: { name: string | null; image: string | null }) {
+export function EventAvatar({ name, image }: { name: string | null; image: string | null }) {
   if (image) {
     return (
       // eslint-disable-next-line @next/next/no-img-element

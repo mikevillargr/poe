@@ -1,5 +1,5 @@
 import 'server-only'
-import { and, asc, count, desc, eq, ilike, inArray, max, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, ilike, inArray, max, notInArray, or, sql } from 'drizzle-orm'
 import { db, type Db } from '@/lib/db'
 import { articleEvents, articleVersions, articles, users } from '@/lib/db/schema'
 import type { ArticleVersionKind } from '@/lib/db/schema'
@@ -15,6 +15,15 @@ import {
   type StatusCounts,
 } from './schemas'
 import { countWords } from './text'
+import {
+  DRAFT_EDIT_WINDOW_MS,
+  FIELD_EDIT_WINDOW_MS,
+  hasOpenDraftSession,
+  mergeDraftEdits,
+  mergeFieldChanges,
+  recordArticleEvent,
+  saveEditCheckpoint,
+} from './provenance'
 
 export type Article = typeof articles.$inferSelect
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
@@ -192,6 +201,9 @@ export async function updateArticle(
 
     const [updated] = await tx.update(articles).set(set).where(eq(articles.id, articleId)).returning()
 
+    // DR-020 provenance for edits made by people (generations, revisions and restores record their own events).
+    if (!opts.eventType) await recordEdits(tx, tenantId, current, updated, patch, user?.id ?? null)
+
     if (statusChanged || opts.eventType) {
       await tx.insert(articleEvents).values({
         articleId,
@@ -205,6 +217,53 @@ export async function updateArticle(
     }
     return updated
   })
+}
+
+const EDITABLE_FIELDS = ['title', 'brief', 'keywords', 'primaryKeyword', 'targetWordCount'] as const
+const clip = (v: unknown) => (typeof v === 'string' && v.length > 2000 ? `${v.slice(0, 2000)}…` : v)
+
+/** DR-020: field edits (From → To, per burst), owner changes, and draft-editing sessions with a checkpoint. */
+async function recordEdits(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tenantId: string,
+  before: Article,
+  after: Article,
+  patch: ArticleUpdate,
+  userId: string | null,
+) {
+  const changes = EDITABLE_FIELDS.filter((k) => patch[k] !== undefined && JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null)).map((k) => ({
+    field: k,
+    from: clip(before[k] ?? null),
+    to: clip(after[k] ?? null),
+  }))
+  if (changes.length) {
+    await recordArticleEvent(tx, {
+      tenantId,
+      articleId: after.id,
+      userId,
+      type: 'fields_edited',
+      payload: { changes },
+      coalesceMs: FIELD_EDIT_WINDOW_MS,
+      merge: mergeFieldChanges,
+    })
+  }
+  if (patch.assigneeId !== undefined && before.assigneeId !== after.assigneeId) {
+    await recordArticleEvent(tx, { tenantId, articleId: after.id, userId, type: 'assigned', payload: { from: before.assigneeId, to: after.assigneeId } })
+  }
+  if (patch.draftHtml !== undefined && (before.draftHtml ?? '') !== (after.draftHtml ?? '')) {
+    const open = await hasOpenDraftSession(tx, after.id, userId)
+    const checkpointVersionNo = !open && before.draftHtml?.trim() ? await saveEditCheckpoint(tx, after.id, before.draftHtml, userId) : undefined
+    await recordArticleEvent(tx, {
+      tenantId,
+      articleId: after.id,
+      userId,
+      type: 'draft_edited',
+      payload: { wordsBefore: before.wordCount ?? 0, wordsAfter: after.wordCount ?? 0, saves: 1, ...(checkpointVersionNo ? { checkpointVersionNo } : {}) },
+      // Coalesce only into a session that's still open (no regenerate/revise/restore since).
+      coalesceMs: open ? DRAFT_EDIT_WINDOW_MS : undefined,
+      merge: mergeDraftEdits,
+    })
+  }
 }
 
 export async function deleteArticle(tenantId: string, articleId: string) {
@@ -285,9 +344,12 @@ export interface ActivityPage {
   nextCursor: string | null
 }
 
+const RAIL_HIDDEN_EVENTS = ['suggestion_accepted', 'suggestion_dismissed', 'suggestion_restored', 'suggestion_reworded', 'sources_changed', 'research_setting']
+
 export async function recentEvents(tenantId: string, limit = 20, before?: string): Promise<ActivityPage> {
   const pageSize = Math.min(limit, 100)
-  const conds = [eq(articleEvents.tenantId, tenantId)]
+  // DR-020: per-click detail (each suggestion, source or research switch) stays in the article's History.
+  const conds = [eq(articleEvents.tenantId, tenantId), notInArray(articleEvents.type, RAIL_HIDDEN_EVENTS)]
   if (before) {
     // Row-value cursor against a subquery: keeps the comparison entirely in Postgres, so no
     // JS Date/uuid serialization edge cases (timestamp ties need the id tiebreak).

@@ -12,7 +12,7 @@ import type { AIStreamEvent } from '@/lib/ai/types'
 import { ARTICLE_STATUS_LABELS, type ArticleStatus } from '@/lib/articles/schemas'
 import type { ArticleVersionDTO, ResearchEdit, WorkspaceResearch } from '@/lib/pipeline/schemas'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
-import { VersionHistory } from '@/components/VersionHistory'
+import { HistoryPanel, type HistoryTab } from './HistoryPanel'
 import { WorkspaceHeader, type PrimaryAction } from './WorkspaceHeader'
 import { BriefPanel, type BriefPatch } from './BriefPanel'
 import { ResearchTab } from './ResearchTab'
@@ -98,6 +98,7 @@ export function WorkspaceView({
   const [activeSuggestionId, setActiveSuggestionId] = useState<string | null>(null)
   const [versions, setVersions] = useState<ArticleVersionDTO[]>([])
   const [versionsOpen, setVersionsOpen] = useState(false)
+  const [historyTab, setHistoryTab] = useState<HistoryTab>('activity')
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [confirm, setConfirm] = useState<'regenerate' | 'delete' | null>(null)
   const [statusSaving, setStatusSaving] = useState(false)
@@ -653,6 +654,13 @@ export function WorkspaceView({
         optimizeOpen={optimizeOpen}
         onToggleBrief={() => setBriefOpen((o) => !o)}
         onToggleOptimize={() => setOptimizeOpen((o) => !o)}
+        historyOpen={versionsOpen}
+        onOpenHistory={() => {
+          if (versionsOpen) return setVersionsOpen(false)
+          setHistoryTab('activity')
+          setVersionsOpen(true)
+          void loadVersions()
+        }}
         onTitleChange={(title) => patchFields({ title })}
         onPrimary={onPrimary}
         onMoveBack={moveStatus}
@@ -660,6 +668,8 @@ export function WorkspaceView({
         onExportDocx={() => {
           try {
             exportDocx(article.title, currentHtml())
+            // DR-020: the download happens in the browser, so it reports itself to History.
+            void fetch(`${base}/events`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'exported', format: 'docx' }) }).catch(() => {})
           } catch (err) {
             toast.error('Export failed', err instanceof Error ? err.message : undefined)
           }
@@ -769,6 +779,7 @@ export function WorkspaceView({
                   onEditorReady={(e) => setLiveHtml(e.getHTML())}
                   onSaveVersion={() => void saveVersion().catch(() => {})}
                   onOpenVersions={() => {
+                    setHistoryTab('versions')
                     setVersionsOpen(true)
                     void loadVersions()
                   }}
@@ -812,17 +823,18 @@ export function WorkspaceView({
         )}
       </div>
 
-      <AnimatePresence>
-        {versionsOpen && (
-          <VersionHistory
-            versions={versions}
-            loading={versionsLoading}
-            onClose={() => setVersionsOpen(false)}
-            onRestore={restore}
-            onCreate={(label) => saveVersion(label)}
-          />
-        )}
-      </AnimatePresence>
+      <HistoryPanel
+        open={versionsOpen}
+        tab={historyTab}
+        onTabChange={setHistoryTab}
+        onClose={() => setVersionsOpen(false)}
+        base={base}
+        refreshKey={`${article.updatedAt}:${article.status}:${versions.length}`}
+        versions={versions}
+        versionsLoading={versionsLoading}
+        onRestore={restore}
+        onSaveVersion={(label) => saveVersion(label)}
+      />
 
       <ConfirmModal
         isOpen={confirm === 'regenerate'}

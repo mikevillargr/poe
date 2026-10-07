@@ -1,4 +1,5 @@
 import { eq, and } from 'drizzle-orm'
+import { recordArticleEvent } from '@/lib/articles/provenance'
 import { withRoute, json } from '@/lib/auth/guards'
 import { requireClient } from '@/lib/tenancy'
 import { Errors } from '@/lib/api/errors'
@@ -88,5 +89,12 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
     })
     .where(and(eq(articles.id, article.id), eq(articles.tenantId, client.id)))
 
+  await recordArticleEvent(db, {
+    tenantId: client.id,
+    articleId: article.id,
+    userId: user.id,
+    type: 'guidelines_checked',
+    payload: { score: parsed.overallScore, suggestions: parsed.suggestions.length, rules },
+  })
   return json({ ...parsed, guidelineCount, rules })
 })

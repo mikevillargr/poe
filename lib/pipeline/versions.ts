@@ -1,4 +1,5 @@
 import 'server-only'
+import { recordArticleEvent } from '@/lib/articles/provenance'
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { articleVersions, users } from '@/lib/db/schema'
@@ -63,6 +64,7 @@ export async function saveManualVersion(tenantId: string, articleId: string, use
   const article = await getArticle(tenantId, articleId)
   if (!hasContent(article.draftHtml)) throw Errors.badRequest('There is no draft to save yet.')
   const v = await createVersion(articleId, article.draftHtml, 'manual', user, label || undefined)
+  await recordArticleEvent(db, { tenantId, articleId, userId: user.id, type: 'version_saved', payload: { versionNo: v.versionNo, label: label || null, wordCount: v.wordCount } })
   return toDTO(v, user.name)
 }
 

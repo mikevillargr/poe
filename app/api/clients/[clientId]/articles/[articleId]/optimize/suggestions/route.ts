@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { and, eq, sql } from 'drizzle-orm'
+import { recordArticleEvent } from '@/lib/articles/provenance'
 import { withRoute, json } from '@/lib/auth/guards'
 import { Errors } from '@/lib/api/errors'
 import { requireClient } from '@/lib/tenancy'
@@ -18,7 +19,7 @@ const bodySchema = z.object({
 
 // PATCH { id, status?, suggested? } → { lastOptimize }. Saves what the editor did with one guideline-check
 // suggestion (accept, dismiss, undo, recompose), so the list survives status changes and reloads.
-export const PATCH = withRoute<{ clientId: string; articleId: string }>(async ({ req, params }) => {
+export const PATCH = withRoute<{ clientId: string; articleId: string }>(async ({ req, params, user }) => {
   const client = await requireClient(params.clientId, { write: true })
   const article = await getArticle(client.id, params.articleId)
   const body = bodySchema.parse(await req.json())
@@ -36,5 +37,21 @@ export const PATCH = withRoute<{ clientId: string; articleId: string }>(async ({
     .where(and(eq(articles.id, article.id), eq(articles.tenantId, client.id)))
     .returning({ lastOptimize: articles.lastOptimize })
   const next = row.lastOptimize
+  // DR-020: what was done with the suggestion, with its text, for the History panel.
+  const s = article.lastOptimize.suggestions.find((x) => x.id === body.id)!
+  const type = body.suggested
+    ? 'suggestion_reworded'
+    : body.status === 'accepted'
+      ? 'suggestion_accepted'
+      : body.status === 'dismissed'
+        ? 'suggestion_dismissed'
+        : 'suggestion_restored'
+  await recordArticleEvent(db, {
+    tenantId: client.id,
+    articleId: article.id,
+    userId: user.id,
+    type,
+    payload: { suggestionId: s.id, category: s.category, title: s.title, original: s.original, suggested: body.suggested ?? s.suggested },
+  })
   return json({ lastOptimize: next })
 })
