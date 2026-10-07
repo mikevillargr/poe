@@ -50,6 +50,10 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    - *Comments* (header): the share link's threads inside Poe: jump to the passage, reply as the team, resolve/reopen.
    - **Notifications** (sidebar bell): comments, replies and sign-offs on articles you own. Each row is also an email
      outbox entry (`email_status`); no email sender is configured yet (`lib/notifications/email.ts`).
+3a. **Export** (Home header, or the bulk bar for selected rows; DR-021): Poe preview links and/or Google Docs (one per
+   drafted article in the person's Drive, reused while the draft is unchanged, optionally viewable by anyone with the
+   link) as a **Google Sheet**, **Excel** or **CSV** with title, status, keywords, words, score, owner, links, open
+   comments, client decision and last update. Progress streams per article.
 5. **Guidelines** (`/c/[client]/guidelines`). Manual-first, categorized rules (SEO, structure, readability, sourcing,
    brand, agency, client, blacklist). Import-from-document is secondary. The **blacklist** holds "sounds AI-written"
    words and patterns that generation avoids and Optimize flags. A rule applies to the whole client or to one template

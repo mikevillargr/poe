@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { userGoogleDrive } from '@/lib/db/schema'
 import { decryptSecret, encryptSecret } from '@/lib/ai/secrets'
 import { ApiError } from '@/lib/api/errors'
-import { canReadSheets, classifyDriveError, driveRedirectUri, idTokenEmail, multipartDocBody } from './drive-oauth'
+import { canReadSheets, classifyDriveError, driveRedirectUri, GOOGLE_DOC_MIME, GOOGLE_SHEET_MIME, idTokenEmail, multipartBody } from './drive-oauth'
 
 // DR-014: each person connects their own Google Drive once (drive.file scope). The refresh token is stored
 // encrypted; exports upload on the server with a short-lived access token, so the browser's one-window-per-click
@@ -108,18 +108,26 @@ export async function userAccessToken(userId: string): Promise<string> {
 
 /** Uploads a full HTML document as a new Google Doc in the person's My Drive; returns its link. */
 export async function createGoogleDoc(userId: string, name: string, html: string): Promise<string> {
+  const id = await uploadConverted(userId, name, GOOGLE_DOC_MIME, 'text/html', html)
+  return id.webViewLink || `https://docs.google.com/document/d/${id.id}/edit`
+}
+
+/** DR-021: uploads CSV as a new Google Sheet in the person's My Drive; returns its link. */
+export async function createGoogleSheet(userId: string, name: string, csv: string): Promise<string> {
+  const id = await uploadConverted(userId, name, GOOGLE_SHEET_MIME, 'text/csv', csv)
+  return id.webViewLink || `https://docs.google.com/spreadsheets/d/${id.id}/edit`
+}
+
+async function uploadConverted(userId: string, name: string, targetMime: string, contentType: string, content: string): Promise<{ id: string; webViewLink?: string }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const boundary = `poe-${crypto.randomUUID()}`
     const res = await fetch(UPLOAD_URL, {
       method: 'POST',
       headers: { authorization: `Bearer ${await userAccessToken(userId)}`, 'content-type': `multipart/related; boundary=${boundary}` },
-      body: multipartDocBody(name, html, boundary),
+      body: multipartBody(name, targetMime, contentType, content, boundary),
     })
     const body = await res.json().catch(() => null)
-    if (res.ok) {
-      const { id, webViewLink } = body as { id: string; webViewLink?: string }
-      return webViewLink || `https://docs.google.com/document/d/${id}/edit`
-    }
+    if (res.ok) return body as { id: string; webViewLink?: string }
     const { code, message } = classifyDriveError(res.status, body)
     // A 401 with a cached token: drop it and retry once with a fresh one.
     if (res.status === 401 && attempt === 0) {
@@ -129,4 +137,16 @@ export async function createGoogleDoc(userId: string, name: string, html: string
     throw new ApiError(code === 'DRIVE_NOT_CONNECTED' ? 409 : 502, code, message)
   }
   throw notConnected()
+}
+
+/** DR-021: lets anyone with the link view a file Poe created (Workspace policy may refuse; returns false then). */
+export async function shareWithLink(userId: string, fileUrl: string): Promise<boolean> {
+  const id = /\/d\/([A-Za-z0-9_-]+)/.exec(fileUrl)?.[1]
+  if (!id) return false
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}/permissions?sendNotificationEmail=false`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${await userAccessToken(userId)}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone', allowFileDiscovery: false }),
+  })
+  return res.ok
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { Search, SearchX, Sparkles, X } from 'lucide-react'
+import { Search, SearchX, Sparkles, X, Download } from 'lucide-react'
 
 // DR-017: actions for the selected queue rows, in a floating bar (ClickUp/YNAB pattern).
 
@@ -11,6 +11,7 @@ export function BulkBar({
   busy,
   onResearch,
   onGenerate,
+  onExport,
   onClear,
 }: {
   count: number
@@ -19,6 +20,8 @@ export function BulkBar({
   busy?: boolean
   onResearch: (on: boolean) => void
   onGenerate: () => void
+  /** DR-021: export the selected articles (links and/or Google Docs). */
+  onExport: () => void
   onClear: () => void
 }) {
   const btn = 'px-3 py-1.5 rounded-input text-sm font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-50'
@@ -53,6 +56,9 @@ export function BulkBar({
             className={`${btn} text-accent hover:bg-accent/10`}
           >
             <Sparkles className="w-4 h-4" /> Generate {generatable}
+          </button>
+          <button type="button" onClick={onExport} className={`${btn} text-body hover:bg-surface-hover`}>
+            <Download className="w-4 h-4" /> Export
           </button>
           <button type="button" onClick={onClear} aria-label="Clear selection" className="p-1.5 rounded text-muted hover:text-heading hover:bg-surface-hover">
             <X className="w-4 h-4" />
