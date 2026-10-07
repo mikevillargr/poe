@@ -37,6 +37,7 @@ export function WorkspaceHeader({
   showBriefToggle,
   showOptimizeToggle,
   briefOpen,
+  briefChanged = false,
   optimizeOpen,
   onToggleBrief,
   onToggleOptimize,
@@ -57,6 +58,8 @@ export function WorkspaceHeader({
   showBriefToggle: boolean
   showOptimizeToggle: boolean
   briefOpen: boolean
+  /** DR-019: the brief changed since the draft was written (a dot on the Brief toggle). */
+  briefChanged?: boolean
   optimizeOpen: boolean
   onToggleBrief: () => void
   onToggleOptimize: () => void
@@ -135,11 +138,12 @@ export function WorkspaceHeader({
           type="button"
           onClick={onToggleBrief}
           aria-pressed={briefOpen}
-          className={`p-2 rounded-input transition-colors flex items-center gap-1.5 text-sm ${briefOpen ? 'bg-accent/10 text-accent' : 'text-muted hover:text-heading hover:bg-surface-hover'}`}
-          title="Brief"
+          className={`relative p-2 rounded-input transition-colors flex items-center gap-1.5 text-sm ${briefOpen ? 'bg-accent/10 text-accent' : 'text-muted hover:text-heading hover:bg-surface-hover'}`}
+          title={briefChanged ? 'Brief: changed since this draft' : 'Brief'}
         >
           <PanelLeft className="w-4 h-4" />
           Brief
+          {briefChanged && <span className="absolute top-1.5 right-1 w-1.5 h-1.5 rounded-full bg-accent" aria-label="changed since this draft" />}
         </button>
       )}
       <div className="w-px h-6 bg-border" />

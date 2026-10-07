@@ -9,6 +9,8 @@ import { persistGeneratedDraft } from './generate'
 import { snapshotDraft } from './versions'
 import { tapStream, toApiError } from './stream'
 import { drive, reserveRun, setRunState, type Run } from './runs'
+import { draftInputs } from '@/lib/articles/draft-inputs'
+import { claimOwnerIfUnassigned } from '@/lib/articles/owner'
 
 /** True when the article has a usable research brief (summary, outline or sources). */
 export function articleHasResearch(article: Pick<Article, 'research'>): boolean {
@@ -28,7 +30,9 @@ export async function startStandardGeneration(
   opts: { useResearch?: boolean } = {},
 ): Promise<Run> {
   const run = reserveRun('generation', article.id)
+  const inputs = draftInputs(article)
   try {
+    await claimOwnerIfUnassigned(client.id, article.id, user)
     const research = readResearch(article.research)
     const useResearch = articleHasResearch(article) && opts.useResearch !== false
     const previousState = article.draftHtml?.trim() ? 'ready' : 'idle'
@@ -61,6 +65,7 @@ export async function startStandardGeneration(
         const saved = await persistGeneratedDraft(client.id, article.id, done.text, model, user, {
           usedResearch: useResearch,
           snapshotVersionNo: snapshot?.versionNo ?? null,
+          inputs,
         })
         await setRunState('generation', client.id, article.id, 'ready')
         return [{ type: 'saved', articleId: article.id, versionNo: saved.versionNo }]

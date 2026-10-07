@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation'
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import type { DraftInputs } from '@/lib/articles/draft-inputs'
 import { db } from '@/lib/db'
-import { users } from '@/lib/db/schema'
+import { articleEvents, users } from '@/lib/db/schema'
 import { requirePageUser } from '@/lib/auth/guards'
 import { getClientBySlug } from '@/lib/tenancy'
 import { getArticleReconciled } from '@/lib/pipeline/runs'
@@ -40,7 +41,7 @@ export default async function ArticleWorkspacePage({
     throw err
   }
 
-  const [people, research, generation, drive] = await Promise.all([
+  const [people, research, generation, drive, lastDraft] = await Promise.all([
     db
       .select({ id: users.id, name: users.name, email: users.email, image: users.image })
       .from(users)
@@ -49,6 +50,13 @@ export default async function ArticleWorkspacePage({
     configuredModel('research'),
     configuredModel('generation'),
     driveStatus(user.id),
+    // DR-019: what the current draft was written from (newest generated/revised event).
+    db
+      .select({ payload: articleEvents.payload })
+      .from(articleEvents)
+      .where(and(eq(articleEvents.articleId, row.id), inArray(articleEvents.type, ['generated', 'revised'])))
+      .orderBy(desc(articleEvents.at))
+      .limit(1),
   ])
   const models: ModelsInUse = { research, generation }
 
@@ -61,6 +69,8 @@ export default async function ArticleWorkspacePage({
       models={models}
       isSuperAdmin={user.role === 'super_admin'}
       initialDrive={drive}
+      currentUserId={user.id}
+      lastDraftInputs={(lastDraft[0]?.payload?.inputs as DraftInputs | undefined) ?? null}
     />
   )
 }

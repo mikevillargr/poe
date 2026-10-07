@@ -5,6 +5,8 @@ import { ApiError, Errors } from '@/lib/api/errors'
 import type { AppUser } from '@/lib/auth/guards'
 import type { Article } from '@/lib/articles/repo'
 import { categoryLabel } from '@/lib/guidelines/categories'
+import { draftInputs } from '@/lib/articles/draft-inputs'
+import { claimOwnerIfUnassigned } from '@/lib/articles/owner'
 import { renderGuidelineTiers } from '@/lib/guidelines/render'
 import { getActiveGuidelines } from '@/lib/pipeline/guidelines'
 import { persistGeneratedDraft } from '@/lib/pipeline/generate'
@@ -90,7 +92,9 @@ export async function startTemplateGeneration(client: ClientLike, article: Artic
   if (!template.enabled) throw Errors.badRequest(`The “${template.name}” template is disabled.`)
 
   const run = reserveRun('generation', article.id)
+  const inputs = draftInputs(article)
   try {
+    await claimOwnerIfUnassigned(client.id, article.id, user)
     const [facts, inventories, guidelines] = await Promise.all([
       getClientFacts(client.id),
       loadInventories(client.id, inventoriesUsed(template.config)),
@@ -149,6 +153,7 @@ export async function startTemplateGeneration(client: ClientLike, article: Artic
         const saved = await persistGeneratedDraft(client.id, article.id, result.html, models.generation ?? 'unknown', user, {
           usedResearch: article.researchEnabled && !!researchText(article),
           snapshotVersionNo: snapshot?.versionNo ?? null,
+          inputs,
         })
         await saveGenerationMeta(client.id, article.id, {
           templateId: template.id,

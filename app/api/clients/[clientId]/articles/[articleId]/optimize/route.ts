@@ -28,6 +28,11 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
 
   const guidelines = await getActiveGuidelines(client.id, article.templateId)
   const guidelineCount = guidelines.reduce((n, g) => n + g.rules.length, 0)
+  // What was checked, by tier (agency-wide Universal rules first, then the client's own; D-003).
+  const rules = {
+    universal: guidelines.filter((g) => g.tier === 'universal').reduce((n, g) => n + g.rules.length, 0),
+    client: guidelines.filter((g) => g.tier !== 'universal').reduce((n, g) => n + g.rules.length, 0),
+  }
   if (!guidelineCount) throw Errors.badRequest('This client has no active guidelines to check against. Add some on the Guidelines page.')
 
   const { text } = await generateForRole(
@@ -77,10 +82,11 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
         })),
         suggestions: parsed.suggestions,
         guidelineCount,
+        rules,
         dropped: parsed.dropped,
       },
     })
     .where(and(eq(articles.id, article.id), eq(articles.tenantId, client.id)))
 
-  return json({ ...parsed, guidelineCount })
+  return json({ ...parsed, guidelineCount, rules })
 })

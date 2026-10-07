@@ -51,6 +51,8 @@ export interface OptimizeResult {
   /** Saved so they survive status changes, reloads and other people opening the article. */
   suggestions?: StoredSuggestion[]
   guidelineCount?: number
+  /** Rules checked, by tier (agency-wide Universal / the client's own). */
+  rules?: { universal: number; client: number }
   dropped?: number
 }
 
