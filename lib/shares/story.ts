@@ -28,6 +28,13 @@ export interface StoryInput {
   researchEnabled: boolean
   status: string
   score: number | null
+  /** The article's current word count, to tell whether people changed the AI draft. */
+  wordCount?: number
+  /**
+   * The saved guideline check (articles.last_optimize). Work done before per-action history existed (v1.19.0)
+   * has no events, so the story falls back on what the article itself shows.
+   */
+  check?: { ranAt: string | null; rules: { universal: number; client: number } | null; applied: number; dismissed: number } | null
 }
 
 const nf = new Intl.NumberFormat('en-US')
@@ -42,7 +49,7 @@ function collect(events: HistoryEvent[], types: string[]) {
   return { hits, people: [...people.values()], at }
 }
 
-export function buildStory({ events, researchEnabled, status, score }: StoryInput): StoryStep[] {
+export function buildStory({ events, researchEnabled, status, score, wordCount, check: saved }: StoryInput): StoryStep[] {
   const count = (type: string) => events.filter((e) => e.type === type).length
 
   // 1. Brief
@@ -89,10 +96,11 @@ export function buildStory({ events, researchEnabled, status, score }: StoryInpu
 
   // 5. Guideline check
   const check = collect(events, ['guidelines_checked', 'suggestion_accepted', 'suggestion_reworded', 'suggestion_dismissed', 'checks_reviewed'])
-  const applied = count('suggestion_accepted') + count('suggestion_reworded')
-  const dismissed = count('suggestion_dismissed')
+  const applied = Math.max(count('suggestion_accepted') + count('suggestion_reworded'), saved?.applied ?? 0)
+  const dismissed = Math.max(count('suggestion_dismissed'), saved?.dismissed ?? 0)
   const lastCheck = check.hits.filter((e) => e.type === 'guidelines_checked').reduce<HistoryEvent | null>((a, e) => (!a || e.at > a.at ? e : a), null)
-  const rules = lastCheck?.payload?.rules as { universal?: number; client?: number } | undefined
+  const rules = (lastCheck?.payload?.rules as { universal?: number; client?: number } | undefined) ?? saved?.rules ?? undefined
+  const checked = !!lastCheck || score !== null
   const checkStats: string[] = []
   if (score !== null) checkStats.push(`Score ${score}/100`)
   if (rules) checkStats.push(`${plural((rules.universal ?? 0) + (rules.client ?? 0), 'rule')} checked`)
@@ -112,6 +120,20 @@ export function buildStory({ events, researchEnabled, status, score }: StoryInpu
   const reviewPeople = new Map<string, StoryPerson>()
   for (const e of reviewMoves) if (e.userId && e.userName) reviewPeople.set(e.userId, { name: e.userName, image: e.userImage })
 
+  // Human editing without per-edit history (work done before v1.19.0): infer it from the article itself.
+  const lastAi = draft.hits.reduce<HistoryEvent | null>((a, e) => (!a || e.at > a.at ? e : a), null)
+  const aiWords = num(lastAi?.payload?.wordCount)
+  const netChange = wordCount !== undefined && aiWords !== null ? wordCount - aiWords : 0
+  const tracked = sessions.length > 0 || aiAssists > 0
+  const reviewedAfterDraft = generations > 0 && (status === 'in_review' || status === 'done')
+  const editedInferred = !tracked && (netChange !== 0 || applied > 0 || reviewedAfterDraft)
+  if (editedInferred) {
+    if (netChange !== 0) editingStats.push(`Draft changed by ${netChange > 0 ? '+' : '−'}${plural(Math.abs(netChange), 'word')} after the AI draft`)
+    if (applied > 0) editingStats.push(`${plural(applied, 'guideline suggestion')} applied by an editor`)
+    if (!editingStats.length) editingStats.push('Reviewed and edited by the team before sign-off')
+  }
+  const editingPeople = editing.people.length ? editing.people : editedInferred ? [...reviewPeople.values()] : []
+
   return [
     { key: 'brief', label: 'Brief & keywords', actor: 'human', state: brief.hits.length ? 'done' : 'pending', people: brief.people, at: brief.at, stats: briefStats },
     {
@@ -128,12 +150,20 @@ export function buildStory({ events, researchEnabled, status, score }: StoryInpu
       key: 'editing',
       label: 'Human editing',
       actor: 'human',
-      state: sessions.length || aiAssists ? 'done' : 'pending',
-      people: editing.people,
-      at: editing.at,
+      state: tracked || editedInferred ? 'done' : 'pending',
+      people: editingPeople,
+      at: editing.at ?? (editedInferred ? (reviewMoves[0]?.at ?? null) : null),
       stats: editingStats,
     },
-    { key: 'check', label: 'Guideline check', actor: 'both', state: lastCheck ? 'done' : 'pending', people: check.people, at: check.at, stats: checkStats },
+    {
+      key: 'check',
+      label: 'Guideline check',
+      actor: 'both',
+      state: checked ? 'done' : 'pending',
+      people: check.people,
+      at: check.at ?? saved?.ranAt ?? null,
+      stats: checkStats,
+    },
     {
       key: 'review',
       label: 'Review',
