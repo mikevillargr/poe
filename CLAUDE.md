@@ -92,7 +92,8 @@ lib/
                     copy, save as revision, restore, delete) + dry-run.ts + diff.ts (History), rows.ts + inputs.ts (sheet/file → queue rows
                     or link inventories; sheet-source sync); seed/ holds the 10 verbatim prompts, template
                     configs, each client's imported rules and the Google Sheet sources
-  google/           service-account credential (encrypted; GOOGLE_SERVICE_ACCOUNT_JSON fallback) + read-only
+  google/           drive.ts + drive-oauth.ts: each person's own Google connection (Docs export; read-only Sheets for
+                    Import → "Google Sheet link", user-sheets.ts, DR-018); service-account credential (encrypted; GOOGLE_SERVICE_ACCOUNT_JSON fallback) + read-only
                     Sheets client (self-signed JWT, no googleapis)
 drizzle/            versioned migrations (never db:push against real data)
 scripts/            db (migrate, baseline, fixtures, seed-universal, seed-n8n), dev (api-sweep, smokes, template-e2e, inputs-e2e, batch-e2e),
@@ -318,7 +319,7 @@ npx tsx --conditions=react-server scripts/ai-smoke.ts --provider anthropic|opena
 ### Environment (see `.env.example`)
 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`, `AUTH_TRUST_HOST`, `AUTH_GOOGLE_ID/SECRET`, `ALLOWED_EMAIL_DOMAIN`, `SUPER_ADMIN_EMAIL`,
 `APP_ENCRYPTION_KEY` (encrypts provider keys; never change it once keys are stored), optional `ANTHROPIC_API_KEY` /
-`OPENAI_API_KEY` / `MOONSHOT_API_KEY` env fallbacks, `AI_MOCK`, Google Docs export (DR-014): each person connects their own Drive once (`drive.file`, refresh token encrypted in `user_google_drive`); the server uploads with `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`. Needs the Drive API enabled and `<AUTH_URL>/api/google/drive/callback` in the OAuth client's redirect URIs.
+`OPENAI_API_KEY` / `MOONSHOT_API_KEY` env fallbacks, `AI_MOCK`, Google Docs export (DR-014): each person connects their own Drive once (`drive.file`, refresh token encrypted in `user_google_drive`); the server uploads with `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET`. Needs the Drive API enabled and `<AUTH_URL>/api/google/drive/callback` in the OAuth client's redirect URIs. Import from a sheet link also needs the Google Sheets API enabled in that same project.
 
 ## Releases and deploys
 

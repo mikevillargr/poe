@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch, ApiFetchError } from '@/lib/api/fetch'
 import { useToast, useToastStore } from '@/hooks/useToast'
+import { openGoogleConnectWindow } from '@/lib/google/client/connect-window'
 
 // DR-014: Google Docs export with a once-per-person Drive connection. Exporting opens a tab on the click
 // (browsers allow one new window per click) that turns into the new Doc once the server has created it.
@@ -49,11 +50,7 @@ export function useDriveExport(opts: { exportUrl: string; initial: DriveState; g
   }, [toast])
 
   const connect = useCallback(() => {
-    const w = 520
-    const h = 640
-    const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2)
-    const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2)
-    const win = window.open('/api/google/drive/connect', 'poe-drive-connect', `popup,width=${w},height=${h},left=${left},top=${top}`)
+    const win = openGoogleConnectWindow()
     if (!win) {
       toast.error('The browser blocked the Google window', 'Allow pop-ups for this site, then try again.')
       return

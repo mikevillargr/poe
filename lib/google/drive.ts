@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { userGoogleDrive } from '@/lib/db/schema'
 import { decryptSecret, encryptSecret } from '@/lib/ai/secrets'
 import { ApiError } from '@/lib/api/errors'
-import { classifyDriveError, driveRedirectUri, idTokenEmail, multipartDocBody } from './drive-oauth'
+import { canReadSheets, classifyDriveError, driveRedirectUri, idTokenEmail, multipartDocBody } from './drive-oauth'
 
 // DR-014: each person connects their own Google Drive once (drive.file scope). The refresh token is stored
 // encrypted; exports upload on the server with a short-lived access token, so the browser's one-window-per-click
@@ -25,9 +25,13 @@ export function oauthClient() {
 
 const notConnected = () => new ApiError(409, 'DRIVE_NOT_CONNECTED', 'Connect Google Drive to export.')
 
-export async function driveStatus(userId: string): Promise<{ connected: boolean; email: string | null }> {
-  const [row] = await db.select({ email: userGoogleDrive.googleEmail }).from(userGoogleDrive).where(eq(userGoogleDrive.userId, userId)).limit(1)
-  return { connected: !!row, email: row?.email ?? null }
+export async function driveStatus(userId: string): Promise<{ connected: boolean; email: string | null; canReadSheets: boolean }> {
+  const [row] = await db
+    .select({ email: userGoogleDrive.googleEmail, scope: userGoogleDrive.scope })
+    .from(userGoogleDrive)
+    .where(eq(userGoogleDrive.userId, userId))
+    .limit(1)
+  return { connected: !!row, email: row?.email ?? null, canReadSheets: canReadSheets(row?.scope) }
 }
 
 /** Exchanges the consent code, checks it's the signed-in person's own account, and stores the refresh token. */
@@ -77,7 +81,8 @@ async function revoke(token: string | undefined) {
 // Short-lived access tokens, per process (refreshed on demand; a restart just refreshes again).
 const tokens = new Map<string, { value: string; expiresAt: number }>()
 
-async function accessToken(userId: string): Promise<string> {
+/** A short-lived access token for the person's own Google connection (DR-014/018). */
+export async function userAccessToken(userId: string): Promise<string> {
   const cached = tokens.get(userId)
   if (cached && Date.now() < cached.expiresAt - 60_000) return cached.value
   const [row] = await db.select().from(userGoogleDrive).where(eq(userGoogleDrive.userId, userId)).limit(1)
@@ -107,7 +112,7 @@ export async function createGoogleDoc(userId: string, name: string, html: string
     const boundary = `poe-${crypto.randomUUID()}`
     const res = await fetch(UPLOAD_URL, {
       method: 'POST',
-      headers: { authorization: `Bearer ${await accessToken(userId)}`, 'content-type': `multipart/related; boundary=${boundary}` },
+      headers: { authorization: `Bearer ${await userAccessToken(userId)}`, 'content-type': `multipart/related; boundary=${boundary}` },
       body: multipartDocBody(name, html, boundary),
     })
     const body = await res.json().catch(() => null)

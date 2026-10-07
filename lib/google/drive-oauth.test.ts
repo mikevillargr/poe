@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildConnectUrl, classifyDriveError, CONNECT_SCOPES, driveRedirectUri, idTokenEmail, multipartDocBody } from './drive-oauth'
+import { buildConnectUrl, canReadSheets, classifyDriveError, classifySheetsError, CONNECT_SCOPES, driveRedirectUri, gidFrom, idTokenEmail, multipartDocBody, SHEETS_READ_SCOPE } from './drive-oauth'
 
 const jwt = (payload: object) => `x.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`
 
@@ -41,4 +41,27 @@ test('Drive errors map to actionable codes', () => {
   assert.equal(classifyDriveError(403, { error: { errors: [{ reason: 'storageQuotaExceeded' }] } }).code, 'DRIVE_FULL')
   const other = classifyDriveError(500, { error: { message: 'Backend Error' } })
   assert.deepEqual(other, { code: 'DRIVE_ERROR', message: 'Backend Error' })
+})
+
+test('DR-018: connect asks for read-only Sheets; older connections without it are detected', () => {
+  assert.ok(CONNECT_SCOPES.split(' ').includes(SHEETS_READ_SCOPE))
+  assert.ok(!CONNECT_SCOPES.split(' ').includes('https://www.googleapis.com/auth/spreadsheets'), 'never write access')
+  assert.equal(canReadSheets(`openid email https://www.googleapis.com/auth/drive.file ${SHEETS_READ_SCOPE}`), true)
+  assert.equal(canReadSheets('openid email https://www.googleapis.com/auth/drive.file'), false)
+  assert.equal(canReadSheets(null), false)
+})
+
+test('DR-018: the tab comes from the link gid', () => {
+  assert.equal(gidFrom('https://docs.google.com/spreadsheets/d/abc/edit#gid=123456'), 123456)
+  assert.equal(gidFrom('https://docs.google.com/spreadsheets/d/abc/edit?gid=0#gid=0'), 0)
+  assert.equal(gidFrom('https://docs.google.com/spreadsheets/d/abc/edit'), null)
+})
+
+test('DR-018: Sheets errors say what to do', () => {
+  assert.equal(classifySheetsError(403, { error: { message: 'The caller does not have permission' } }, 'a@growth-rocket.com').code, 'SHEET_NO_ACCESS')
+  assert.match(classifySheetsError(403, null, 'a@growth-rocket.com').message, /as a@growth-rocket\.com/)
+  assert.equal(classifySheetsError(403, { error: { message: 'Request had insufficient authentication scopes.' } }, null).code, 'SHEETS_NOT_CONNECTED')
+  assert.equal(classifySheetsError(403, { error: { details: [{ reason: 'SERVICE_DISABLED' }] } }, null).code, 'SHEETS_API_DISABLED')
+  assert.equal(classifySheetsError(404, null, null).code, 'SHEET_NOT_FOUND')
+  assert.equal(classifySheetsError(401, null, null).code, 'SHEETS_NOT_CONNECTED')
 })
