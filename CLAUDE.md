@@ -35,7 +35,8 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    - *Research* streams live web research into an editable summary, outline and numbered sources.
    - *Draft* streams the generated article into the TipTap editor (autosave, versions, DOCX/Drive export).
    - *Optimize* = keyword coverage (H1 / first 100 words / H2, density), length vs target, and **Check against
-     guidelines** (AI) producing suggestions with in-text highlight, Accept / Adjust / Dismiss.
+     guidelines** (AI) producing suggestions with in-text highlight, Accept / Adjust / Dismiss. The last check (scores, suggestions and
+     what was done with each) is saved on the article (`last_optimize`), so it survives status changes and reloads.
 5. **Guidelines** (`/c/[client]/guidelines`). Manual-first, categorized rules (SEO, structure, readability, sourcing,
    brand, agency, client, blacklist). Import-from-document is secondary. The **blacklist** holds "sounds AI-written"
    words and patterns that generation avoids and Optimize flags. A rule applies to the whole client or to one template

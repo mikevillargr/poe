@@ -1,7 +1,7 @@
 // Client-side shapes for the Article Workspace (WS workspace).
 import type { ArticleStatus } from '@/lib/articles/schemas'
 import type { WorkspaceResearch } from '@/lib/pipeline/schemas'
-import type { GenerationMeta } from '@/lib/db/schema/articles'
+import type { GenerationMeta, OptimizeResult } from '@/lib/db/schema/articles'
 
 export interface WorkspaceArticle {
   id: string
@@ -29,6 +29,8 @@ export interface WorkspaceArticle {
   generationMeta: GenerationMeta | null
   /** DR-017: research before writing for this topic. */
   researchEnabled: boolean
+  /** The last guideline check: scores and suggestions with what was done to them. */
+  lastOptimize: OptimizeResult | null
 }
 
 export interface WorkspaceClient {
@@ -87,6 +89,7 @@ export function toWorkspaceArticle(raw: Raw): WorkspaceArticle {
     researchEnabled: r.researchEnabled ?? true,
     templateInputs: (raw.templateInputs as Record<string, string | number | null> | null) ?? {},
     generationMeta: (raw.generationMeta as GenerationMeta | null) ?? null,
+    lastOptimize: (raw.lastOptimize as OptimizeResult | null) ?? null,
   }
 }
 

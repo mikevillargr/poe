@@ -552,6 +552,8 @@ export function WorkspaceView({
       editorApi={editorApi}
       activeSuggestionId={activeSuggestionId}
       onActiveSuggestionChange={setActiveSuggestionId}
+      saved={article.lastOptimize}
+      onSaved={(lastOptimize) => setArticle((a) => ({ ...a, lastOptimize }))}
     />
   )
   // DR-012: templated articles get a "Template run" tab next to Optimize.
