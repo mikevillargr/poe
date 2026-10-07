@@ -1,8 +1,22 @@
 // DR-014: pure helpers for the per-user Google Drive connection (no DB, no network), so they can be unit-tested.
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file'
+/** DR-018: read-only Sheets, so a pasted sheet link can be imported with the person's own access. */
+export const SHEETS_READ_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly'
 /** openid + email let the callback check which Google account was connected. */
-export const CONNECT_SCOPES = ['openid', 'email', DRIVE_SCOPE].join(' ')
+export const CONNECT_SCOPES = ['openid', 'email', DRIVE_SCOPE, SHEETS_READ_SCOPE].join(' ')
+
+/** Whether a granted scope string (space-separated) includes read-only Sheets access. */
+export function canReadSheets(scope: string | null | undefined): boolean {
+  return !!scope && scope.split(/\s+/).some((s) => s === SHEETS_READ_SCOPE || s === 'https://www.googleapis.com/auth/spreadsheets')
+}
+
+/** The tab id from a Sheets link (`#gid=123` or `?gid=123`), if any. */
+export function gidFrom(url: string): number | null {
+  const m = /[#&?]gid=(\d+)/.exec(url)
+  return m ? Number(m[1]) : null
+}
+
 export const DRIVE_STATE_COOKIE = 'poe_drive_state'
 export const DRIVE_CALLBACK_PATH = '/api/google/drive/callback'
 
@@ -65,4 +79,27 @@ export function classifyDriveError(status: number, body: unknown): { code: Drive
   if (status === 401) return { code: 'DRIVE_NOT_CONNECTED', message: 'Google Drive needs to be connected again.' }
   if (reasons.includes('storageQuotaExceeded')) return { code: 'DRIVE_FULL', message: 'Your Google Drive is full.' }
   return { code: 'DRIVE_ERROR', message: err?.message || `Google Drive returned ${status}.` }
+}
+
+/** DR-018: a Sheets API error, in words an editor can act on (they read the sheet with their own access). */
+export function classifySheetsError(status: number, body: unknown, email: string | null): { status: number; code: string; message: string } {
+  const err = (body as { error?: { message?: string; details?: { reason?: string }[] } } | null)?.error
+  const reasons = (err?.details ?? []).map((d) => d.reason)
+  const msg = err?.message ?? ''
+  if (reasons.includes('SERVICE_DISABLED') || /has not been used|is disabled/i.test(msg)) {
+    return { status: 502, code: 'SHEETS_API_DISABLED', message: 'The Google Sheets API isn’t enabled for Poe’s Google Cloud project. An admin needs to enable it.' }
+  }
+  if (reasons.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') || /insufficient authentication scopes/i.test(msg)) {
+    return { status: 409, code: 'SHEETS_NOT_CONNECTED', message: 'Connect Google again to let Poe read your sheets.' }
+  }
+  if (status === 401) return { status: 409, code: 'SHEETS_NOT_CONNECTED', message: 'Your Google connection expired. Connect Google again.' }
+  if (status === 403) {
+    return {
+      status: 403,
+      code: 'SHEET_NO_ACCESS',
+      message: `You don’t have access to this sheet${email ? ` as ${email}` : ''}. Ask the owner to share it with you, then try again.`,
+    }
+  }
+  if (status === 404) return { status: 404, code: 'SHEET_NOT_FOUND', message: 'That sheet wasn’t found. Check the link.' }
+  return { status: 502, code: 'SHEETS_ERROR', message: msg ? `Google Sheets: ${msg}` : `Google Sheets returned ${status}.` }
 }
