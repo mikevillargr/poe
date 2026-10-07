@@ -32,6 +32,7 @@ import type { DraftHunk } from '@/lib/articles/draft-diff'
 import {
   HISTORY_FILTERS,
   describeHistoryEvent,
+  historyActor,
   fieldLabel,
   groupByDay,
   historyGroup,
@@ -289,11 +290,11 @@ function ActivityRow({ e, people, base }: { e: HistoryEvent; people: Record<stri
   return (
     <li className="rounded-lg -mx-2 px-2 py-2 hover:bg-surface-hover/60 transition-colors">
       <div className="flex items-start gap-3">
-        <EventAvatar name={e.userName} image={e.userImage} />
+        <EventAvatar name={historyActor(e)} image={e.userImage} />
         <div className="min-w-0 flex-1 text-sm leading-snug">
           <div className="flex items-start gap-2">
             <p className="flex-1 min-w-0">
-              <span className="text-heading font-medium">{e.userName ?? 'Poe'}</span> <span className="text-body">{describeHistoryEvent(e, people)}</span>
+              <span className="text-heading font-medium">{historyActor(e)}</span> <span className="text-body">{describeHistoryEvent(e, people)}</span>
             </p>
             <time dateTime={e.at} title={format(new Date(e.at), 'PPpp')} className="text-xs text-muted font-mono tabular-nums shrink-0 pt-0.5">
               {format(new Date(e.at), 'h:mm a')}

@@ -11,8 +11,9 @@ import type { ShareDTO } from '@/lib/shares/repo'
 
 // DR-021: share an article (any status) as a private link: create, copy, choose what it shows, reset or turn off.
 
-type Toggle = 'showRules' | 'showHistory'
+type Toggle = 'showComments' | 'showRules' | 'showHistory'
 const TOGGLES: { key: Toggle; label: string; hint: string }[] = [
+  { key: 'showComments', label: 'Comments', hint: 'Viewers can comment on the article or a passage' },
   { key: 'showRules', label: 'Guidelines', hint: 'The rules behind the score' },
   { key: 'showHistory', label: 'Full history', hint: 'Every step, by person' },
 ]
@@ -126,7 +127,7 @@ export function SharePopover({ base }: { base: string }) {
             ) : share === null ? (
               <div className="mt-2">
                 <p className="text-sm text-muted">
-                  A private, branded page with this article, its guideline score and how it was made. Anyone with the link can view it, so send it only
+                  A private, branded page with this article, its guideline score and how it was made, where viewers can comment and approve. Anyone with the link can view it, so send it only
                   to people who should see it. You can turn it off anytime.
                 </p>
                 <button

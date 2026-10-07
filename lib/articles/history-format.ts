@@ -29,7 +29,7 @@ export interface HistoryData {
   origin: HistoryOrigin
 }
 
-export type HistoryGroup = 'status' | 'writing' | 'ai' | 'suggestions' | 'research'
+export type HistoryGroup = 'status' | 'writing' | 'ai' | 'suggestions' | 'research' | 'feedback'
 
 export const HISTORY_FILTERS: { id: HistoryGroup | 'all'; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -38,6 +38,7 @@ export const HISTORY_FILTERS: { id: HistoryGroup | 'all'; label: string }[] = [
   { id: 'ai', label: 'AI' },
   { id: 'suggestions', label: 'Suggestions' },
   { id: 'research', label: 'Research' },
+  { id: 'feedback', label: 'Feedback' },
 ]
 
 const GROUP: Record<string, HistoryGroup> = {
@@ -65,6 +66,12 @@ const GROUP: Record<string, HistoryGroup> = {
   research_edited: 'research',
   sources_changed: 'research',
   research_setting: 'research',
+  comment_added: 'feedback',
+  comment_reply: 'feedback',
+  comment_resolved: 'feedback',
+  comment_reopened: 'feedback',
+  client_approved: 'feedback',
+  changes_requested: 'feedback',
 }
 
 export function historyGroup(type: string): HistoryGroup {
@@ -156,9 +163,28 @@ export function describeHistoryEvent(e: HistoryEvent, people: Record<string, str
       return 'changed which sources are used'
     case 'research_setting':
       return p.on ? 'turned research on' : 'turned research off'
+    case 'comment_added':
+      return p.quote ? 'commented on a passage' : 'left a comment'
+    case 'comment_reply':
+      return 'replied to a comment'
+    case 'comment_resolved':
+      return 'resolved a comment'
+    case 'comment_reopened':
+      return 'reopened a comment'
+    case 'client_approved':
+      return 'approved the article'
+    case 'changes_requested':
+      return 'requested changes'
     default:
       return e.type.replace(/_/g, ' ')
   }
+}
+
+/** Who did it: the staff member, or the name a guest gave on a shared link (DR-021). */
+export function historyActor(e: HistoryEvent): string {
+  if (e.userName) return e.userName
+  const name = e.payload?.name
+  return typeof name === 'string' && name ? name : 'Poe'
 }
 
 /** A short secondary line (word counts, models, scores), or null. */
@@ -184,6 +210,13 @@ export function historyMeta(e: HistoryEvent): string | null {
       const rules = r ? (r.universal ?? 0) + (r.client ?? 0) : null
       return [s !== null ? `${s} suggestion${s === 1 ? '' : 's'}` : null, rules !== null ? `${rules} rules` : null].filter(Boolean).join(' · ') || null
     }
+    case 'comment_added':
+    case 'comment_reply':
+    case 'comment_resolved':
+    case 'comment_reopened':
+      return str(p.quote) ? `“${(p.quote as string).slice(0, 120)}”` : null
+    case 'changes_requested':
+      return str(p.note) ? (p.note as string).slice(0, 200) : null
     case 'researched': {
       const c = num(p.citations)
       return [c !== null ? `${c} source${c === 1 ? '' : 's'}` : null, str(p.model)?.split(':').pop() ?? null].filter(Boolean).join(' · ') || null

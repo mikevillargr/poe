@@ -8,7 +8,7 @@ import { tableExtensions } from '@/lib/tiptap/table'
 
 // DR-021: the article on a shared page, rendered read-only through the editor's schema, so only known
 // nodes and marks reach the page (no raw HTML).
-export const ArticleReader = forwardRef<HTMLDivElement, { html: string }>(function ArticleReader({ html }, ref) {
+export const ArticleReader = forwardRef<HTMLDivElement, { html: string; onReady?: () => void }>(function ArticleReader({ html, onReady }, ref) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
@@ -18,6 +18,8 @@ export const ArticleReader = forwardRef<HTMLDivElement, { html: string }>(functi
     content: html,
     editable: false,
     immediatelyRender: false,
+    // Comment highlights need the rendered text: tell the page once it's there.
+    onCreate: () => requestAnimationFrame(() => onReady?.()),
     editorProps: { attributes: { class: 'prose prose-lg max-w-none focus:outline-none' } },
   })
   return (

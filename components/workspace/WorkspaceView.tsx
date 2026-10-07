@@ -13,6 +13,7 @@ import { ARTICLE_STATUS_LABELS, type ArticleStatus } from '@/lib/articles/schema
 import type { ArticleVersionDTO, ResearchEdit, WorkspaceResearch } from '@/lib/pipeline/schemas'
 import { ConfirmModal } from '@/components/feedback/ConfirmModal'
 import { HistoryPanel, type HistoryTab } from './HistoryPanel'
+import { CommentsPanel } from './CommentsPanel'
 import { WorkspaceHeader, type PrimaryAction } from './WorkspaceHeader'
 import { BriefPanel, type BriefPatch } from './BriefPanel'
 import { ResearchTab } from './ResearchTab'
@@ -99,6 +100,12 @@ export function WorkspaceView({
   const [versions, setVersions] = useState<ArticleVersionDTO[]>([])
   const [versionsOpen, setVersionsOpen] = useState(false)
   const [historyTab, setHistoryTab] = useState<HistoryTab>('activity')
+  // DR-021: comments from the share link. A notification link opens the panel (?panel=comments).
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [commentCount, setCommentCount] = useState(0)
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('panel') === 'comments') setCommentsOpen(true)
+  }, [])
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [confirm, setConfirm] = useState<'regenerate' | 'delete' | null>(null)
   const [statusSaving, setStatusSaving] = useState(false)
@@ -656,8 +663,15 @@ export function WorkspaceView({
         onToggleOptimize={() => setOptimizeOpen((o) => !o)}
         historyOpen={versionsOpen}
         shareBase={base}
+        commentsOpen={commentsOpen}
+        commentCount={commentCount}
+        onOpenComments={() => {
+          setVersionsOpen(false)
+          setCommentsOpen((o) => !o)
+        }}
         onOpenHistory={() => {
           if (versionsOpen) return setVersionsOpen(false)
+          setCommentsOpen(false)
           setHistoryTab('activity')
           setVersionsOpen(true)
           void loadVersions()
@@ -824,6 +838,20 @@ export function WorkspaceView({
         )}
       </div>
 
+      <CommentsPanel
+        open={commentsOpen}
+        onClose={() => setCommentsOpen(false)}
+        base={base}
+        refreshKey={article.updatedAt}
+        onCount={setCommentCount}
+        onShowQuote={(quote) => {
+          if (tab === 'draft' && editorApi.isReady()) return editorApi.highlight([{ text: quote }]) > 0
+          // The editor mounts with the Draft tab; highlight once it's there.
+          setTab('draft')
+          setTimeout(() => editorApi.highlight([{ text: quote }]), 350)
+          return true
+        }}
+      />
       <HistoryPanel
         open={versionsOpen}
         tab={historyTab}
