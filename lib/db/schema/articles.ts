@@ -31,11 +31,27 @@ export interface ArticleResearch {
   queries: string[]
 }
 
+/** A guideline-check suggestion as saved with the article, with what the editor did with it. */
+export interface StoredSuggestion {
+  id: string
+  category: string
+  severity: 'high' | 'medium' | 'low'
+  title: string
+  original: string
+  suggested: string
+  reason: string
+  status: 'pending' | 'accepted' | 'dismissed'
+}
+
 export interface OptimizeResult {
   ranAt: string
   overallScore?: number
   keywordCoverage?: Array<{ keyword: string; count: number; inTitle: boolean; inIntro: boolean; inHeading: boolean }>
   dimensionScores?: Array<{ category: string; score: number; passCount: number; failCount: number }>
+  /** Saved so they survive status changes, reloads and other people opening the article. */
+  suggestions?: StoredSuggestion[]
+  guidelineCount?: number
+  dropped?: number
 }
 
 export interface GenerationCheck {

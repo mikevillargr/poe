@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/useToast'
 import { apiFetch } from '@/lib/api/fetch'
 import { analyzeCoverage, type KeywordCoverage } from '@/lib/optimize/coverage'
 import type { DimensionScore, OptimizeSuggestion } from '@/lib/optimize/parse'
+import type { OptimizeResult } from '@/lib/db/schema/articles'
 import type { EditorApi } from './useEditorApi'
 import { SuggestionCard } from './SuggestionCard'
 
@@ -29,6 +30,10 @@ export interface OptimizePanelProps {
   editorApi: EditorApi
   activeSuggestionId: string | null
   onActiveSuggestionChange: (id: string | null) => void
+  /** The saved last check (scores + suggestions with their status), restored when the panel loads. */
+  saved: OptimizeResult | null
+  /** The saved check changed (a new check, or a suggestion accepted/dismissed/edited). */
+  onSaved: (lastOptimize: OptimizeResult) => void
 }
 
 interface CheckResult {
@@ -63,6 +68,8 @@ export function OptimizePanel({
   editorApi,
   activeSuggestionId,
   onActiveSuggestionChange,
+  saved,
+  onSaved,
 }: OptimizePanelProps) {
   const { toast } = useToast()
   const { suggestions, setSuggestions, acceptSuggestion, dismissSuggestion, undoDismiss, updateSuggestion, finishRecomposition } =
@@ -73,14 +80,37 @@ export function OptimizePanel({
   const [result, setResult] = useState<CheckResult | null>(null)
   const base = `/api/clients/${clientId}/articles/${articleId}`
 
-  // Everything here belongs to one article: reset when the workspace opens another.
+  // Everything here belongs to one article: restore its saved check when the panel loads or the workspace opens
+  // another article (the suggestions used to live only in memory and were lost on any refresh).
   useEffect(() => {
-    setSuggestions([])
-    setResult(null)
+    const list = saved?.suggestions ?? []
+    setSuggestions(list)
+    setResult(
+      saved && saved.overallScore !== undefined
+        ? {
+            overallScore: saved.overallScore,
+            dimensionScores: saved.dimensionScores ?? [],
+            suggestions: list.map((s) => ({ ...s, status: 'pending' as const })),
+            dropped: saved.dropped ?? 0,
+            guidelineCount: saved.guidelineCount ?? 0,
+          }
+        : null,
+    )
     setActiveFilter('All')
     onActiveSuggestionChange(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [articleId])
+
+  /** Saves what was done with one suggestion; the panel already shows it (a failure is toasted). */
+  function persist(id: string, change: { status?: SuggestionState['status']; suggested?: string }) {
+    apiFetch<{ lastOptimize: OptimizeResult }>(`${base}/optimize/suggestions`, {
+      method: 'PATCH',
+      body: { id, ...change },
+      errorTitle: 'Couldn’t save that change',
+    })
+      .then((r) => onSaved(r.lastOptimize))
+      .catch(() => {})
+  }
 
   const coverage = useMemo(() => analyzeCoverage(html, keywords, primaryKeyword, targetWordCount), [html, keywords, primaryKeyword, targetWordCount])
   const { length } = coverage
@@ -104,6 +134,14 @@ export function OptimizePanel({
       const r = await apiFetch<CheckResult>(`${base}/optimize`, { method: 'POST', errorTitle: 'Guideline check failed' })
       setResult(r)
       setSuggestions(r.suggestions)
+      onSaved({
+        ranAt: new Date().toISOString(),
+        overallScore: r.overallScore,
+        dimensionScores: r.dimensionScores,
+        suggestions: r.suggestions,
+        guidelineCount: r.guidelineCount,
+        dropped: r.dropped,
+      })
       setActiveFilter('All')
       onActiveSuggestionChange(null)
       editorApi.highlight([])
@@ -131,10 +169,12 @@ export function OptimizePanel({
       return
     }
     acceptSuggestion(s.id)
+    persist(s.id, { status: 'accepted' })
     clearActive()
   }
   function dismiss(s: SuggestionState) {
     dismissSuggestion(s.id)
+    persist(s.id, { status: 'dismissed' })
     if (activeSuggestionId === s.id) clearActive()
   }
   function showKeyword(k: KeywordCoverage) {
@@ -310,11 +350,15 @@ export function OptimizePanel({
               onSelect={() => select(s)}
               onAccept={() => accept(s)}
               onDismiss={() => dismiss(s)}
-              onUndoDismiss={() => undoDismiss(s.id)}
+              onUndoDismiss={() => {
+                undoDismiss(s.id)
+                persist(s.id, { status: 'pending' })
+              }}
               onExpand={(open) => setExpandedId(open ? s.id : null)}
               onRecompose={(text, meta) => {
                 updateSuggestion(s.id, text, meta)
                 finishRecomposition(s.id)
+                persist(s.id, { suggested: text })
                 setExpandedId(null)
               }}
             />

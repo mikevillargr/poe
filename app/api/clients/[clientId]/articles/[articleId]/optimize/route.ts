@@ -18,7 +18,8 @@ export const maxDuration = 300
 
 // POST → { overallScore, dimensionScores, suggestions, dropped, guidelineCount, keywordCoverage }
 // Runs the generation-role model against the client's active guidelines (incl. the AI-tell blacklist) and
-// keeps only suggestions whose quoted text is really in the draft. Saves the score summary to last_optimize.
+// keeps only suggestions whose quoted text is really in the draft. Saves the scores and the suggestions to
+// last_optimize, so they survive status changes and reloads (accept/dismiss are saved by …/optimize/suggestions).
 export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ params, user }) => {
   const client = await requireClient(params.clientId, { write: true })
   const article = await getArticle(client.id, params.articleId)
@@ -74,6 +75,9 @@ export const POST = withRoute<{ clientId: string; articleId: string }>(async ({ 
           inIntro: k.inIntro,
           inHeading: k.inHeading,
         })),
+        suggestions: parsed.suggestions,
+        guidelineCount,
+        dropped: parsed.dropped,
       },
     })
     .where(and(eq(articles.id, article.id), eq(articles.tenantId, client.id)))
