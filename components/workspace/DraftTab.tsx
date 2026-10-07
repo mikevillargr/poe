@@ -46,7 +46,7 @@ function ToolButton({
 
 // DR-005 Draft tab: streaming preview during generation, then the Poe editor with autosave,
 // actual/target words, keyword highlight, Save version, Versions and (DR-009) Revise with feedback;
-// plain regenerate lives in the ⋯ menu as "Start over".
+// plain regenerate lives in the ⋯ menu as "Regenerate from brief" (and in the Brief panel, DR-019).
 
 /** Revise needs a draft, and a status where editing is still expected. */
 export function reviseDisabledReason(status: WorkspaceArticle['status']): string | null {
@@ -84,8 +84,8 @@ function MoreMenu({ onStartOver }: { onStartOver: () => void }) {
           >
             <RotateCcw className="w-3.5 h-3.5 mt-0.5 text-muted shrink-0" />
             <span>
-              Start over…
-              <span className="block text-muted">Regenerate from the brief. The current draft is saved as a version first.</span>
+              Regenerate from brief…
+              <span className="block text-muted">A new draft from the brief and research. The current draft is saved as a version first.</span>
             </span>
           </button>
         </div>

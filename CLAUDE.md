@@ -30,7 +30,8 @@ scoring-only app (retired 2026-10-05; see `docs/archive/README.md`).
    rows can be selected for bulk research on/off or **Generate selected**; **Generate queued** researches the topics
    that have it on, then drafts every queued topic, 3 at a time. Click a running topic’s status to watch it live (stepper,
    searches and sources, a peek at the model’s thinking, words written); **Stop remaining** cancels the waiting ones.
-4. **Article Workspace** (`/c/[client]/articles/[id]`). Brief + keywords (left) · **Research | Draft** tabs (centre) ·
+4. **Article Workspace** (`/c/[client]/articles/[id]`). Brief + keywords (left, collapsed on open; its footer
+   Generates / **Regenerates from brief** and says what changed since the draft, DR-019) · **Research | Draft** tabs (centre) ·
    **Optimize** (right).
    - *Research* streams live web research into an editable summary, outline and numbered sources.
    - *Draft* streams the generated article into the TipTap editor (autosave, versions, DOCX/Drive export).

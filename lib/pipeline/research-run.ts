@@ -6,6 +6,7 @@ import { buildResearchPrompt } from '@/lib/prompts/research'
 import { parseResearchOutput, writeResearch } from './research'
 import { drive, reserveRun, setRunState, type Run } from './runs'
 import { logArticleEvent, tapStream, toApiError } from './stream'
+import { claimOwnerIfUnassigned } from '@/lib/articles/owner'
 
 /**
  * Starts live web research for an article as a detached run (lib/pipeline/runs.ts): it finishes and saves even
@@ -15,6 +16,7 @@ import { logArticleEvent, tapStream, toApiError } from './stream'
 export async function startResearch(client: { id: string }, article: Article, user: AppUser): Promise<Run> {
   const run = reserveRun('research', article.id)
   try {
+    await claimOwnerIfUnassigned(client.id, article.id, user)
     const previousState = article.research ? 'ready' : 'idle'
     const prompt = buildResearchPrompt(article)
     let started: Awaited<ReturnType<typeof researchForRole>>

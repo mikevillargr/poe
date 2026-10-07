@@ -41,10 +41,18 @@ interface CheckResult {
   dimensionScores: DimensionScore[]
   suggestions: OptimizeSuggestion[]
   dropped: number
+  /** 0 / undefined when an older check didn't record it. */
   guidelineCount: number
+  rules?: { universal: number; client: number }
 }
 
 const nf = new Intl.NumberFormat('en-US')
+
+/** "52 rules (46 agency-wide, 6 client)" for toasts. */
+function rulesSummary(r: { guidelineCount: number; rules?: { universal: number; client: number } }) {
+  const base = `${nf.format(r.guidelineCount)} rules`
+  return r.rules ? `${base} (${nf.format(r.rules.universal)} agency-wide, ${nf.format(r.rules.client)} client)` : base
+}
 
 function Mark({ ok, label }: { ok: boolean; label: string }) {
   return (
@@ -93,6 +101,7 @@ export function OptimizePanel({
             suggestions: list.map((s) => ({ ...s, status: 'pending' as const })),
             dropped: saved.dropped ?? 0,
             guidelineCount: saved.guidelineCount ?? 0,
+            rules: saved.rules,
           }
         : null,
     )
@@ -140,13 +149,14 @@ export function OptimizePanel({
         dimensionScores: r.dimensionScores,
         suggestions: r.suggestions,
         guidelineCount: r.guidelineCount,
+        rules: r.rules,
         dropped: r.dropped,
       })
       setActiveFilter('All')
       onActiveSuggestionChange(null)
       editorApi.highlight([])
-      if (r.suggestions.length === 0) toast.success('No guideline issues found', `Checked against ${r.guidelineCount} guidelines.`)
-      else toast.info(`${r.suggestions.length} suggestions`, `Checked against ${r.guidelineCount} guidelines.`)
+      if (r.suggestions.length === 0) toast.success('No guideline issues found', `Checked against ${rulesSummary(r)}.`)
+      else toast.info(`${r.suggestions.length} suggestions`, `Checked against ${rulesSummary(r)}.`)
     } catch {
       // apiFetch already toasted
     } finally {
@@ -267,7 +277,21 @@ export function OptimizePanel({
         {result ? (
           <div className="flex flex-col items-center mb-4">
             <ScoreGauge score={result.overallScore} size={120} />
-            <p className="text-xs text-muted mt-3 font-mono">{result.guidelineCount} rules evaluated</p>
+            <p className="text-xs text-muted mt-3">
+              {result.guidelineCount ? (
+                <>
+                  Checked against <span className="font-mono tabular-nums text-body">{nf.format(result.guidelineCount)}</span> rules
+                  {result.rules && (
+                    <span className="font-mono tabular-nums">
+                      {' '}
+                      · {nf.format(result.rules.universal)} agency-wide · {nf.format(result.rules.client)} client
+                    </span>
+                  )}
+                </>
+              ) : (
+                'Rule count wasn’t recorded for this check. Check again to update.'
+              )}
+            </p>
           </div>
         ) : (
           <p className="text-xs text-muted mb-4">Checks the draft against this client’s guidelines, including the “sounds human” rules.</p>

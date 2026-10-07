@@ -1,3 +1,4 @@
+import { draftInputs } from '@/lib/articles/draft-inputs'
 import { withRoute, json } from '@/lib/auth/guards'
 import { ApiError } from '@/lib/api/errors'
 import { requireClient } from '@/lib/tenancy'
@@ -80,6 +81,7 @@ export const POST = withRoute<P>(async ({ req, params, user }) => {
       onPersistError: () => setRunState('generation', client.id, article.id, 'error'),
       onDone: async (done) => {
         const saved = await persistRevisedDraft(client.id, article.id, done.text, model, user, {
+          inputs: draftInputs(article),
           feedback: body.feedback,
           usedResearch: hasResearch,
           snapshotVersionNo: snapshot?.versionNo ?? null,

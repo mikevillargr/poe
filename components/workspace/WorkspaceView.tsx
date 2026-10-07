@@ -23,6 +23,7 @@ import { useEditorApi } from './useEditorApi'
 import { useDebouncedPatch } from './useDebouncedPatch'
 import { exportDocx } from './export'
 import { useDriveExport, type DriveState } from './useDriveExport'
+import { changedInputs, draftInputs, type DraftInputs } from '@/lib/articles/draft-inputs'
 import { useRunEstimates } from '@/components/runs/useRunEstimates'
 import {
   hasDraft,
@@ -67,6 +68,8 @@ export function WorkspaceView({
   models,
   isSuperAdmin,
   initialDrive,
+  currentUserId,
+  lastDraftInputs,
 }: {
   client: WorkspaceClient
   initialArticle: WorkspaceArticle
@@ -75,6 +78,10 @@ export function WorkspaceView({
   isSuperAdmin: boolean
   /** DR-014: this person's Google Drive connection, for Export to Google Docs. */
   initialDrive: DriveState
+  /** DR-019: becomes the owner of an unassigned article when they start a run. */
+  currentUserId: string
+  /** DR-019: what the current draft was written from (null for drafts made before this was recorded). */
+  lastDraftInputs: DraftInputs | null
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -97,13 +104,24 @@ export function WorkspaceView({
   const [researchSaving, setResearchSaving] = useState(false)
 
   const wide = useMediaQuery(WIDE_QUERY, true)
-  const [briefOpen, setBriefOpen] = useState(true)
+  // DR-019: the Brief starts collapsed; it opens from the header toggle.
+  const [briefOpen, setBriefOpen] = useState(false)
   const [optimizeOpen, setOptimizeOpen] = useState(true)
   const [rightTab, setRightTab] = useState<'template' | 'optimize'>(initialArticle.templateId ? 'template' : 'optimize')
   useEffect(() => {
-    setBriefOpen(wide)
+    if (!wide) setBriefOpen(false)
     setOptimizeOpen(wide)
   }, [wide])
+
+  // DR-019: "Changed since this draft" — compare what the draft was written from with the brief now.
+  const [draftInputsAt, setDraftInputsAt] = useState<DraftInputs | null>(lastDraftInputs)
+  const pendingInputs = useRef<DraftInputs | null>(null)
+  const draftChanged = hasDraft(article) ? changedInputs(draftInputsAt, draftInputs(article)) : []
+  /** A run is starting: remember its inputs, and show the starter as owner if nobody owns it (the server does the same). */
+  function startingRun() {
+    pendingInputs.current = draftInputs(article)
+    if (!article.assigneeId) setArticle((a) => ({ ...a, assigneeId: a.assigneeId ?? currentUserId }))
+  }
 
   const editorRef = useRef<Editor | null>(null)
   const editorApi = useEditorApi(editorRef)
@@ -192,6 +210,7 @@ export function WorkspaceView({
     if (ev.type === 'step') setRunSteps((s) => [...s, { step: ev.step, label: ev.label }])
     if (ev.type === 'saved') {
       handledLocally.current.generation = Date.now()
+      if (pendingInputs.current) setDraftInputsAt(pendingInputs.current)
       refetch()
         .then((a) => {
           setLiveHtml(a.draftHtml ?? '')
@@ -231,6 +250,7 @@ export function WorkspaceView({
   const onReviseEvent = useLatest((ev: AIStreamEvent) => {
     if (ev.type === 'saved') {
       handledLocally.current.generation = Date.now()
+      if (pendingInputs.current) setDraftInputsAt(pendingInputs.current)
       setReviseFeedback('')
       setReviseOpen(false)
       refetch()
@@ -333,6 +353,7 @@ export function WorkspaceView({
     if (prev.generation === 'running' && article.generationStatus !== 'running') {
       if (Date.now() - handledLocally.current.generation < 15000) handledLocally.current.generation = 0
       else if (article.generationStatus === 'ready') {
+        setDraftInputsAt(draftInputs(article))
         setLiveHtml(article.draftHtml ?? '')
         setEditorGen((g) => g + 1)
         toast.success('Draft ready', `${nf.format(article.wordCount ?? 0)} words`)
@@ -381,6 +402,7 @@ export function WorkspaceView({
     } catch {
       return
     }
+    startingRun()
     void research.start(`${base}/research`, {})
   }
 
@@ -399,6 +421,7 @@ export function WorkspaceView({
       setRightTab('template')
       setOptimizeOpen(true)
     }
+    startingRun()
     void generation.start(`${base}/generate`, { useResearch })
   }
 
@@ -413,6 +436,7 @@ export function WorkspaceView({
     setActiveSuggestionId(null)
     setReviseOpen(false)
     setTab('draft')
+    pendingInputs.current = draftInputs(article)
     void revision.start(`${base}/revise`, { feedback })
   }
 
@@ -539,6 +563,10 @@ export function WorkspaceView({
       onChange={patchFields}
       onTemplateSaved={(next) => setArticle((a) => ({ ...a, ...next }))}
       onResearchEnabled={(on) => void setResearchEnabled(on)}
+      draftChanged={draftChanged}
+      onRegenerate={() => requestGenerate(true)}
+      onResearch={() => void runResearch()}
+      busy={streaming}
     />
   )
   const optimizePanel = (
@@ -619,6 +647,7 @@ export function WorkspaceView({
         busy={streaming}
         statusSaving={statusSaving}
         showBriefToggle
+        briefChanged={draftChanged.length > 0}
         showOptimizeToggle
         briefOpen={briefOpen}
         optimizeOpen={optimizeOpen}

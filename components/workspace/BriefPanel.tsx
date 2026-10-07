@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Star, X, Plus, Cpu, Search as SearchIcon, PenLine, Settings2 } from 'lucide-react'
+import { Star, X, Plus, Cpu, Search as SearchIcon, PenLine, Settings2, RotateCcw, Sparkles } from 'lucide-react'
 import { splitKeywords } from '@/lib/articles/schemas'
 import type { ModelsInUse, WorkspaceArticle, WorkspacePerson } from './types'
 import { TemplatePicker } from './TemplatePicker'
@@ -58,6 +58,10 @@ export function BriefPanel({
   onChange,
   onTemplateSaved,
   onResearchEnabled,
+  draftChanged,
+  onRegenerate,
+  onResearch,
+  busy,
 }: {
   article: WorkspaceArticle
   people: WorkspacePerson[]
@@ -69,6 +73,14 @@ export function BriefPanel({
   onTemplateSaved: (next: Pick<WorkspaceArticle, 'templateId' | 'templateInputs'>) => void
   /** DR-017: switch research before writing for this topic. */
   onResearchEnabled: (on: boolean) => void
+  /** DR-019: inputs that changed since the current draft was written (empty: unchanged or unknown). */
+  draftChanged: string[]
+  /** Generate, or regenerate (confirms, keeps the current draft in Versions). */
+  onRegenerate: () => void
+  /** Research is on for this topic but hasn't run: research first. */
+  onResearch: () => void
+  /** A run is going. */
+  busy: boolean
 }) {
   const [brief, setBrief] = useState(article.brief ?? '')
   const [target, setTarget] = useState(article.targetWordCount ? String(article.targetWordCount) : '')
@@ -102,6 +114,10 @@ export function BriefPanel({
     const next = keywords.filter((x) => x !== k)
     setKeywords(next, k === primary ? next[0] ?? null : primary)
   }
+
+  const hasDraft = !!article.draftHtml?.trim()
+  const r = article.research
+  const needsResearch = article.researchEnabled && !(r && (r.summary?.trim() || r.outlineHtml?.trim() || r.citations.length))
 
   const targetError =
     target && (!/^\d+$/.test(target) || Number(target) < 50 || Number(target) > 20000) ? 'Between 50 and 20,000 words.' : null
@@ -303,6 +319,49 @@ export function BriefPanel({
             Change in Settings
           </Link>
         )}
+      </div>
+
+      {/* DR-019: the Brief's action — write the article (again) from these fields and the research. */}
+      <div className="sticky bottom-0 -mx-5 -mb-5 px-5 py-4 border-t border-border bg-background/95 backdrop-blur-sm space-y-2">
+        {hasDraft && draftChanged.length > 0 && (
+          <p className="text-xs text-accent" role="status">
+            Changed since this draft: {draftChanged.join(', ')}
+          </p>
+        )}
+        {needsResearch ? (
+          <>
+            <button
+              type="button"
+              onClick={onResearch}
+              disabled={busy}
+              className="w-full px-4 py-2 rounded-input text-sm font-medium inline-flex items-center justify-center gap-2 bg-accent hover:bg-accent/90 text-white disabled:opacity-50"
+            >
+              <SearchIcon className="w-4 h-4" /> Run research
+            </button>
+            <button type="button" onClick={onRegenerate} disabled={busy} className="w-full text-xs text-muted hover:text-accent disabled:opacity-50">
+              or {hasDraft ? 'regenerate' : 'generate'} without research
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onRegenerate}
+            disabled={busy}
+            className={`w-full px-4 py-2 rounded-input text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors disabled:opacity-50 ${
+              !hasDraft || draftChanged.length > 0
+                ? 'bg-accent hover:bg-accent/90 text-white'
+                : 'border border-border text-heading hover:bg-surface-hover'
+            }`}
+          >
+            {hasDraft ? <RotateCcw className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
+            {hasDraft ? 'Regenerate draft' : 'Generate draft'}
+          </button>
+        )}
+        <p className="text-[11px] text-muted leading-snug">
+          {hasDraft
+            ? 'Writes a new draft from this brief and the research. The current draft is kept in Versions.'
+            : 'Writes the draft from this brief and the research.'}
+        </p>
       </div>
     </div>
   )

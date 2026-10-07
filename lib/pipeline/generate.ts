@@ -8,6 +8,7 @@ import { countWords } from '@/lib/articles/text'
 import { Errors } from '@/lib/api/errors'
 import { cleanGeneratedHtml } from './html'
 import { revisionLabel } from '@/lib/prompts/revision'
+import type { DraftInputs } from '@/lib/articles/draft-inputs'
 
 /**
  * Persists a finished generation: the draft, a `generated` version, the draft model, queued → draft
@@ -19,7 +20,8 @@ export async function persistGeneratedDraft(
   rawText: string,
   model: string,
   user: AppUser,
-  opts: { usedResearch: boolean; snapshotVersionNo: number | null },
+  /** `inputs`: DR-019, what the draft was written from (taken when the run started). */
+  opts: { usedResearch: boolean; snapshotVersionNo: number | null; inputs?: DraftInputs },
 ) {
   const html = cleanGeneratedHtml(rawText)
   if (countWords(html) === 0) throw Errors.badRequest('The model returned an empty draft.')
@@ -40,6 +42,7 @@ export async function persistGeneratedDraft(
         wordCount: version.wordCount,
         usedResearch: opts.usedResearch,
         snapshotVersionNo: opts.snapshotVersionNo,
+        ...(opts.inputs ? { inputs: opts.inputs } : {}),
       },
     },
   )
@@ -62,7 +65,7 @@ export async function persistRevisedDraft(
   rawText: string,
   model: string,
   user: AppUser,
-  opts: { feedback: string; usedResearch: boolean; snapshotVersionNo: number | null },
+  opts: { feedback: string; usedResearch: boolean; snapshotVersionNo: number | null; inputs?: DraftInputs },
 ) {
   const html = cleanGeneratedHtml(rawText)
   if (countWords(html) === 0) throw Errors.badRequest('The model returned an empty draft.')
@@ -76,6 +79,7 @@ export async function persistRevisedDraft(
       feedback: opts.feedback,
       usedResearch: opts.usedResearch,
       snapshotVersionNo: opts.snapshotVersionNo,
+      ...(opts.inputs ? { inputs: opts.inputs } : {}),
     },
   })
   await db
