@@ -69,10 +69,17 @@ export function ApprovalBar({
             {thanks ? (
               <span className="text-heading">Thanks, {ownerName ?? 'the team'} has been notified.</span>
             ) : decision ? (
-              <span className={`inline-flex items-center gap-1.5 truncate ${decision.decision === 'approved' ? 'text-green-600' : 'text-orange-500'}`}>
+              <span
+                className={`flex items-center gap-1.5 min-w-0 ${decision.decision === 'approved' ? 'text-green-600' : 'text-orange-500'}`}
+                title={`${decision.decision === 'approved' ? 'Approved' : 'Changes requested'} by ${decision.name} · ${format(new Date(decision.at), 'MMM d')}`}
+              >
                 {decision.decision === 'approved' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <PencilLine className="w-4 h-4 shrink-0" />}
                 <span className="truncate">
-                  {decision.decision === 'approved' ? 'Approved' : 'Changes requested'} by {decision.name} · {format(new Date(decision.at), 'MMM d')}
+                  {decision.decision === 'approved' ? 'Approved' : 'Changes requested'}
+                  <span className="hidden sm:inline">
+                    {' '}
+                    by {decision.name} · {format(new Date(decision.at), 'MMM d')}
+                  </span>
                 </span>
               </span>
             ) : (
